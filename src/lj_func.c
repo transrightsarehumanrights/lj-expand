@@ -14,6 +14,7 @@
 #include "lj_func.h"
 #include "lj_trace.h"
 #include "lj_vm.h"
+#include "stdio.h"
 
 /* -- Prototypes ---------------------------------------------------------- */
 
@@ -119,7 +120,7 @@ GCfunc *lj_func_newC(lua_State *L, MSize nelems, GCtab *env)
 static GCfunc *func_newL(lua_State *L, GCproto *pt, GCtab *env)
 {
   uint32_t count;
-  GCfunc *fn = (GCfunc *)lj_mem_newgco(L, sizeLfunc((MSize)pt->sizeuv));
+  GCfunc *fn = (GCfunc *)lj_mem_newgco(L, sizeLfunc((MSize)pt->sizeuv) + sizeof(LJEfunc));
   fn->l.gct = ~LJ_TFUNC;
   fn->l.ffid = FF_LUA;
   fn->l.nupvalues = 0;  /* Set to zero until upvalues are initialized. */
@@ -129,12 +130,18 @@ static GCfunc *func_newL(lua_State *L, GCproto *pt, GCtab *env)
   /* Saturating 3 bit counter (0..7) for created closures. */
   count = (uint32_t)pt->flags + PROTO_CLCOUNT;
   pt->flags = (uint8_t)(count - ((count >> PROTO_CLC_BITS) & PROTO_CLCOUNT));
+
+  LJEfunc* ljeFn = (LJEfunc*)((char*)fn + sizeLfunc((MSize)pt->sizeuv));
+  memset(ljeFn->metadata, 0, sizeof(ljeFn->metadata));
+  strcpy(ljeFn->metadata, "Hello!");
+
   return fn;
 }
 
 /* Create a new Lua function with empty upvalues. */
 GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
 {
+  printf("Creating new empty Lua function from proto %p\n", (void*)pt);
   GCfunc *fn = func_newL(L, pt, env);
   MSize i, nuv = pt->sizeuv;
   /* NOBARRIER: The GCfunc is new (marked white). */
@@ -152,6 +159,7 @@ GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
 /* Do a GC check and create a new Lua function with inherited upvalues. */
 GCfunc *lj_func_newL_gc(lua_State *L, GCproto *pt, GCfuncL *parent)
 {
+  printf("Creating new Lua function from proto %p\n", (void*)pt);
   GCfunc *fn;
   GCRef *puv;
   MSize i, nuv;
@@ -182,6 +190,9 @@ void LJ_FASTCALL lj_func_free(global_State *g, GCfunc *fn)
 {
   MSize size = isluafunc(fn) ? sizeLfunc((MSize)fn->l.nupvalues) :
 			       sizeCfunc((MSize)fn->c.nupvalues);
+  printf("size: %d, sizeof(GCfuncL): %d\n, sizeof(LJEfunc): %d\n", (int)size, (int)sizeof(GCfuncL), (int)sizeof(LJEfunc));
+  printf("isluafunc: %d\n", isluafunc(fn));
+  printf("expected size: %d\n", isluafunc(fn) ? (int)(sizeof(GCfuncL)-sizeof(GCRef)+sizeof(GCRef)*(MSize)fn->l.nupvalues + sizeof(LJEfunc)) : (int)(sizeof(GCfuncC)-sizeof(TValue)+sizeof(TValue)*(MSize)fn->c.nupvalues));
   lj_mem_free(g, fn, size);
 }
 

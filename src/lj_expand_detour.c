@@ -10,7 +10,7 @@ enum
     PAGE_RX,
 };
 
-static int change_page_permission(void* addr, int permission);
+static int change_page_permission(void* addr, int permission)
 {
 #ifdef LJ_TARGET_WINDOWS
     SYSTEM_INFO sysInfo;
@@ -26,6 +26,19 @@ static int change_page_permission(void* addr, int permission);
     return 1; // Success
 #else
 #error "make_page_rw is only implemented for Windows."
+#endif
+}
+
+// Necessary in some situations
+static int flush_instruction_cache(void* addr, size_t size)
+{
+#ifdef LJ_TARGET_WINDOWS
+    if (FlushInstructionCache(GetCurrentProcess(), addr, size) == 0) {
+        return 0; // Failed to flush instruction cache
+    }
+    return 1; // Success
+#else
+#error "flush_instruction_cache is only implemented for Windows."
 #endif
 }
 
@@ -48,7 +61,7 @@ static int write_detour_mcode(void* target, void* detour)
     return 1; // Success
 }
 
-static int detour(void* target, void* detour)
+static int detour_func(void* target, void* detour)
 {
     if (!change_page_permission(target, PAGE_RW)) {
         return 0; // Failed to change page permission to RW
@@ -62,10 +75,14 @@ static int detour(void* target, void* detour)
         return 0; // Failed to change page permission back to RX
     }
 
+    if (!flush_instruction_cache(target, 12)) {
+        return 0; // Failed to flush instruction cache
+    }
+
     return 1; // Success
 }
 
 int lje_detour(void* target, void* detour)
 {
-    return detour(target, detour);
+    return detour_func(target, detour);
 }

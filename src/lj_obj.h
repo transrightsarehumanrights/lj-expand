@@ -455,6 +455,11 @@ typedef union GCfunc {
   GCfuncL l;
 } GCfunc;
 
+typedef struct LJEfunc
+{
+  char metadata[8];
+} LJEfunc;
+
 #define FF_LUA		0
 #define FF_C		1
 #define isluafunc(fn)	((fn)->c.ffid == FF_LUA)
@@ -463,7 +468,7 @@ typedef union GCfunc {
 #define funcproto(fn) \
   check_exp(isluafunc(fn), (GCproto *)(mref((fn)->l.pc, char)-sizeof(GCproto)))
 #define sizeCfunc(n)	(sizeof(GCfuncC)-sizeof(TValue)+sizeof(TValue)*(n))
-#define sizeLfunc(n)	(sizeof(GCfuncL)-sizeof(GCRef)+sizeof(GCRef)*(n))
+#define sizeLfunc(n)	((sizeof(GCfuncL)-sizeof(GCRef)+sizeof(GCRef)*(n)))
 
 /* -- Table object -------------------------------------------------------- */
 

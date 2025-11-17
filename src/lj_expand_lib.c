@@ -39,14 +39,23 @@ int lje_spoof_debug_info(lua_State* L)
   return 0;
 }
 
+int lje_read_metadata(lua_State* L)
+{
+  GCfunc* func = lj_lib_checkfunc(L, 1);
+  LJEfunc* ljeFn = (LJEfunc*)((char*)func + sizeLfunc((MSize)funcproto(func)->sizeuv));
+
+  lua_pushstring(L, ljeFn->metadata);
+  return 1;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
 
 void lje_addfuncs(lua_State* L) {
-  // Placeholder implementation
   lua_pushvalue(L, LUA_GLOBALSINDEX);
   LJE_SET_FUNC("set_ffid", lje_set_ffid);
   LJE_SET_FUNC("spoof_debug_info", lje_spoof_debug_info);
+  LJE_SET_FUNC("read_metadata", lje_read_metadata);
   lua_pop(L, 1); // Pop globals table
 }

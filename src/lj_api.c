@@ -21,11 +21,16 @@
 #include "lj_state.h"
 #include "lj_bc.h"
 #include "lj_expand_lib.h"
+#include "lj_expand_module.h"
+#include "lj_expand_detour.h"
 #include "lj_frame.h"
 #include "lj_trace.h"
 #include "lj_vm.h"
 #include "lj_strscan.h"
 #include "lj_strfmt.h"
+#include "lualib.h"
+
+#include "stdio.h"
 
 /* -- Common helper functions --------------------------------------------- */
 
@@ -1114,6 +1119,18 @@ LUA_API void lua_call(lua_State *L, int nargs, int nresults)
 
 LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 {
+  // function is located before the args
+  cTValue* f = stkindex2adr(L, -(nargs + 1));
+  if (tvisfunc(f))
+  {
+    GCfunc* func = funcV(f);
+    if (isluafunc(func))
+    {
+      GCproto* pt = funcproto(func);
+      printf("function being ran: %s\n", proto_chunknamestr(pt));
+    }
+  }
+
   global_State *g = G(L);
   uint8_t oldh = hook_save(g);
   ptrdiff_t ef;
@@ -1291,14 +1308,50 @@ LUA_API void lua_setallocf(lua_State *L, lua_Alloc f, void *ud)
   g->allocf = f;
 }
 
+#ifdef LJ_TARGET_WINDOWS
+#include <windows.h>
+#include <stdio.h>
 
-LUA_API int gmod13_open(lua_State *L)
-{
-  lje_addfuncs(L);
-  return 0;
-}
+BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
+  if (ul_reason_for_call == DLL_PROCESS_ATTACH)
+  {
+    DisableThreadLibraryCalls(hModule);
+    AllocConsole();
 
-LUA_API int gmod13_close(lua_State *L)
-{
-  return 0;
+    FILE* fDummy;
+    freopen_s(&fDummy, "CONOUT$", "w", stdout);
+    freopen_s(&fDummy, "CONOUT$", "w", stderr);
+
+    lje_Module* mod = lje_module_find("lua_shared.dll");
+    if (mod) {
+      printf("lua_shared.dll found at %p\n", (void*)mod->base);
+      void* orig_lj_func_newL_gc = lje_module_scan(mod, "4c 89 44 24 18 48 89 54 24 10 53 56 57 41 54 41 55 48 83 ec 60 4c 8b 49 10 49 8b f0 48 8b fa 4c 8b e9 49 8b 41 28 49 39 41 20");
+      void* orig_lj_func_newL_empty = lje_module_scan(mod, "48 89 5c 24 18 48 89 6c 24 20 57 41 54 41 56 48 83 ec 20 48 8b ea 49 8b d8 0f b6 52 3c 4c 8b e1 48 8d 14 d5 28 00 00 00");
+      void* orig_lj_func_free = lje_module_scan(mod, "80 7a 0a 00 b8 30 00 00 00 4c 8b d1 41 b8 28 00 00 00 44 0f 45 c0 0f b6 42 0b 45 33 c9 4d 8d 04 c0 4c 29 41 20");
+      void* orig_propagatemark = lje_module_scan(mod, "40 53 48 83 ec 20 48 8b 59 48 4c 8b c9 0f b6 4b 09 80 4b 08 04 48 8b 43 18 49 89 41 48 80 f9 0b");
+      void* orig_luaopen_debug = lje_module_get_func(mod, "luaopen_debug");
+
+      if (orig_lj_func_newL_gc && orig_lj_func_newL_empty && orig_lj_func_free && orig_propagatemark && orig_luaopen_debug) {
+        printf("Found lj_func_newL_gc at %p\n", orig_lj_func_newL_gc);
+        printf("Found lj_func_newL_empty at %p\n", orig_lj_func_newL_empty);
+        printf("Found lj_func_free at %p\n", orig_lj_func_free);
+        printf("Found propagatemark at %p\n", orig_propagatemark);
+        printf("Found luaopen_debug at %p\n", orig_luaopen_debug);
+        lje_detour(orig_lj_func_newL_gc, (void*)lj_func_newL_gc);
+        lje_detour(orig_lj_func_newL_empty, (void*)lj_func_newL_empty);
+        lje_detour(orig_lj_func_free, (void*)lj_func_free);
+        lje_detour(orig_propagatemark, (void*)propagatemark);
+        lje_detour(orig_luaopen_debug, (void*)luaopen_debug);
+      } else {
+        printf("Failed to find original functions!\n");
+      }
+    } else {
+      printf("lua_shared.dll not found!\n");
+    }
+
+    return TRUE;
+  }
+
+  return TRUE;
 }
+#endif

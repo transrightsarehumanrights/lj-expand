@@ -27,6 +27,8 @@
 #include "lj_trace.h"
 #include "lj_vm.h"
 
+#include "stdio.h"
+
 #define GCSTEPSIZE	1024u
 #define GCSWEEPMAX	40
 #define GCSWEEPCOST	10
@@ -305,7 +307,7 @@ static void gc_traverse_thread(global_State *g, lua_State *th)
 }
 
 /* Propagate one gray object. Traverse it and turn it black. */
-static size_t propagatemark(global_State *g)
+size_t propagatemark(global_State *g)
 {
   GCobj *o = gcref(g->gc.gray);
   int gct = o->gch.gct;
@@ -321,6 +323,9 @@ static size_t propagatemark(global_State *g)
   } else if (LJ_LIKELY(gct == ~LJ_TFUNC)) {
     GCfunc *fn = gco2func(o);
     gc_traverse_func(g, fn);
+    printf("Traversing gray GCfunc. Size: %llu\n",
+      isluafunc(fn) ? sizeLfunc((MSize)fn->l.nupvalues) :
+                     sizeCfunc((MSize)fn->c.nupvalues));
     return isluafunc(fn) ? sizeLfunc((MSize)fn->l.nupvalues) :
 			   sizeCfunc((MSize)fn->c.nupvalues);
   } else if (LJ_LIKELY(gct == ~LJ_TPROTO)) {
