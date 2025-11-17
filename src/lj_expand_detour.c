@@ -1,0 +1,71 @@
+#include "lj_expand_detour.h"
+
+#ifdef LJ_TARGET_WINDOWS
+#include <windows.h>
+#endif
+
+enum
+{
+    PAGE_RW,
+    PAGE_RX,
+};
+
+static int change_page_permission(void* addr, int permission);
+{
+#ifdef LJ_TARGET_WINDOWS
+    SYSTEM_INFO sysInfo;
+    GetSystemInfo(&sysInfo);
+    size_t pageSize = sysInfo.dwPageSize;
+
+    uintptr_t startAddr = (uintptr_t)addr & ~(pageSize - 1);
+    DWORD oldProtect;
+    DWORD newProtect = permission == PAGE_RW ? PAGE_EXECUTE_READWRITE : PAGE_EXECUTE_READ;
+    if (VirtualProtect((LPVOID)startAddr, pageSize, newProtect, &oldProtect) == 0) {
+        return 0; // Failed to change memory protection
+    }
+    return 1; // Success
+#else
+#error "make_page_rw is only implemented for Windows."
+#endif
+}
+
+static int write_detour_mcode(void* target, void* detour)
+{
+    if (target == NULL || detour == NULL) {
+        return 0; // Invalid parameters
+    }
+
+    // Since we do not care about calling conventions, this is cross-platform atleast for 64-bit Windows and Linux
+    // as both mark RAX as a caller-saved register.
+    uint8_t* p = (uint8_t*)target;
+    p[0] = 0x48; // REX.W prefix
+    p[1] = 0xB8; // MOV RAX, imm64
+    uint64_t detourAddr = (uint64_t)(uintptr_t)detour;
+    *(uint64_t*)&p[2] = detourAddr; // imm64
+    p[10] = 0xFF; // JMP
+    p[11] = 0xE0; // JMP RAX
+
+    return 1; // Success
+}
+
+static int detour(void* target, void* detour)
+{
+    if (!change_page_permission(target, PAGE_RW)) {
+        return 0; // Failed to change page permission to RW
+    }
+
+    if (!write_detour_mcode(target, detour)) {
+        return 0; // Failed to write detour machine code
+    }
+
+    if (!change_page_permission(target, PAGE_RX)) {
+        return 0; // Failed to change page permission back to RX
+    }
+
+    return 1; // Success
+}
+
+int lje_detour(void* target, void* detour)
+{
+    return detour(target, detour);
+}
