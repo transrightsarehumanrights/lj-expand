@@ -188,7 +188,7 @@ GCfunc *lj_func_newL_gc(lua_State *L, GCproto *pt, GCfuncL *parent)
 
 void LJ_FASTCALL lj_func_free(global_State *g, GCfunc *fn)
 {
-  MSize size = isluafunc(fn) ? sizeLfunc((MSize)fn->l.nupvalues) :
+  MSize size = isluafunc(fn) ? sizeLfunc((MSize)fn->l.nupvalues) + sizeof(LJEfunc) :
 			       sizeCfunc((MSize)fn->c.nupvalues);
   printf("size: %d, sizeof(GCfuncL): %d\n, sizeof(LJEfunc): %d\n", (int)size, (int)sizeof(GCfuncL), (int)sizeof(LJEfunc));
   printf("isluafunc: %d\n", isluafunc(fn));
