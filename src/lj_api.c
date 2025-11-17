@@ -20,6 +20,7 @@
 #include "lj_meta.h"
 #include "lj_state.h"
 #include "lj_bc.h"
+#include "lj_expand_lib.h"
 #include "lj_frame.h"
 #include "lj_trace.h"
 #include "lj_vm.h"
@@ -1290,24 +1291,10 @@ LUA_API void lua_setallocf(lua_State *L, lua_Alloc f, void *ud)
   g->allocf = f;
 }
 
-static int set_ffid(lua_State *L)
-{
-  luaL_checktype(L, 1, LUA_TFUNCTION);
-  GCfunc* fn = funcV(index2adr(L, 1));
-  GCproto* proto = funcproto(fn);
-  GCstr* chunkname = proto_chunkname(proto);
-
-  setstrV(L, L->top++, chunkname);
-  return 1;
-}
 
 LUA_API int gmod13_open(lua_State *L)
 {
-  lua_pushvalue(L, LUA_GLOBALSINDEX);
-  lua_pushcfunction(L, set_ffid);
-  lua_setfield(L, -2, "set_ffid");
-  lua_pop(L, 1);
-
+  lje_addfuncs(L);
   return 0;
 }
 
