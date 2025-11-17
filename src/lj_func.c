@@ -133,7 +133,7 @@ static GCfunc *func_newL(lua_State *L, GCproto *pt, GCtab *env)
 
   LJEfunc* ljeFn = (LJEfunc*)((char*)fn + sizeLfunc((MSize)pt->sizeuv));
   memset(ljeFn->metadata, 0, sizeof(ljeFn->metadata));
-  strcpy(ljeFn->metadata, "Hello!");
+  ljeFn->is_special = 0;
 
   return fn;
 }
@@ -190,9 +190,6 @@ void LJ_FASTCALL lj_func_free(global_State *g, GCfunc *fn)
 {
   MSize size = isluafunc(fn) ? sizeLfunc((MSize)fn->l.nupvalues) + sizeof(LJEfunc) :
 			       sizeCfunc((MSize)fn->c.nupvalues);
-  printf("size: %d, sizeof(GCfuncL): %d\n, sizeof(LJEfunc): %d\n", (int)size, (int)sizeof(GCfuncL), (int)sizeof(LJEfunc));
-  printf("isluafunc: %d\n", isluafunc(fn));
-  printf("expected size: %d\n", isluafunc(fn) ? (int)(sizeof(GCfuncL)-sizeof(GCRef)+sizeof(GCRef)*(MSize)fn->l.nupvalues + sizeof(LJEfunc)) : (int)(sizeof(GCfuncC)-sizeof(TValue)+sizeof(TValue)*(MSize)fn->c.nupvalues));
   lj_mem_free(g, fn, size);
 }
 

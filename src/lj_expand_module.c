@@ -3,6 +3,7 @@
 #ifdef LJ_TARGET_WINDOWS
 #include <windows.h>
 #include <psapi.h>
+#include <stdio.h>
 #endif
 
 lje_Module* lje_module_find(const char* name)
@@ -54,6 +55,63 @@ void* lje_module_get_func(lje_Module* module, const char* func_name)
 #endif
 }
 
+typedef struct
+{
+    uint8_t value;
+    uint8_t mask;
+} PatternByte;
+
+PatternByte* make_pattern_from_str(const char* pattern, size_t *byteLengthOut)
+{
+    size_t byteLength = 0;
+    size_t patternLen = strlen(pattern);
+    for (char* c = pattern; c < pattern + patternLen; )
+    {
+        if (*c == ' ')
+        {
+            c++;
+            continue;
+        }
+
+        byteLength++;
+        c += 2;
+    }
+
+    PatternByte* patternBytes = (PatternByte*)malloc(sizeof(PatternByte) * byteLength);
+    if (patternBytes == NULL) {
+        return NULL;
+    }
+
+    memset(patternBytes, 0, sizeof(PatternByte) * byteLength);
+
+    for (size_t i = 0, j = 0; i < patternLen; )
+    {
+        if (pattern[i] == ' ')
+        {
+            i++;
+            continue;
+        }
+
+        if (pattern[i] == '?' && pattern[i + 1] == '?')
+        {
+            patternBytes[j].value = 0x00;
+            patternBytes[j].mask = 0x00;
+        }
+        else
+        {
+            char byteStr[3] = { pattern[i], pattern[i + 1], '\0' };
+            patternBytes[j].value = (uint8_t)strtoul(byteStr, NULL, 16);
+            patternBytes[j].mask = 0xFF;
+        }
+
+        i += 2;
+        j++;
+    }
+
+    *byteLengthOut = byteLength;
+    return patternBytes;
+}
+
 void* lje_module_scan(lje_Module* module, const char* pattern)
 {
     if (module == NULL || pattern == NULL) {
@@ -62,41 +120,30 @@ void* lje_module_scan(lje_Module* module, const char* pattern)
 
     size_t patternLen = strlen(pattern);
     uint8_t* scanStart = (uint8_t*)module->base;
-    uint8_t* scanEnd = scanStart + module->size - patternLen;
+    uint8_t* scanEnd = scanStart + module->size;
 
-    // construct byte pattern from string
-    size_t byteStringSize = 0;
-    for (int i = 0; i < patternLen; i++) {
-        if (pattern[i] != ' ') {
-            byteStringSize++;
-            i += 1; // Skip next character as it's part of the byte
-        }
-    }
-
-    uint8_t* bytePattern = (uint8_t*)malloc(byteStringSize);
-    if (bytePattern == NULL)
+    size_t patternLenBytes = 0;
+    PatternByte* patternBytes = make_pattern_from_str(pattern, &patternLenBytes);
+    if (patternBytes == NULL)
     {
         return NULL;
     }
 
-    for (int i = 0, j = 0; i < patternLen; ) {
-        if (pattern[i] == ' ') {
-            i++;
-            continue;
+    for (uint8_t* p = scanStart; p <= scanEnd - patternLen; p++) {
+        size_t i;
+
+        for (i = 0; i < patternLenBytes; i++) {
+            if ((p[i] & patternBytes[i].mask) != patternBytes[i].value) {
+                break;
+            }
         }
 
-        char byteStr[3] = { pattern[i], pattern[i + 1], '\0' };
-        bytePattern[j++] = (uint8_t)strtoul(byteStr, NULL, 16);
-        i += 2;
-    }
-
-    for (uint8_t* p = scanStart; p <= scanEnd; p++) {
-        if (memcmp(p, bytePattern, byteStringSize) == 0) {
-            free(bytePattern);
+        if (i == patternLenBytes) {
+            free(patternBytes);
             return (void*)p;
         }
     }
 
-    free(bytePattern);
+    free(patternBytes);
     return NULL;
 }

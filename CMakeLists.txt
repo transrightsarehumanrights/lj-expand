@@ -3,5 +3,5 @@ project(lj-expand C)
 
 file(GLOB_RECURSE SOURCES "src/*.c" "src/*.h")
 add_executable(luajit_dummy ${SOURCES})
-add_compile_options(luajit_dummy PRIVATE -DLUAJIT_DISABLE_VMEVENT -DLUAJIT_ENABLE_GC64 -DLUAJIT_DISABLE_FFI)
+add_compile_options(luajit_dummy PRIVATE -DLUAJIT_DISABLE_VMEVENT -DLUAJIT_ENABLE_GC64 -DLUAJIT_DISABLE_FFI -DLUAJIT_DISABLE_PROFILE)
 set_target_properties(luajit_dummy PROPERTIES EXCLUDE_FROM_ALL TRUE)

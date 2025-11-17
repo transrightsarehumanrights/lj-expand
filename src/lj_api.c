@@ -1329,7 +1329,8 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
       void* orig_lj_func_newL_empty = lje_module_scan(mod, "48 89 5c 24 18 48 89 6c 24 20 57 41 54 41 56 48 83 ec 20 48 8b ea 49 8b d8 0f b6 52 3c 4c 8b e1 48 8d 14 d5 28 00 00 00");
       void* orig_lj_func_free = lje_module_scan(mod, "80 7a 0a 00 b8 30 00 00 00 4c 8b d1 41 b8 28 00 00 00 44 0f 45 c0 0f b6 42 0b 45 33 c9 4d 8d 04 c0 4c 29 41 20");
       void* orig_propagatemark = lje_module_scan(mod, "40 53 48 83 ec 20 48 8b 59 48 4c 8b c9 0f b6 4b 09 80 4b 08 04 48 8b 43 18 49 89 41 48 80 f9 0b");
-      void* orig_luaopen_debug = lje_module_get_func(mod, "luaopen_debug");
+
+      lje_detour_export(mod, luaopen_debug, luaopen_debug);
 
       if (orig_lj_func_newL_gc && orig_lj_func_newL_empty && orig_lj_func_free && orig_propagatemark && orig_luaopen_debug) {
         printf("Found lj_func_newL_gc at %p\n", orig_lj_func_newL_gc);
@@ -1337,11 +1338,11 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
         printf("Found lj_func_free at %p\n", orig_lj_func_free);
         printf("Found propagatemark at %p\n", orig_propagatemark);
         printf("Found luaopen_debug at %p\n", orig_luaopen_debug);
+
         lje_detour(orig_lj_func_newL_gc, (void*)lj_func_newL_gc);
         lje_detour(orig_lj_func_newL_empty, (void*)lj_func_newL_empty);
         lje_detour(orig_lj_func_free, (void*)lj_func_free);
         lje_detour(orig_propagatemark, (void*)propagatemark);
-        lje_detour(orig_luaopen_debug, (void*)luaopen_debug);
       } else {
         printf("Failed to find original functions!\n");
       }
