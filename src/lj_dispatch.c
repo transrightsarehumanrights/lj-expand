@@ -56,6 +56,8 @@ static const ASMFunction dispatch_got[] = {
 #undef GOTFUNC
 #endif
 
+#include <stdio.h>
+
 /* Initialize instruction dispatch table and hot counters. */
 void lj_dispatch_init(GG_State *GG)
 {
@@ -404,6 +406,8 @@ static BCReg cur_topslot(GCproto *pt, const BCIns *pc, uint32_t nres)
 void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc)
 {
   ERRNO_SAVE
+  printf("Hi! From dispatch_ins: %d\n", bc_op(pc[-1]));
+
   GCfunc *fn = curr_func(L);
   GCproto *pt = funcproto(fn);
   void *cf = cframe_raw(L->cframe);

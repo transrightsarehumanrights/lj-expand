@@ -356,6 +356,9 @@ LUA_API lua_Integer lua_tointegerx (lua_State *L, int idx, int *isnum);
 /* From Lua 5.3. */
 LUA_API int lua_isyieldable (lua_State *L);
 
+/* GMod binary module specifics */
+LUA_API int gmod13_open(lua_State* L);
+LUA_API int gmod13_close(lua_State* L);
 
 struct lua_Debug {
   int event;
