@@ -323,9 +323,6 @@ size_t propagatemark(global_State *g)
   } else if (LJ_LIKELY(gct == ~LJ_TFUNC)) {
     GCfunc *fn = gco2func(o);
     gc_traverse_func(g, fn);
-    printf("Traversing gray GCfunc. Size: %llu\n",
-      isluafunc(fn) ? sizeLfunc((MSize)fn->l.nupvalues) :
-                     sizeCfunc((MSize)fn->c.nupvalues));
     return isluafunc(fn) ? sizeLfunc((MSize)fn->l.nupvalues) :
 			   sizeCfunc((MSize)fn->c.nupvalues);
   } else if (LJ_LIKELY(gct == ~LJ_TPROTO)) {

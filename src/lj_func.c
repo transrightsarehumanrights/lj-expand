@@ -141,7 +141,6 @@ static GCfunc *func_newL(lua_State *L, GCproto *pt, GCtab *env)
 /* Create a new Lua function with empty upvalues. */
 GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
 {
-  printf("Creating new empty Lua function from proto %p\n", (void*)pt);
   GCfunc *fn = func_newL(L, pt, env);
   MSize i, nuv = pt->sizeuv;
   /* NOBARRIER: The GCfunc is new (marked white). */
@@ -159,7 +158,6 @@ GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
 /* Do a GC check and create a new Lua function with inherited upvalues. */
 GCfunc *lj_func_newL_gc(lua_State *L, GCproto *pt, GCfuncL *parent)
 {
-  printf("Creating new Lua function from proto %p\n", (void*)pt);
   GCfunc *fn;
   GCRef *puv;
   MSize i, nuv;
