@@ -33,10 +33,18 @@ cTValue *lj_debug_frame(lua_State *L, int level, int *size)
     /* LJE: Alternate check if this frame is both lua and marked special, if so then it definitely needs to be skipped */
     if (isluafunc(frame_func(frame)))
     {
-      LJEfunc* ljeFn = funcextend(frame_func(frame));
+        LJEfunc* ljeFn = funcextend(frame_func(frame));
         if (ljeFn->is_special)
         {
             level++; /* Skip special frames */
+        }
+
+        /* LJE: If this is spoofed, then we want to override its frame function to the spoofed target */
+        GCobj* target = gcrefp(ljeFn->spoof, GCobj);
+        if (target != NULL)
+        {
+            /* LJE: Override the frame function to point to the spoofed target */
+            setframe_gc((TValue*)frame, target, LJ_TFUNC);
         }
     }
 
