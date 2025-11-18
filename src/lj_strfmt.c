@@ -393,7 +393,6 @@ GCstr * LJ_FASTCALL lj_strfmt_obj(lua_State *L, cTValue *o)
     /* LJE: Use spoofed function, if it exists */
     GCfunc* fn = NULL;
     if (tvisfunc(o)) {
-    {
       fn = funcV(o);
       if (isluafunc(fn))
       {
