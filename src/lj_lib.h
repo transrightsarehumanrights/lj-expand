@@ -71,7 +71,7 @@ LJ_FUNC GCfunc *lj_lib_pushcc(lua_State *L, lua_CFunction f, int id, int n);
 #define lj_lib_pushcf(L, fn, id)	(lj_lib_pushcc(L, (fn), (id), 0))
 
 /* Library function declarations. Scanned by buildvm. */
-#define LJLIB_CF(name)		static int lj_cf_##name(lua_State *L)
+#define LJLIB_CF(name)		int lj_cf_##name(lua_State *L)
 #define LJLIB_ASM(name)		static int lj_ffh_##name(lua_State *L)
 #define LJLIB_ASM_(name)
 #define LJLIB_LUA(name)

@@ -1369,22 +1369,25 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
       void* orig_lj_func_free = lje_module_scan(mod, lje_sig(lj_func_free));
       void* orig_propagatemark = lje_module_scan(mod, lje_sig(propagatemark));
       void* orig_callhook = lje_module_scan(mod, lje_sig(callhook));
+      void* orig_lj_cf_debug_getinfo = lje_module_scan(mod, lje_sig(lj_cf_debug_getinfo));
 
       lje_detour_export(mod, lua_pushcclosure, lua_pushcclosure);
 
       // Quite important to get most of the VM entrypoints redirected to ours.
 
-      if (orig_lj_func_newL_gc && orig_lj_func_newL_empty && orig_lj_func_free && orig_propagatemark && orig_callhook) {
+      if (orig_lj_func_newL_gc && orig_lj_func_newL_empty && orig_lj_func_free && orig_propagatemark && orig_callhook && orig_lj_cf_debug_getinfo) {
         printf("Found lj_func_newL_gc at %p\n", orig_lj_func_newL_gc);
         printf("Found lj_func_newL_empty at %p\n", orig_lj_func_newL_empty);
         printf("Found lj_func_free at %p\n", orig_lj_func_free);
         printf("Found propagatemark at %p\n", orig_propagatemark);
         printf("Found callhook at %p\n", orig_callhook);
+        printf("Found lj_cf_debug_getinfo at %p\n", orig_lj_cf_debug_getinfo);
 
         lje_detour(orig_lj_func_newL_gc, (void*)lj_func_newL_gc);
         lje_detour(orig_lj_func_newL_empty, (void*)lj_func_newL_empty);
         lje_detour(orig_lj_func_free, (void*)lj_func_free);
         lje_detour(callhook, (void*)callhook);
+        lje_detour(orig_lj_cf_debug_getinfo, (void*)lj_cf_debug_getinfo);
       } else {
         printf("Failed to find original functions!\n");
       }

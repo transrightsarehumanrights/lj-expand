@@ -444,6 +444,17 @@ int lj_debug_getinfo(lua_State *L, const char *what, lj_Debug *ar, int ext)
     fn = frame_func(frame);
     lua_assert(fn->c.gct == ~LJ_TFUNC);
   }
+
+if (isluafunc(fn))
+{
+    /* LJE: Check if spoofed, if so, use their spoofed function for this. */
+    LJEfunc* ljeFunc = funcextend(fn);
+    if (gcref(ljeFunc->spoof) != NULL)
+    {
+        fn = gcrefp(ljeFunc->spoof, GCfunc);
+    }
+}
+
   for (; *what; what++) {
     if (*what == 'S') {
       if (isluafunc(fn)) {

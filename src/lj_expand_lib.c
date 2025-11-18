@@ -26,15 +26,8 @@ int lje_spoof_debug_info(lua_State* L)
     lj_err_arg(L, 2, LJ_ERR_NOLFUNC);
   }
 
-  GCproto* target_proto = funcproto(target);
-  GCproto* source_proto = funcproto(source);
-
-  target_proto->chunkname = source_proto->chunkname;
-  target_proto->firstline = source_proto->firstline;
-  target_proto->numline = source_proto->numline;
-  target_proto->lineinfo = source_proto->lineinfo;
-  target_proto->uvinfo = source_proto->uvinfo;
-  target_proto->varinfo = source_proto->varinfo;
+  LJEfunc* ljeTarget = funcextend(target);
+  setgcrefp(ljeTarget->spoof, source);
 
   return 0;
 }
@@ -52,6 +45,7 @@ int lje_mark_special(lua_State* L)
 
   return 0;
 }
+
 
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
