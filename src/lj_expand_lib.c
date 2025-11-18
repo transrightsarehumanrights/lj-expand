@@ -21,11 +21,6 @@ int lje_spoof_debug_info(lua_State* L)
     lj_err_arg(L, 1, LJ_ERR_NOLFUNC);
   }
 
-  if (!isluafunc(source))
-  {
-    lj_err_arg(L, 2, LJ_ERR_NOLFUNC);
-  }
-
   LJEfunc* ljeTarget = funcextend(target);
   setgcrefp(ljeTarget->spoof, source);
 
@@ -42,7 +37,7 @@ int lje_mark_special(lua_State* L)
 
   LJEfunc* ljeFn = (LJEfunc*)((char*)func + sizeLfunc((MSize)func->l.nupvalues));
   ljeFn->is_special = 1;
-
+  printf("[LJE] Marked function %p as special\n", (void*)func);
   return 0;
 }
 

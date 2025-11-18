@@ -128,7 +128,6 @@ LJLIB_CF(debug_getinfo)
   if (!lj_debug_getinfo(L1, options, &ar, 1))
     lj_err_arg(L, arg+2, LJ_ERR_INVOPT);
   lua_createtable(L, 0, 16);  /* Create result table. */
-  settabss(L, "hi", "hey there");
   for (; *options; options++) {
     switch (*options) {
     case 'S':

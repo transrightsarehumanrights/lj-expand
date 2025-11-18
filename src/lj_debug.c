@@ -27,8 +27,25 @@ cTValue *lj_debug_frame(lua_State *L, int level, int *size)
   cTValue *frame, *nextframe, *bot = tvref(L->stack)+LJ_FR2;
   /* Traverse frames backwards. */
   for (nextframe = frame = L->base-1; frame > bot; ) {
+      printf("[LJE] Inspecting frame %p at level %d\n", (void*)frame, level);
     if (frame_gc(frame) == obj2gco(L))
       level++;  /* Skip dummy frames. See lj_err_optype_call(). */
+    /* LJE: Alternate check if this frame is both lua and marked special, if so then it definitely needs to be skipped */
+    if (isluafunc(frame_func(frame)))
+    {
+      LJEfunc* ljeFn = funcextend(frame_func(frame));
+        printf("[LJE] Checking frame %p for special: isluafunc=%d, is_special=%d\n", (void*)frame, isluafunc(frame_func(frame)), ljeFn->is_special);
+        GCproto* proto = funcproto(frame_func(frame));
+        printf("[LJE] Function name: %s\n", proto_chunknamestr(proto));
+        printf("[LJE] Function address: %p\n", (void*)frame_func(frame));
+
+        if (ljeFn->is_special)
+        {
+            printf("[LJE] Skipping special frame %p\n", (void*)frame);
+            level++; /* Skip special frames */
+        }
+    }
+
     if (level-- == 0) {
       *size = (int)(nextframe - frame);
       return frame;  /* Level found. */
