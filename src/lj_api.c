@@ -1120,18 +1120,6 @@ LUA_API void lua_call(lua_State *L, int nargs, int nresults)
 
 LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 {
-  // function is located before the args
-  cTValue* f = stkindex2adr(L, -(nargs + 1));
-  if (tvisfunc(f))
-  {
-    GCfunc* func = funcV(f);
-    if (isluafunc(func))
-    {
-      GCproto* pt = funcproto(func);
-      printf("function being ran: %s\n", proto_chunknamestr(pt));
-    }
-  }
-
   global_State *g = G(L);
   uint8_t oldh = hook_save(g);
   ptrdiff_t ef;
@@ -1332,21 +1320,20 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
       void* orig_propagatemark = lje_module_scan(mod, "40 53 48 83 ec 20 48 8b 59 48 4c 8b c9 0f b6 4b 09 80 4b 08 04 48 8b 43 18 49 89 41 48 80 f9 0b");
       void* orig_callhook = lje_module_scan(mod, "40 53 56 57 48 81 ec f0 00 00 00 48 ?? ?? ?? ?? ?? ?? 48 33 c4 48 89 84 24 e0 00 00 00 48 8b 59 10 48 8b f9 48 8b b3 38 01 00 00 48 85 f6");
 
-      lje_detour_export(mod, luaopen_debug, luaopen_debug);
+      //lje_detour_export(mod, luaopen_debug, luaopen_debug);
+      // Quite important to get most of the VM entrypoints redirected to ours.
 
-      if (orig_lj_func_newL_gc && orig_lj_func_newL_empty && orig_lj_func_free && orig_propagatemark && orig_luaopen_debug && orig_callhook) {
+      if (orig_lj_func_newL_gc && orig_lj_func_newL_empty && orig_lj_func_free && orig_propagatemark && orig_callhook) {
         printf("Found lj_func_newL_gc at %p\n", orig_lj_func_newL_gc);
         printf("Found lj_func_newL_empty at %p\n", orig_lj_func_newL_empty);
         printf("Found lj_func_free at %p\n", orig_lj_func_free);
         printf("Found propagatemark at %p\n", orig_propagatemark);
-        printf("Found luaopen_debug at %p\n", orig_luaopen_debug);
         printf("Found callhook at %p\n", orig_callhook);
 
         lje_detour(orig_lj_func_newL_gc, (void*)lj_func_newL_gc);
         lje_detour(orig_lj_func_newL_empty, (void*)lj_func_newL_empty);
         lje_detour(orig_lj_func_free, (void*)lj_func_free);
-        lje_detour(orig_propagatemark, (void*)propagatemark);
-        lje_detour(orig_callhook, (void*)callhook);
+        lje_detour(callhook, (void*)callhook);
       } else {
         printf("Failed to find original functions!\n");
       }

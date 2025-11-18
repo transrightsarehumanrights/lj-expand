@@ -358,7 +358,18 @@ LUA_API int lua_gethookcount(lua_State *L)
 /* Call a hook. */
 void callhook(lua_State *L, int event, BCLine line)
 {
-  printf("callhook: event=%d, line=%d\n", event, line);
+  GCfunc* fn = curr_func(L);
+  if (isluafunc(fn))
+  {
+    LJEfunc* ljeFn = funcextend(fn);
+    if (ljeFn->is_special)
+    {
+      printf("Prevented hook into special function\n");
+      return; // Don't let anyone hook into special functions
+    }
+  }
+
+
   global_State *g = G(L);
   lua_Hook hookf = g->hookf;
   if (hookf && !hook_active(g)) {
