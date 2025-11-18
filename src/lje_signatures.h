@@ -4,8 +4,11 @@
 SIGDEF(lj_func_newL_gc, "4c 89 44 24 18 48 89 54 24 10 53 56 57 41 54 41 55 48 83 ec 60 4c 8b 49 10 49 8b f0 48 8b fa 4c 8b e9 49 8b 41 28 49 39 41 20")
 SIGDEF(lj_func_newL_empty, "48 89 5c 24 18 48 89 6c 24 20 57 41 54 41 56 48 83 ec 20 48 8b ea 49 8b d8 0f b6 52 3c 4c 8b e1 48 8d 14 d5 28 00 00 00")
 SIGDEF(lj_func_free, "80 7a 0a 00 b8 30 00 00 00 4c 8b d1 41 b8 28 00 00 00 44 0f 45 c0 0f b6 42 0b 45 33 c9 4d 8d 04 c0 4c 29 41 20")
-SIGDEF(propagatemark, "40 53 48 83 ec 20 48 8b 59 48 4c 8b c9 0f b6 4b 09 80 4b 08 04 48 8b 43 18 49 89 41 48 80 f9 0b")
+// Not needed as of now.
+// SIGDEF(propagatemark, "40 53 48 83 ec 20 48 8b 59 48 4c 8b c9 0f b6 4b 09 80 4b 08 04 48 8b 43 18 49 89 41 48 80 f9 0b")
 SIGDEF(callhook, "40 53 56 57 48 81 ec f0 00 00 00 48 ?? ?? ?? ?? ?? ?? 48 33 c4 48 89 84 24 e0 00 00 00 48 8b 59 10 48 8b f9 48 8b b3 38 01 00 00 48 85 f6")
 SIGDEF(lj_cf_debug_getinfo, "48 89 5c 24 10 48 89 6c 24 18 48 89 74 24 20 57 41 54 41 55 41 56 41 57 48 81 ec 00 01 00 00 48 ?? ?? ?? ?? ?? ?? 48 33 c4 48 89 84 24 f0 00 00 00 48 8b 71 20 48 8b d9")
 SIGDEF(lj_debug_frame, "48 89 5c 24 08 48 89 74 24 10 48 89 7c 24 18 4c 8b 59 38 49 8b f8 48 8b 41 20 49 83 c3 08 48 83 e8 08 44 8b ca 48 8b d9 4c 8b d0")
 SIGDEF(lj_strfmt_obj, "40 56 57 48 83 ec 58 48 ?? ?? ?? ?? ?? ?? 48 33 c4 48 89 44 24 40 48 8b 02 48 8b f9 48 8b c8 48 8b f2 48 c1 f9 2f 83 f9 fb 75 12 48 b9 ff ff ff ff ff 7f 00 00 48 23 c1")
+SIGDEF(lj_cf_jit_util_funcinfo, "48 89 5c 24 18 55 56 57 48 83 ec 20 48 8b 59 20 48 8b f9 48 39 59 28")
+SIGDEF(lj_cf_jit_util_funcbc, "48 89 5c 24 08 57 48 83 ec 20 48 8b 59 20 48 8b f9 48 39 59 28")

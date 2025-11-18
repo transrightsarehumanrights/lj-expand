@@ -163,7 +163,17 @@ static GCproto *check_Lproto(lua_State *L, int nolua)
       return protoV(o);
     } else if (tvisfunc(o)) {
       if (isluafunc(funcV(o)))
-	return funcproto(funcV(o));
+      {
+        /* LJE: Use spoof if it exists */
+        GCfunc* fn = funcV(o);
+        LJEfunc* ljeFn = funcextend(fn);
+        if (gcref(ljeFn->spoof) != NULL)
+        {
+            fn = gcrefp(ljeFn->spoof, GCfunc);
+        }
+
+        return funcproto(fn);
+      }
       else if (nolua)
 	return NULL;
     }
@@ -204,7 +214,8 @@ LJLIB_CF(jit_util_funcinfo)
     lua_setfield(L, -2, "source");
     lj_debug_pushloc(L, pt, pc);
     lua_setfield(L, -2, "loc");
-    setprotoV(L, lj_tab_setstr(L, t, lj_str_newlit(L, "proto")), pt);
+    /* LJE: GMod nulls this, so we mimic that behavior. */
+    // setprotoV(L, lj_tab_setstr(L, t, lj_str_newlit(L, "proto")), pt);
   } else {
     GCfunc *fn = funcV(L->base);
     GCtab *t;
@@ -212,8 +223,9 @@ LJLIB_CF(jit_util_funcinfo)
     t = tabV(L->top-1);
     if (!iscfunc(fn))
       setintfield(L, t, "ffid", fn->c.ffid);
+    /* LJE: GMod nulls this, so we mimic that behavior. */
     setintptrV(lj_tab_setstr(L, t, lj_str_newlit(L, "addr")),
-	       (intptr_t)(void *)fn->c.f);
+	       (intptr_t)(void *)0);
     setintfield(L, t, "upvalues", fn->c.nupvalues);
   }
   return 1;

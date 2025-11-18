@@ -1365,42 +1365,15 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
     lje_Module* mod = lje_module_find("lua_shared.dll");
     if (mod) {
       printf("lua_shared.dll found at %p\n", (void*)mod->base);
-      void* orig_lj_func_newL_gc = lje_module_scan(mod, lje_sig(lj_func_newL_gc));
-      void* orig_lj_func_newL_empty = lje_module_scan(mod, lje_sig(lj_func_newL_empty));
-      void* orig_lj_func_free = lje_module_scan(mod, lje_sig(lj_func_free));
-      void* orig_propagatemark = lje_module_scan(mod, lje_sig(propagatemark));
-      void* orig_callhook = lje_module_scan(mod, lje_sig(callhook));
-      void* orig_lj_cf_debug_getinfo = lje_module_scan(mod, lje_sig(lj_cf_debug_getinfo));
-      void* orig_lj_debug_frame = lje_module_scan(mod, lje_sig(lj_debug_frame));
-      void* orig_lj_strfmt_obj = lje_module_scan(mod, lje_sig(lj_strfmt_obj));
+      // Remap all the necessary functions to our own.
+#define SIGDEF(name, _) lje_remap(mod, name)
+#include "lje_signatures.h"
+#undef SIGDEF
 
       lje_detour_export(mod, lua_pushcclosure, lua_pushcclosure);
       // This is *very* annoying, but GMod's luaL_traceback seems to have inlined lj_debug_frame,
       // so we have to detour that as well to ensure our debug_frame is used.
       lje_detour_export(mod, luaL_traceback, luaL_traceback);
-      // Quite important to get most of the VM entrypoints redirected to ours.
-
-      if (orig_lj_func_newL_gc && orig_lj_func_newL_empty && orig_lj_func_free && orig_propagatemark && orig_callhook && orig_lj_cf_debug_getinfo
-          && orig_lj_debug_frame && orig_lj_strfmt_obj) {
-        printf("Found lj_func_newL_gc at %p\n", orig_lj_func_newL_gc);
-        printf("Found lj_func_newL_empty at %p\n", orig_lj_func_newL_empty);
-        printf("Found lj_func_free at %p\n", orig_lj_func_free);
-        printf("Found propagatemark at %p\n", orig_propagatemark);
-        printf("Found callhook at %p\n", orig_callhook);
-        printf("Found lj_cf_debug_getinfo at %p\n", orig_lj_cf_debug_getinfo);
-        printf("Found lj_debug_frame at %p\n", orig_lj_debug_frame);
-        printf("Found lj_strfmt_obj at %p\n", orig_lj_strfmt_obj);
-
-        lje_detour(orig_lj_func_newL_gc, (void*)lj_func_newL_gc);
-        lje_detour(orig_lj_func_newL_empty, (void*)lj_func_newL_empty);
-        lje_detour(orig_lj_func_free, (void*)lj_func_free);
-        lje_detour(callhook, (void*)callhook);
-        lje_detour(orig_lj_cf_debug_getinfo, (void*)lj_cf_debug_getinfo);
-        lje_detour(orig_lj_debug_frame, (void*)lj_debug_frame);
-        lje_detour(orig_lj_strfmt_obj, (void*)lj_strfmt_obj);
-      } else {
-        printf("Failed to find original functions!\n");
-      }
     } else {
       printf("lua_shared.dll not found!\n");
     }

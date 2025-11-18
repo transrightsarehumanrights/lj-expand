@@ -32,6 +32,8 @@ LUALIB_API int luaopen_package(lua_State *L);
 int lj_cf_debug_getinfo(lua_State *L);
 LUALIB_API int luaopen_debug(lua_State *L);
 LUALIB_API int luaopen_bit(lua_State *L);
+int lj_cf_jit_util_funcinfo(lua_State *L);
+int lj_cf_jit_util_funcbc(lua_State *L);
 LUALIB_API int luaopen_jit(lua_State *L);
 LUALIB_API int luaopen_ffi(lua_State *L);
 
