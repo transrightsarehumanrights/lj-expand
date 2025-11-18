@@ -1346,7 +1346,7 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
         lje_detour(orig_lj_func_newL_empty, (void*)lj_func_newL_empty);
         lje_detour(orig_lj_func_free, (void*)lj_func_free);
         lje_detour(orig_propagatemark, (void*)propagatemark);
-        //lje_detour(orig_callhook, (void*)callhook);
+        lje_detour(orig_callhook, (void*)callhook);
       } else {
         printf("Failed to find original functions!\n");
       }
