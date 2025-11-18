@@ -369,7 +369,6 @@ void callhook(lua_State *L, int event, BCLine line)
     }
   }
 
-
   global_State *g = G(L);
   lua_Hook hookf = g->hookf;
   if (hookf && !hook_active(g)) {

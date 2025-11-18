@@ -458,7 +458,7 @@ typedef union GCfunc {
 typedef struct LJEfunc
 {
   uint8_t is_special;
-  char metadata[7];
+  GCRef spoof;
 } LJEfunc;
 
 #define FF_LUA		0

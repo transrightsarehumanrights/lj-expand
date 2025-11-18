@@ -132,7 +132,7 @@ static GCfunc *func_newL(lua_State *L, GCproto *pt, GCtab *env)
   pt->flags = (uint8_t)(count - ((count >> PROTO_CLC_BITS) & PROTO_CLCOUNT));
 
   LJEfunc* ljeFn = (LJEfunc*)((char*)fn + sizeLfunc((MSize)pt->sizeuv));
-  memset(ljeFn->metadata, 0, sizeof(ljeFn->metadata));
+  setgcrefnull(ljeFn->spoof);
   ljeFn->is_special = 0;
 
   return fn;
