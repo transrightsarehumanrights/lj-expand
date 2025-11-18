@@ -35,9 +35,8 @@ int lje_mark_special(lua_State* L)
     lj_err_arg(L, 1, LJ_ERR_NOLFUNC);
   }
 
-  LJEfunc* ljeFn = (LJEfunc*)((char*)func + sizeLfunc((MSize)func->l.nupvalues));
+  LJEfunc* ljeFn = funcextend(func);
   ljeFn->is_special = 1;
-  printf("[LJE] Marked function %p as special\n", (void*)func);
   return 0;
 }
 
