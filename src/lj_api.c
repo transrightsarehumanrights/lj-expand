@@ -680,8 +680,57 @@ LUA_API const char *lua_pushfstring(lua_State *L, const char *fmt, ...)
   return ret;
 }
 
+// We inject our globals here, since it functions well enough as a good injection point.
+// Bit of a hack, but it works. Can replace it if we ever add detours with original function calls.
+#define LJE_MAX_STATES 16
+static lua_State* lje_seen_states[LJE_MAX_STATES] = {0};
+
+static void lje_clear_seen_states();
+static int lje_seen_state_length();
+
+static int lje_is_new_state(lua_State* L) {
+  if (lje_seen_state_length() >= LJE_MAX_STATES) {
+      lje_clear_seen_states();
+  }
+
+  for (int i = 0; i < LJE_MAX_STATES; i++) {
+      if (lje_seen_states[i] == L) {
+          return 0;
+      }
+
+      if (lje_seen_states[i] == NULL) {
+          lje_seen_states[i] = L;
+          return 1;
+      }
+  }
+  return 0;
+}
+
+static int lje_seen_state_length() {
+  int count = 0;
+  for (int i = 0; i < LJE_MAX_STATES; i++) {
+      if (lje_seen_states[i] != NULL) {
+          count++;
+      }
+  }
+
+  return count;
+}
+
+static void lje_clear_seen_states() {
+  for (int i = 0; i < LJE_MAX_STATES; i++) {
+      lje_seen_states[i] = NULL;
+  }
+}
+
 LUA_API void lua_pushcclosure(lua_State *L, lua_CFunction f, int n)
 {
+  if (lje_is_new_state(L))
+  {
+    printf("[LJE] Injecting globals into new lua_State %p\n", (void*)L);
+    lje_addfuncs(L);
+  }
+
   GCfunc *fn;
   lj_gc_check(L);
   api_checknelems(L, n);
@@ -1320,7 +1369,8 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
       void* orig_propagatemark = lje_module_scan(mod, "40 53 48 83 ec 20 48 8b 59 48 4c 8b c9 0f b6 4b 09 80 4b 08 04 48 8b 43 18 49 89 41 48 80 f9 0b");
       void* orig_callhook = lje_module_scan(mod, "40 53 56 57 48 81 ec f0 00 00 00 48 ?? ?? ?? ?? ?? ?? 48 33 c4 48 89 84 24 e0 00 00 00 48 8b 59 10 48 8b f9 48 8b b3 38 01 00 00 48 85 f6");
 
-      //lje_detour_export(mod, luaopen_debug, luaopen_debug);
+      lje_detour_export(mod, lua_pushcclosure, lua_pushcclosure);
+
       // Quite important to get most of the VM entrypoints redirected to ours.
 
       if (orig_lj_func_newL_gc && orig_lj_func_newL_empty && orig_lj_func_free && orig_propagatemark && orig_callhook) {
