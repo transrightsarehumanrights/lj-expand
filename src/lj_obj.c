@@ -36,15 +36,44 @@ int LJ_FASTCALL lj_obj_equal(cTValue *o1, cTValue *o2)
 /* Return pointer to object or its object data. */
 const void * LJ_FASTCALL lj_obj_ptr(cTValue *o)
 {
+  void* result = NULL;
   if (tvisudata(o))
-    return uddata(udataV(o));
+    result = uddata(udataV(o));
   else if (tvislightud(o))
-    return lightudV(o);
+    result = lightudV(o);
   else if (LJ_HASFFI && tviscdata(o))
-    return cdataptr(cdataV(o));
+    result = cdataptr(cdataV(o));
   else if (tvisgcv(o))
-    return gcV(o);
+    /* LJE: Check if a spoofed lua function. If so, return the spoofed target pointer */
+      if (tvisfunc(o))
+      {
+        GCfunc* fn = funcV(o);
+        if (isluafunc(fn))
+        {
+          LJEfunc* ljeFn = funcextend(fn);
+          GCfunc* target = gcrefp(ljeFn->spoof, GCfunc);
+          if (target != NULL)
+          {
+            result = (void*)target;
+          }
+          else
+          {
+            result = gcV(o);
+          }
+        } else
+        {
+          // a C function, just return normally
+          result = gcV(o);
+        }
+      } else
+      {
+        result = gcV(o);
+      }
   else
     return NULL;
+
+  /* LJE: Stupid change by GMod. We need to OR the pointer with a mask to avoid noticeable differences */
+  void* maskedResult = (void*)((uintptr_t)result | GMOD_PTR_MASK);
+  return maskedResult;
 }
 
