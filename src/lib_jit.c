@@ -173,6 +173,9 @@ static GCproto *check_Lproto(lua_State *L, int nolua)
           /* If the spoofed function is *not* a Lua function, return NULL to avoid memory corruption */
           if (!isluafunc(fn))
           {
+            /* If nolua is false, we want to raise an error */
+            if (!nolua)
+              goto type_error;
             return NULL;
           }
         }
@@ -186,6 +189,7 @@ static GCproto *check_Lproto(lua_State *L, int nolua)
       }
     }
   }
+  type_error:
   lj_err_argt(L, 1, LUA_TFUNCTION);
   return NULL;  /* unreachable */
 }
@@ -226,6 +230,21 @@ LJLIB_CF(jit_util_funcinfo)
     // setprotoV(L, lj_tab_setstr(L, t, lj_str_newlit(L, "proto")), pt);
   } else {
     GCfunc *fn = funcV(L->base);
+    /* LJE: check_Lproto can return NULL if a spoofed function is not a Lua function, so we need to handle that case accordingly */
+    if (isluafunc(fn))
+    {
+      LJEfunc* ljeFn = funcextend(fn);
+      if (gcref(ljeFn->spoof) != NULL)
+      {
+        GCfunc* spoof = gcrefp(ljeFn->spoof, GCfunc);
+        if (!isluafunc(spoof)) /* iscfunc won't work here if it's a fast-function. */
+        {
+          /* Use the spoofed function only if the original function is a C function */
+          fn = spoof;
+        }
+      }
+    }
+
     GCtab *t;
     lua_createtable(L, 0, 4);  /* Increment hash size if fields are added. */
     t = tabV(L->top-1);
