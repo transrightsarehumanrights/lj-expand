@@ -43,8 +43,15 @@ cTValue *lj_debug_frame(lua_State *L, int level, int *size)
         GCobj* target = gcrefp(ljeFn->spoof, GCobj);
         if (target != NULL)
         {
-            /* LJE: Override the frame function to point to the spoofed target */
-            setframe_gc((TValue*)frame, target, LJ_TFUNC);
+            /* LJE: Disabled for now. This did work and it actually was pretty cool
+             * but it causes major issues in detouring situations where the debug functions
+             * have an expectation of what the function should be, but the actual frame slots do not match up
+             * and cause a spectacular crash later on down the line.
+             *
+             * This was only ever used to get debug.getinfo to return the right function, (func), but it does it
+             * without this anyways. I don't think this will be re-enabled unless we can find a way to make it work with detouring.
+             */
+            //setframe_gc((TValue*)frame, target, LJ_TFUNC);
         }
     }
 
@@ -322,9 +329,19 @@ const char *lj_debug_funcname(lua_State *L, cTValue *frame, const char **name)
     frame = frame_prevd(frame);
   pframe = frame_prev(frame);
   fn = frame_func(pframe);
+    /* LJE: Handle spoofed functions */
+    if (isluafunc(fn)) {
+        LJEfunc* ljeFn = funcextend(fn);
+        if (gcref(ljeFn->spoof) != NULL)
+        {
+            fn = gcrefp(ljeFn->spoof, GCfunc);
+        }
+    }
   pc = debug_framepc(L, fn, frame);
   if (pc != NO_BCPOS) {
     GCproto *pt = funcproto(fn);
+      if (pc == 0) return NULL;
+      if (pc > pt->sizebc) return NULL;
     const BCIns *ip = &proto_bc(pt)[check_exp(pc < pt->sizebc, pc)];
     MMS mm = bcmode_mm(bc_op(*ip));
     if (mm == MM_call) {

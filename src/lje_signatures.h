@@ -13,3 +13,7 @@ SIGDEF(lj_strfmt_obj, "40 56 57 48 83 ec 58 48 ?? ?? ?? ?? ?? ?? 48 33 c4 48 89 
 SIGDEF(lj_cf_jit_util_funcinfo, "48 89 5c 24 18 55 56 57 48 83 ec 20 48 8b 59 20 48 8b f9 48 39 59 28")
 SIGDEF(lj_cf_jit_util_funcbc, "48 89 5c 24 08 57 48 83 ec 20 48 8b 59 20 48 8b f9 48 39 59 28")
 SIGDEF(lj_cf_debug_getlocal, "48 89 5c 24 10 48 89 6c 24 18 56 57 41 56 48 81 ec f0 00 00 00 48 ?? ?? ?? ?? ?? ?? 48 33 c4 48 89 84 24 e0 00 00 00 48 8b 79 20")
+// This is a really niche bug, but this is necessary to fix crashes inside GMod's custom Lua C code.
+// It's something to do with how lj_debug_funcname can get called, but it wont handle spoofing properly.
+// Then, it'll try to read bytecodes past the valid memory region and crash.
+SIGDEF(lj_debug_funcname, "48 89 5c 24 08 48 89 74 24 10 57 48 83 ec 20 48 8b 41 38 49 8b f0 48 83 c0 08 48 8b d9 48 3b d0")

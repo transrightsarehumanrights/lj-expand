@@ -40,6 +40,12 @@ int lje_mark_special(lua_State* L)
   return 0;
 }
 
+int lje_con_print(lua_State* L)
+{
+    const char* msg = luaL_checkstring(L, 1);
+    printf("[LJE CONSOLE] %s\n", msg);
+    return 0;
+}
 
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
@@ -50,5 +56,6 @@ void lje_addfuncs(lua_State* L) {
   LJE_SET_FUNC("set_ffid", lje_set_ffid);
   LJE_SET_FUNC("spoof_debug_info", lje_spoof_debug_info);
   LJE_SET_FUNC("mark_special", lje_mark_special);
+  LJE_SET_FUNC("con_print", lje_con_print);
   lua_pop(L, 1); // Pop globals table
 }

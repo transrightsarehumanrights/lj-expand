@@ -145,7 +145,7 @@ GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
   /* LJE: Check if this is @Startup, which means game is starting up */
   if (strcmp(proto_chunknamestr(pt), "@Startup") == 0)
   {
-      printf("[LJE] Detected creation of Lua function for @Startup\n");
+    printf("[LJE] Detected creation of Lua function for @Startup\n");
     lje_startup_execute(L);
   }
 
