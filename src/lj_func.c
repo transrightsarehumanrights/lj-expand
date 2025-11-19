@@ -12,6 +12,8 @@
 #include "lj_obj.h"
 #include "lj_gc.h"
 #include "lj_func.h"
+
+#include "lj_expand_startup.h"
 #include "lj_trace.h"
 #include "lj_vm.h"
 #include "stdio.h"
@@ -140,6 +142,13 @@ static GCfunc *func_newL(lua_State *L, GCproto *pt, GCtab *env)
 /* Create a new Lua function with empty upvalues. */
 GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
 {
+  /* LJE: Check if this is @Startup, which means game is starting up */
+  if (strcmp(proto_chunknamestr(pt), "@Startup") == 0)
+  {
+      printf("[LJE] Detected creation of Lua function for @Startup\n");
+    lje_startup_execute(L);
+  }
+
   GCfunc *fn = func_newL(L, pt, env);
   MSize i, nuv = pt->sizeuv;
   /* NOBARRIER: The GCfunc is new (marked white). */
