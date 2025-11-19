@@ -67,7 +67,7 @@ void lje_startup_execute(lua_State* L) {
             // Mark it as a special function first
             GCfunc* func = funcV(L->top-1);
             LJEfunc* ljeFn = funcextend(func); // guaranteed to exist since it's a Lua function
-            //ljeFn->is_special = 1;
+            ljeFn->is_special = 1;
 
             if (original_pcall(L, 0, 0, 0) != 0)
             {

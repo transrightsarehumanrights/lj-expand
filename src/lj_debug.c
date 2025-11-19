@@ -739,7 +739,8 @@ LUALIB_API void luaL_traceback (lua_State *L, lua_State *L1, const char *msg,
       if (*ar.what == 'm') {
 	lua_pushliteral(L, " in main chunk");
       } else if (*ar.what == 'C') {
-	lua_pushfstring(L, " at %p", fn->c.f);
+          /* LJE: GMod masks C function addresses */
+	lua_pushfstring(L, " at %p", (void*)((uintptr_t)fn->c.f | GMOD_PTR_MASK));
       } else {
 	lua_pushfstring(L, " in function <%s:%d>",
 			ar.short_src, ar.linedefined);
