@@ -169,13 +169,21 @@ static GCproto *check_Lproto(lua_State *L, int nolua)
         LJEfunc* ljeFn = funcextend(fn);
         if (gcref(ljeFn->spoof) != NULL)
         {
-            fn = gcrefp(ljeFn->spoof, GCfunc);
+          fn = gcrefp(ljeFn->spoof, GCfunc);
+          /* If the spoofed function is *not* a Lua function, return NULL to avoid memory corruption */
+          if (!isluafunc(fn))
+          {
+            return NULL;
+          }
         }
 
         return funcproto(fn);
       }
-      else if (nolua)
-	return NULL;
+
+      if (nolua)
+      {
+        return NULL;
+      }
     }
   }
   lj_err_argt(L, 1, LUA_TFUNCTION);
