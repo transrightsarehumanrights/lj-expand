@@ -12,3 +12,4 @@ SIGDEF(lj_debug_frame, "48 89 5c 24 08 48 89 74 24 10 48 89 7c 24 18 4c 8b 59 38
 SIGDEF(lj_strfmt_obj, "40 56 57 48 83 ec 58 48 ?? ?? ?? ?? ?? ?? 48 33 c4 48 89 44 24 40 48 8b 02 48 8b f9 48 8b c8 48 8b f2 48 c1 f9 2f 83 f9 fb 75 12 48 b9 ff ff ff ff ff 7f 00 00 48 23 c1")
 SIGDEF(lj_cf_jit_util_funcinfo, "48 89 5c 24 18 55 56 57 48 83 ec 20 48 8b 59 20 48 8b f9 48 39 59 28")
 SIGDEF(lj_cf_jit_util_funcbc, "48 89 5c 24 08 57 48 83 ec 20 48 8b 59 20 48 8b f9 48 39 59 28")
+SIGDEF(lj_cf_debug_getlocal, "48 89 5c 24 10 48 89 6c 24 18 56 57 41 56 48 81 ec f0 00 00 00 48 ?? ?? ?? ?? ?? ?? 48 33 c4 48 89 84 24 e0 00 00 00 48 8b 79 20")

@@ -245,6 +245,13 @@ const char *lj_debug_uvnamev(cTValue *o, uint32_t idx, TValue **tvp)
   if (tvisfunc(o)) {
     GCfunc *fn = funcV(o);
     if (isluafunc(fn)) {
+        /* LJE: Use spoofed function, if it exists */
+        LJEfunc* ljeFn = funcextend(fn);
+        if (gcref(ljeFn->spoof) != NULL)
+        {
+            fn = gcrefp(ljeFn->spoof, GCfunc);
+        }
+        
       GCproto *pt = funcproto(fn);
       if (idx < pt->sizeuv) {
 	*tvp = uvval(&gcref(fn->l.uvptr[idx])->uv);

@@ -1374,6 +1374,8 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
       // This is *very* annoying, but GMod's luaL_traceback seems to have inlined lj_debug_frame,
       // so we have to detour that as well to ensure our debug_frame is used.
       lje_detour_export(mod, luaL_traceback, luaL_traceback);
+      // Necessary because debug.getupvalue simply just calls into this
+      lje_detour_export(mod, lua_getupvalue, lua_getupvalue);
     } else {
       printf("lua_shared.dll not found!\n");
     }

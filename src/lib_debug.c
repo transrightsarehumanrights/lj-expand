@@ -167,10 +167,24 @@ LJLIB_CF(debug_getlocal)
   const char *name;
   int slot = lj_lib_checkint(L, arg+2);
   if (tvisfunc(L->base+arg)) {
+    /* LJE: Quick hack to support getting locals from direct references of spoofed functions */
+    /* This is bad, I know, but somehow simpler than having to delve into the internals of lj_debug_uv* functions */
+    GCfunc* fn = funcV(L->base+arg);
+    if (isluafunc(fn))
+    {
+      LJEfunc* ljeFn = funcextend(fn);
+      if (gcref(ljeFn->spoof) != NULL)
+      {
+        setfuncV(L, L->base+arg, gcrefp(ljeFn->spoof, GCfunc));
+      }
+    }
+
     L->top = L->base+arg+1;
     lua_pushstring(L, lua_getlocal(L, NULL, slot));
     return 1;
   }
+
+  /* LJE: In this case, our debug_frame mitigation will handle this correctly */
   if (!lua_getstack(L1, lj_lib_checkint(L, arg+1), &ar))
     lj_err_arg(L, arg+1, LJ_ERR_LVLRNG);
   name = lua_getlocal(L1, &ar, slot);
