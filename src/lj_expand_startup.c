@@ -1,5 +1,6 @@
 #include "lj_expand_startup.h"
 
+#include "lj_expand_lib.h"
 #include "lj_expand_module.h"
 #include "lj_lib.h"
 #include "stdio.h"
@@ -76,6 +77,7 @@ void lje_startup_execute(lua_State* L) {
             } else
             {
                 printf("[LJE] Startup script executed successfully.\n");
+                lje_removefuncs(L); // Clean up our global functions after execution
             }
         }
         else

@@ -4,13 +4,6 @@
 #include "lj_lib.h"
 #include "lj_err.h"
 
-int lje_set_ffid(lua_State* L) {
-  lua_Integer ffid = luaL_checkinteger(L, 2);
-  GCfunc* func = lj_lib_checkfunc(L, 1);
-  func->c.ffid = (uint8_t)ffid;
-
-  return 0;
-}
 
 int lje_spoof_debug_info(lua_State* L)
 {
@@ -51,11 +44,22 @@ int lje_con_print(lua_State* L)
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
 
+#define LJE_REMOVE_FUNC(name) \
+  lua_pushnil(L); \
+  lua_setfield(L, -2, name);
+
 void lje_addfuncs(lua_State* L) {
   lua_pushvalue(L, LUA_GLOBALSINDEX);
-  LJE_SET_FUNC("set_ffid", lje_set_ffid);
   LJE_SET_FUNC("spoof_debug_info", lje_spoof_debug_info);
   LJE_SET_FUNC("mark_special", lje_mark_special);
   LJE_SET_FUNC("con_print", lje_con_print);
+  lua_pop(L, 1); // Pop globals table
+}
+
+void lje_removefuncs(lua_State* L) {
+  lua_pushvalue(L, LUA_GLOBALSINDEX);
+  LJE_REMOVE_FUNC("spoof_debug_info");
+  LJE_REMOVE_FUNC("mark_special");
+  LJE_REMOVE_FUNC("con_print");
   lua_pop(L, 1); // Pop globals table
 }
