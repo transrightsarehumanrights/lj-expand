@@ -123,6 +123,9 @@ static GCfunc *func_newL(lua_State *L, GCproto *pt, GCtab *env)
 {
   uint32_t count;
   GCfunc *fn = (GCfunc *)lj_mem_newgco(L, sizeLfunc((MSize)pt->sizeuv) + sizeof(LJEfunc));
+  /* LJE: Reduce reported memory usage for functions to avoid detection */
+  G(L)->gc.total -= sizeof(LJEfunc);
+
   fn->l.gct = ~LJ_TFUNC;
   fn->l.ffid = FF_LUA;
   fn->l.nupvalues = 0;  /* Set to zero until upvalues are initialized. */
