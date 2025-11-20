@@ -1,5 +1,6 @@
 #include "lj_expand_startup.h"
 
+#include "lj_expand_globals.h"
 #include "lj_expand_lib.h"
 #include "lj_expand_module.h"
 #include "lj_lib.h"
@@ -51,6 +52,8 @@ static int resolve_original_functions(luaL_loadbufferx_t* out_loadbufferx, lua_p
 }
 
 void lje_startup_execute(lua_State* L) {
+    LJEG()->main_state = L;
+
     luaL_loadbufferx_t original_loadbufferx = NULL;
     lua_pcall_t original_pcall = NULL;
     if (!resolve_original_functions(&original_loadbufferx, &original_pcall))

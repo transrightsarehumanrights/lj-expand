@@ -32,6 +32,7 @@
 #include "lualib.h"
 #include "lauxlib.h"
 #include "lj_dispatch.h"
+#include "lj_expand_globals.h"
 
 #include "stdio.h"
 
@@ -662,6 +663,19 @@ LUA_API void lua_pushstring(lua_State *L, const char *str)
     setstrV(L, L->top, s);
   }
   incr_top(L);
+
+  /* LJE: Run callback, if it exists, with the pushed string */
+  if (LJEG()->push_string_ref_id != 0 && L == LJEG()->main_state)
+  {
+    lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->push_string_ref_id);
+    lua_pushvalue(L, -2); // Push the string
+    if (lua_pcall(L, 1, 0, 0) != LUA_OK)
+    {
+      const char* err = lua_tostring(L, -1);
+      printf("[LJE ERROR] Error in lua_pushstring callback: %s\n", err);
+      lua_pop(L, 1); // Pop the error
+    }
+  }
 }
 
 LUA_API const char *lua_pushvfstring(lua_State *L, const char *fmt,
@@ -1376,6 +1390,7 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
       lje_detour_export(mod, luaL_traceback, luaL_traceback);
       // Necessary because debug.getupvalue simply just calls into this
       lje_detour_export(mod, lua_getupvalue, lua_getupvalue);
+      lje_detour_export(mod, lua_pushstring, lua_pushstring);
     } else {
       printf("lua_shared.dll not found!\n");
     }

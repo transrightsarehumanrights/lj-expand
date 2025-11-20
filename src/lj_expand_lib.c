@@ -40,6 +40,19 @@ int lje_con_print(lua_State* L)
     return 0;
 }
 
+int lje_set_push_string_callback(lua_State* L)
+{
+  GCfunc* callback = lj_lib_checkfunc(L, 1);
+  if (!isluafunc(callback))
+  {
+    lj_err_arg(L, 1, LJ_ERR_NOLFUNC);
+  }
+
+  funcextend(callback)->is_special = 1;
+  LJEG()->push_string_ref_id = luaL_ref(L, LUA_REGISTRYINDEX);
+  return 0;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -53,6 +66,7 @@ void lje_addfuncs(lua_State* L) {
   LJE_SET_FUNC("spoof_debug_info", lje_spoof_debug_info);
   LJE_SET_FUNC("mark_special", lje_mark_special);
   LJE_SET_FUNC("con_print", lje_con_print);
+  LJE_SET_FUNC("set_push_string_callback", lje_set_push_string_callback);
   lua_pop(L, 1); // Pop globals table
 }
 
@@ -61,5 +75,6 @@ void lje_removefuncs(lua_State* L) {
   LJE_REMOVE_FUNC("spoof_debug_info");
   LJE_REMOVE_FUNC("mark_special");
   LJE_REMOVE_FUNC("con_print");
+  LJE_REMOVE_FUNC("set_push_string_callback");
   lua_pop(L, 1); // Pop globals table
 }
