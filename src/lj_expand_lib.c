@@ -3,6 +3,7 @@
 #include "lauxlib.h"
 #include "lj_lib.h"
 #include "lj_err.h"
+#include "lj_expand_globals.h"
 
 
 int lje_spoof_debug_info(lua_State* L)
@@ -28,8 +29,7 @@ int lje_mark_special(lua_State* L)
     lj_err_arg(L, 1, LJ_ERR_NOLFUNC);
   }
 
-  LJEfunc* ljeFn = funcextend(func);
-  ljeFn->is_special = 1;
+  funcextend(func)->is_special = 1;
   return 0;
 }
 

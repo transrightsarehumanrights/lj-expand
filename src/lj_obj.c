@@ -26,7 +26,28 @@ int LJ_FASTCALL lj_obj_equal(cTValue *o1, cTValue *o2)
     if (tvispri(o1))
       return 1;
     if (!tvisnum(o1))
+    {
+      /* LJE: Extra check for spoofed functions */
+      if (tvisfunc(o1) && isluafunc(funcV(o1)))
+      {
+        LJEfunc* ljeFn = funcextend(funcV(o1));
+        if (gcref(ljeFn->spoof) != NULL)
+        {
+          return gcrefeq(ljeFn->spoof, o2->gcr);
+        }
+      }
+
+      if (tvisfunc(o2) && isluafunc(funcV(o2)))
+      {
+        LJEfunc* ljeFn = funcextend(funcV(o2));
+        if (gcref(ljeFn->spoof) != NULL)
+        {
+          return gcrefeq(o1->gcr, ljeFn->spoof);
+        }
+      }
+
       return gcrefeq(o1->gcr, o2->gcr);
+    }
   } else if (!tvisnumber(o1) || !tvisnumber(o2)) {
     return 0;
   }
