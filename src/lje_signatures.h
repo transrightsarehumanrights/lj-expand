@@ -19,3 +19,4 @@ SIGDEF(lj_cf_debug_getlocal, "48 89 5c 24 10 48 89 6c 24 18 56 57 41 56 48 81 ec
 SIGDEF(lj_debug_funcname, "48 89 5c 24 08 48 89 74 24 10 57 48 83 ec 20 48 8b 41 38 49 8b f0 48 83 c0 08 48 8b d9 48 3b d0")
 // Spoofs equality for spoofed functions.
 SIGDEF(lj_obj_equal, "4c 8b 09 4c 8b 12 49 8b c1 4d 8b c2 48 c1 f8 2f 49 c1 f8 2f 41 3b c0")
+SIGDEF(lj_cf_string_dump, "48 89 5c 24 08 57 48 83 ec 30 ba 01 00 00 00 48 8b d9")
