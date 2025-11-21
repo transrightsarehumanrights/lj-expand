@@ -14,6 +14,7 @@
 #include "lj_state.h"
 #include "lj_frame.h"
 #include "lj_bc.h"
+#include "lj_expand_globals.h"
 #include "lj_strfmt.h"
 #if LJ_HASJIT
 #include "lj_jit.h"
@@ -329,14 +330,14 @@ const char *lj_debug_funcname(lua_State *L, cTValue *frame, const char **name)
     frame = frame_prevd(frame);
   pframe = frame_prev(frame);
   fn = frame_func(pframe);
-    /* LJE: Handle spoofed functions */
-    if (isluafunc(fn)) {
-        LJEfunc* ljeFn = funcextend(fn);
-        if (gcref(ljeFn->spoof) != NULL)
-        {
-            fn = gcrefp(ljeFn->spoof, GCfunc);
-        }
+/* LJE: Handle spoofed functions, only if we're not in a hook. Hooks have a special frame context and need namewhat to resolve properly */
+if (isluafunc(fn) && LJEG()->in_hook == 0) {
+    LJEfunc* ljeFn = funcextend(fn);
+    if (gcref(ljeFn->spoof) != NULL)
+    {
+        fn = gcrefp(ljeFn->spoof, GCfunc);
     }
+}
   pc = debug_framepc(L, fn, frame);
   if (pc != NO_BCPOS) {
     GCproto *pt = funcproto(fn);

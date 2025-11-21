@@ -155,7 +155,35 @@ LJLIB_CF(debug_getinfo)
     }
   }
   if (opt_L) treatstackoption(L, L1, "activelines");
-  if (opt_f) treatstackoption(L, L1, "func");
+  if (opt_f)
+  {
+    /* LJE: Bit of a niche issue here, so
+     * when debug.sethook is used on a Lua based detour,
+     * it can sometimes find the *real* spoofed function we are
+     * trying to avoid being leaked. The only way to grab it
+     * is through this function, so before we copy it into the
+     * table, we run a full GC (slightly expensive) check to see
+     * if this function is being spoofed by any other function.
+     */
+    GCfunc* fn = funcV(L->top-2);
+    global_State* g = G(L);
+    GCobj* o = NULL;
+    for (o = gcref(g->gc.root); o != NULL; o = gcnext(o))
+    {
+      if (o->gch.gct == ~LJ_TFUNC)
+      {
+        GCfunc* checkFn = &o->fn;
+        if (isluafunc(checkFn) && funcspoof(checkFn) == fn)
+        {
+          printf("[LJE] debug.getinfo detected spoofed function, returning original spoof instead\n");
+          setfuncV(L, L->top-2, checkFn);
+          break;
+        }
+      }
+    }
+
+    treatstackoption(L, L1, "func");
+  }
   return 1;  /* Return result table. */
 }
 

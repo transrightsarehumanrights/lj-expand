@@ -53,6 +53,25 @@ int lje_set_push_string_callback(lua_State* L)
   return 0;
 }
 
+int lje_enable_hooks(lua_State* L)
+{
+    LJEG()->skip_hooks = 0;
+    return 0;
+}
+
+int lje_disable_hooks(lua_State* L)
+{
+    LJEG()->skip_hooks = 1;
+    return 0;
+}
+
+int lje_ignore_fn_on_hook(lua_State* L)
+{
+    GCfunc* func = lj_lib_checkfunc(L, 1);
+    setgcrefp(LJEG()->ignore_fn_on_hook, func);
+    return 0;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -67,6 +86,9 @@ void lje_addfuncs(lua_State* L) {
   LJE_SET_FUNC("mark_special", lje_mark_special);
   LJE_SET_FUNC("con_print", lje_con_print);
   LJE_SET_FUNC("set_push_string_callback", lje_set_push_string_callback);
+  LJE_SET_FUNC("enable_hooks", lje_enable_hooks);
+  LJE_SET_FUNC("disable_hooks", lje_disable_hooks);
+  LJE_SET_FUNC("ignore_fn_on_hook", lje_ignore_fn_on_hook);
   lua_pop(L, 1); // Pop globals table
 }
 
@@ -76,5 +98,8 @@ void lje_removefuncs(lua_State* L) {
   LJE_REMOVE_FUNC("mark_special");
   LJE_REMOVE_FUNC("con_print");
   LJE_REMOVE_FUNC("set_push_string_callback");
+  LJE_REMOVE_FUNC("enable_hooks");
+  LJE_REMOVE_FUNC("disable_hooks");
+  LJE_REMOVE_FUNC("ignore_fn_on_hook");
   lua_pop(L, 1); // Pop globals table
 }

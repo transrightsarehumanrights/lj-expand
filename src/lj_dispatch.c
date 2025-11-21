@@ -30,6 +30,8 @@
 #if LJ_HASPROFILE
 #include "lj_profile.h"
 #endif
+#include "lj_expand_globals.h"
+#include "lj_expand_lib.h"
 #include "lj_vm.h"
 #include "luajit.h"
 
@@ -358,15 +360,38 @@ LUA_API int lua_gethookcount(lua_State *L)
 /* Call a hook. */
 void callhook(lua_State *L, int event, BCLine line)
 {
+  /* LJE: Absolutely no hooks are ran if skip_hooks is enabled */
+  if (LJEG()->skip_hooks)
+  {
+    return;
+  }
+
   GCfunc* fn = curr_func(L);
   if (isluafunc(fn))
   {
     LJEfunc* ljeFn = funcextend(fn);
     if (ljeFn->is_special)
     {
-      printf("Prevented hook into special function\n");
       return; // Don't let anyone hook into special functions
     }
+  }
+
+  if (iscfunc(fn))
+  {
+    // Make sure none of our metahook functions get exposed
+    lua_CFunction cfunc = fn->c.f;
+    if (cfunc == lje_enable_hooks || cfunc == lje_disable_hooks)
+    {
+      return;
+    }
+  }
+
+  // Next, check if this is a function that *should* be ignored once if it was hooked
+  if (gcrefp(LJEG()->ignore_fn_on_hook, GCfunc) == fn)
+  {
+    // Clear the ignore function so it only ignores once
+    setgcrefnull(LJEG()->ignore_fn_on_hook);
+    return;
   }
 
   global_State *g = G(L);
@@ -384,7 +409,10 @@ void callhook(lua_State *L, int event, BCLine line)
 #else
     hook_enter(g);
 #endif
-    hookf(L, &ar);
+    LJEG()->in_hook = 1;
+      hookf(L, &ar);
+    LJEG()->in_hook = 0;
+
     lua_assert(hook_active(g));
     setgcref(g->cur_L, obj2gco(L));
 #if LJ_HASPROFILE && !LJ_PROFILE_SIGPROF
