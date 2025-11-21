@@ -17,6 +17,7 @@ int lje_spoof_debug_info(lua_State* L)
 
   LJEfunc* ljeTarget = funcextend(target);
   setgcrefp(ljeTarget->spoof, source);
+  lje_insert_spoof_record(target, source);
 
   return 0;
 }

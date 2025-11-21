@@ -3,6 +3,16 @@
 #include "lua.h"
 #include "lj_obj.h"
 
+/* LJE: Fast linked list to hold spoofed functions. Useful for doing a fast lookup of either
+ * spoof to target or target to spoof.
+ */
+typedef struct LJESpoofRecord
+{
+   GCfunc* spoof; // e.g: lua function pretending to be target
+    GCfunc* target; // e.g: original function being spoofed, can be C function or lua function
+   struct LJESpoofRecord* next;
+} LJESpoofRecord;
+
 /* LJE: This is our own global state, sysmalloc'd without any
  * interference with LuaJIT's own global_State. This is because
  * it has very *very* specific and precise allocation to facilitate JITed
@@ -15,9 +25,14 @@ typedef struct LJEGlobalState
     int skip_hooks;
     GCRef ignore_fn_on_hook;
     int in_hook;
+    LJESpoofRecord spoof_record_root;
 } LJEGlobalState;
 
 #define LJEG() (lje_get_global_state())
 LJEGlobalState* lje_get_global_state();
+
+void lje_insert_spoof_record(GCfunc* spoof, GCfunc* target);
+GCfunc* lje_find_spoof_by_target(GCfunc* target);
+void lje_remove_spoof_record_by_spoof(GCfunc* spoof);
 
 #endif

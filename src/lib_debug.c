@@ -19,6 +19,7 @@
 #include "lj_debug.h"
 #include "lj_lib.h"
 #include "lj_expand_lib.h"
+#include "lj_expand_globals.h"
 
 /* ------------------------------------------------------------------------ */
 
@@ -166,20 +167,12 @@ LJLIB_CF(debug_getinfo)
      * if this function is being spoofed by any other function.
      */
     GCfunc* fn = funcV(L->top-2);
-    global_State* g = G(L);
-    GCobj* o = NULL;
-    for (o = gcref(g->gc.root); o != NULL; o = gcnext(o))
+    GCfunc* spoof = lje_find_spoof_by_target(fn);
+    if (spoof)
     {
-      if (o->gch.gct == ~LJ_TFUNC)
-      {
-        GCfunc* checkFn = &o->fn;
-        if (isluafunc(checkFn) && funcspoof(checkFn) == fn)
-        {
-          printf("[LJE] debug.getinfo detected spoofed function, returning original spoof instead\n");
-          setfuncV(L, L->top-2, checkFn);
-          break;
-        }
-      }
+      /* LJE: Replace function with spoofed version. */
+      printf("[LJE]: debug.getinfo returned real function for %p, replacing with spoofed %p\n", fn, spoof);
+      setfuncV(L, L->top-2, spoof);
     }
 
     treatstackoption(L, L1, "func");

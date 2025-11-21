@@ -13,6 +13,7 @@
 #include "lj_gc.h"
 #include "lj_func.h"
 
+#include "lj_expand_globals.h"
 #include "lj_expand_startup.h"
 #include "lj_trace.h"
 #include "lj_vm.h"
@@ -199,6 +200,12 @@ void LJ_FASTCALL lj_func_free(global_State *g, GCfunc *fn)
 {
   MSize size = isluafunc(fn) ? sizeLfunc((MSize)fn->l.nupvalues) :
 			       sizeCfunc((MSize)fn->c.nupvalues);
+  /* LJE: Remove spoof record. */
+  if (isluafunc(fn) && funcspoof(fn))
+  {
+    lje_remove_spoof_record_by_spoof(fn);
+  }
+
   lj_mem_free(g, fn, size);
 }
 
