@@ -150,6 +150,9 @@ GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
   if (strcmp(proto_chunknamestr(pt), "@Startup") == 0)
   {
     printf("[LJE] Detected creation of Lua function for @Startup\n");
+    printf("[LJE] Clearing any old spoof records...\n");
+    lje_clear_spoof_records();
+
     lje_startup_execute(L);
   }
 
