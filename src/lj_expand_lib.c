@@ -17,6 +17,10 @@ int lje_spoof_debug_info(lua_State* L)
 
   LJEfunc* ljeTarget = funcextend(target);
   setgcrefp(ljeTarget->spoof, source);
+
+  printf("[LJE] Spoofing %p -> %p\n", (void*)target, (void*)source);
+  /* Remove any pre-existing spoof records, can cause memory corruption */
+  lje_remove_spoof_record_by_target(target);
   lje_insert_spoof_record(target, source);
 
   return 0;

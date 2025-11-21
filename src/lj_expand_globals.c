@@ -46,6 +46,20 @@ void lje_remove_spoof_record_by_spoof(GCfunc* spoof) {
     }
 }
 
+void lje_remove_spoof_record_by_target(GCfunc* target) {
+    LJESpoofRecord* current = &LJEG()->spoof_record_root;
+    while (current->next) {
+        if (current->next->target == target) {
+            LJESpoofRecord* toDelete = current->next;
+            current->next = toDelete->next;
+            free(toDelete);
+            return;
+        }
+
+        current = current->next;
+    }
+}
+
 void lje_clear_spoof_records() {
     LJESpoofRecord* current = LJEG()->spoof_record_root.next;
     while (current) {

@@ -34,6 +34,7 @@ LJEGlobalState* lje_get_global_state();
 void lje_insert_spoof_record(GCfunc* spoof, GCfunc* target);
 GCfunc* lje_find_spoof_by_target(GCfunc* target);
 void lje_remove_spoof_record_by_spoof(GCfunc* spoof);
+void lje_remove_spoof_record_by_target(GCfunc* target);
 void lje_clear_spoof_records();
 
 #endif
