@@ -8,20 +8,22 @@
 
 int lje_spoof_debug_info(lua_State* L)
 {
-  GCfunc* target = lj_lib_checkfunc(L, 1);
-  GCfunc* source = lj_lib_checkfunc(L, 2);
-  if (!isluafunc(target))
+  GCfunc* spoof = lj_lib_checkfunc(L, 1);
+  GCfunc* target = lj_lib_checkfunc(L, 2);
+  if (!isluafunc(spoof))
   {
     lj_err_arg(L, 1, LJ_ERR_NOLFUNC);
   }
 
-  LJEfunc* ljeTarget = funcextend(target);
-  setgcrefp(ljeTarget->spoof, source);
+  LJEfunc* ljeTarget = funcextend(spoof);
+  setgcrefp(ljeTarget->spoof, target);
 
-  printf("[LJE] Spoofing %p -> %p\n", (void*)target, (void*)source);
+  printf("[LJE] Spoofing %p -> %p\n", (void*)spoof, (void*)target);
   /* Remove any pre-existing spoof records, can cause memory corruption */
+  lje_remove_spoof_record_by_spoof(spoof);
   lje_remove_spoof_record_by_target(target);
-  lje_insert_spoof_record(target, source);
+
+  lje_insert_spoof_record(spoof, target);
 
   return 0;
 }
