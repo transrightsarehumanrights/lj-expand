@@ -8,8 +8,10 @@
 
 static char* load_startup_file()
 {
-    const char* path = LJE_STARTUP_SCRIPT_PATH;
+    char* path = lje_concat_path(LJE_STARTUP_FILE);
     FILE* file = fopen(path, "rb");
+    free(path);
+
     if (!file) {
         printf("[LJE] Failed to open startup script: %s\n", path);
         return NULL;
@@ -91,4 +93,68 @@ void lje_startup_execute(lua_State* L) {
 
         free(script);
     }
+}
+
+int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
+    luaL_loadbufferx_t original_loadbufferx = NULL;
+    lua_pcall_t original_pcall = NULL;
+    if (!resolve_original_functions(&original_loadbufferx, &original_pcall))
+    {
+        printf("[LJE] Failed to resolve original startup functions necessary...\n");
+        return 0;
+    }
+
+    char* path = lje_concat_path(relative_path);
+    FILE* file = fopen(path, "rb");
+    free(path);
+
+    if (!file) {
+        printf("[LJE] Failed to open include script: %s\n", relative_path);
+        return 0;
+    }
+
+    fseek(file, 0, SEEK_END);
+    long length = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    char* buffer = (char*)malloc(length + 1);
+    if (!buffer) {
+        fclose(file);
+        return 0;
+    }
+
+    fread(buffer, 1, length, file);
+    buffer[length] = '\0';
+    fclose(file);
+
+    printf("[LJE] Including script: %s\n", relative_path);
+    if (original_loadbufferx(L, buffer, strlen(buffer), "@lje_include", NULL) == 0)
+    {
+        if (!execute)
+        {
+            // Just return the loaded function
+            printf("[LJE] Include script loaded successfully (not executed).\n");
+            free(buffer);
+            return 1;
+        }
+
+        if (original_pcall(L, 0, LUA_MULTRET, 0) != 0)
+        {
+            printf("[LJE] Error executing include script: %s\n", lua_tostring(L, -1));
+            lua_pop(L, 1); // Pop error message
+        } else
+        {
+            free(buffer);
+            printf("[LJE] Include script executed successfully.\n");
+            return lua_gettop(L);
+        }
+    }
+    else
+    {
+        printf("[LJE] Error loading include script: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1); // Pop error message
+    }
+
+    free(buffer);
+    return 0;
 }

@@ -3,6 +3,8 @@
 #include "lua.h"
 #include "lj_obj.h"
 
+#define LJE_LUA_BASE_PATH "C:/LJE/"
+
 /* LJE: Fast linked list to hold spoofed functions. Useful for doing a fast lookup of either
  * spoof to target or target to spoof.
  */
@@ -36,5 +38,6 @@ GCfunc* lje_find_spoof_by_target(GCfunc* target);
 void lje_remove_spoof_record_by_spoof(GCfunc* spoof);
 void lje_remove_spoof_record_by_target(GCfunc* target);
 void lje_clear_spoof_records();
+char* lje_concat_path(const char* relative_path);
 
 #endif

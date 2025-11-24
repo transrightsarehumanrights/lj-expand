@@ -70,3 +70,12 @@ void lje_clear_spoof_records() {
 
     LJEG()->spoof_record_root.next = NULL;
 }
+
+char* lje_concat_path(const char* relative_path) {
+    size_t base_len = strlen(LJE_LUA_BASE_PATH);
+    size_t rel_len = strlen(relative_path);
+    char* full_path = (char*)malloc(base_len + rel_len + 1);
+    strcpy(full_path, LJE_LUA_BASE_PATH);
+    strcpy(full_path + base_len, relative_path);
+    return full_path;
+}

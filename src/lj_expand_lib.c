@@ -4,6 +4,7 @@
 #include "lj_lib.h"
 #include "lj_err.h"
 #include "lj_expand_globals.h"
+#include "lj_expand_startup.h"
 
 
 int lje_spoof_debug_info(lua_State* L)
@@ -62,21 +63,29 @@ int lje_set_push_string_callback(lua_State* L)
 
 int lje_enable_hooks(lua_State* L)
 {
-    LJEG()->skip_hooks = 0;
-    return 0;
+  LJEG()->skip_hooks = 0;
+  return 0;
 }
 
 int lje_disable_hooks(lua_State* L)
 {
-    LJEG()->skip_hooks = 1;
-    return 0;
+  LJEG()->skip_hooks = 1;
+  return 0;
 }
 
 int lje_ignore_fn_on_hook(lua_State* L)
 {
-    GCfunc* func = lj_lib_checkfunc(L, 1);
-    setgcrefp(LJEG()->ignore_fn_on_hook, func);
-    return 0;
+  GCfunc* func = lj_lib_checkfunc(L, 1);
+  setgcrefp(LJEG()->ignore_fn_on_hook, func);
+  return 0;
+}
+
+int lje_include(lua_State* L)
+{
+  const char* relative_path = luaL_checkstring(L, 1);
+  int execute = lua_gettop(L) < 2 || lua_toboolean(L, 2);
+
+  return lje_startup_include(L, relative_path, execute);
 }
 
 #define LJE_SET_FUNC(name, func) \
@@ -97,6 +106,7 @@ void lje_addfuncs(lua_State* L) {
   LJE_SET_FUNC("enable_hooks", lje_enable_hooks);
   LJE_SET_FUNC("disable_hooks", lje_disable_hooks);
   LJE_SET_FUNC("ignore_fn_on_hook", lje_ignore_fn_on_hook);
+  LJE_SET_FUNC("include", lje_include);
   lua_setfield(L, -2, "lje");
   lua_pop(L, 1); // Pop globals table
 }
