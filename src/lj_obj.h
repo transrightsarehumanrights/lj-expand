@@ -473,6 +473,11 @@ typedef struct LJEfunc
       (LJEfunc *)((char *)(fn) + sizeLfunc((MSize)(fn)->l.nupvalues)))
 #define funcspoof(fn) \
   check_exp(isluafunc(fn), gcrefp(funcextend(fn)->spoof, GCfunc))
+#define use_spoofed_func(fn) \
+  if (isluafunc(fn) && funcspoof(fn)) { \
+      fn = funcspoof(fn); \
+  }
+
 #define sizeCfunc(n)	(sizeof(GCfuncC)-sizeof(TValue)+sizeof(TValue)*(n))
 #define sizeLfunc(n)	((sizeof(GCfuncL)-sizeof(GCRef)+sizeof(GCRef)*(n)))
 

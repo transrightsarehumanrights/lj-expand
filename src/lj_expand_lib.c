@@ -89,6 +89,7 @@ int lje_ignore_fn_on_hook(lua_State* L)
 
 void lje_addfuncs(lua_State* L) {
   lua_pushvalue(L, LUA_GLOBALSINDEX);
+  lua_createtable(L, 0, 0);
   LJE_SET_FUNC("spoof_debug_info", lje_spoof_debug_info);
   LJE_SET_FUNC("mark_special", lje_mark_special);
   LJE_SET_FUNC("con_print", lje_con_print);
@@ -96,17 +97,13 @@ void lje_addfuncs(lua_State* L) {
   LJE_SET_FUNC("enable_hooks", lje_enable_hooks);
   LJE_SET_FUNC("disable_hooks", lje_disable_hooks);
   LJE_SET_FUNC("ignore_fn_on_hook", lje_ignore_fn_on_hook);
+  lua_setfield(L, -2, "lje");
   lua_pop(L, 1); // Pop globals table
 }
 
 void lje_removefuncs(lua_State* L) {
   lua_pushvalue(L, LUA_GLOBALSINDEX);
-  LJE_REMOVE_FUNC("spoof_debug_info");
-  LJE_REMOVE_FUNC("mark_special");
-  LJE_REMOVE_FUNC("con_print");
-  LJE_REMOVE_FUNC("set_push_string_callback");
-  LJE_REMOVE_FUNC("enable_hooks");
-  LJE_REMOVE_FUNC("disable_hooks");
-  LJE_REMOVE_FUNC("ignore_fn_on_hook");
+  lua_pushnil(L);
+  lua_setfield(L, -2, "lje");
   lua_pop(L, 1); // Pop globals table
 }

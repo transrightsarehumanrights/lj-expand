@@ -150,6 +150,8 @@ LJLIB_CF(getfenv)		LJLIB_REC(.)
     if (LJ_FR2) o--;
   }
   fn = &gcval(o)->fn;
+  /* LJE: Check for spoofed functions. */
+  use_spoofed_func(fn);
   settabV(L, L->top++, isluafunc(fn) ? tabref(fn->l.env) : tabref(L->env));
   return 1;
 }
@@ -172,6 +174,8 @@ LJLIB_CF(setfenv)
     if (LJ_FR2) o--;
   }
   fn = &gcval(o)->fn;
+  /* LJE: Check for spoofed functions. */
+  use_spoofed_func(fn);
   if (!isluafunc(fn))
     lj_err_caller(L, LJ_ERR_SETFENV);
   setgcref(fn->l.env, obj2gco(t));

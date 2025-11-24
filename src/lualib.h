@@ -22,16 +22,22 @@
 #define LUA_JITLIBNAME	"jit"
 #define LUA_FFILIBNAME	"ffi"
 
+#define LJE_EXPOSE(func) int lj_cf_##func(lua_State *L);
+
+LJE_EXPOSE(setfenv)
+LJE_EXPOSE(getfenv)
 LUALIB_API int luaopen_base(lua_State *L);
 LUALIB_API int luaopen_math(lua_State *L);
-int lj_cf_string_dump(lua_State *L);
+LJE_EXPOSE(string_dump)
 LUALIB_API int luaopen_string(lua_State *L);
 LUALIB_API int luaopen_table(lua_State *L);
 LUALIB_API int luaopen_io(lua_State *L);
 LUALIB_API int luaopen_os(lua_State *L);
 LUALIB_API int luaopen_package(lua_State *L);
-int lj_cf_debug_getinfo(lua_State *L);
-int lj_cf_debug_getlocal(lua_State *L);
+LJE_EXPOSE(debug_getinfo)
+LJE_EXPOSE(debug_getlocal)
+LJE_EXPOSE(debug_getfenv)
+LJE_EXPOSE(debug_setfenv)
 LUALIB_API int luaopen_debug(lua_State *L);
 LUALIB_API int luaopen_bit(lua_State *L);
 int lj_cf_jit_util_funcinfo(lua_State *L);

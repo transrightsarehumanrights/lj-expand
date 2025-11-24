@@ -54,6 +54,14 @@ LJLIB_CF(debug_setmetatable)
 LJLIB_CF(debug_getfenv)
 {
   lj_lib_checkany(L, 1);
+  /* LJE: Check for spoofed functions, although this takes an indirect reference, so we must overwrite the TV. */
+  if (tvisfunc(L->base))
+  {
+    GCfunc* fn = funcV(L->base);
+    use_spoofed_func(fn);
+    setfuncV(L, L->base, fn);
+  }
+
   lua_getfenv(L, 1);
   return 1;
 }
@@ -61,6 +69,14 @@ LJLIB_CF(debug_getfenv)
 LJLIB_CF(debug_setfenv)
 {
   lj_lib_checktab(L, 2);
+  /* LJE: Check for spoofed functions like getfenv. */
+  if (tvisfunc(L->base))
+  {
+    GCfunc* fn = funcV(L->base);
+    use_spoofed_func(fn);
+    setfuncV(L, L->base, fn);
+  }
+
   L->top = L->base+2;
   if (!lua_setfenv(L, 1))
     lj_err_caller(L, LJ_ERR_SETFENV);
