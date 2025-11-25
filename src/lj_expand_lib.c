@@ -88,6 +88,31 @@ int lje_include(lua_State* L)
   return lje_startup_include(L, relative_path, execute);
 }
 
+int lje_get_env(lua_State* L)
+{
+  if (LJEG()->env_ref_id != 0)
+  {
+    lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
+    return 1;
+  }
+
+  return 0;
+}
+
+int lje_set_env(lua_State* L)
+{
+  lj_lib_checktab(L, 1);
+  if (LJEG()->env_ref_id != 0)
+  {
+    luaL_unref(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
+    LJEG()->env_ref_id = 0;
+  }
+
+  lua_pushvalue(L, 1);
+  LJEG()->env_ref_id = luaL_ref(L, LUA_REGISTRYINDEX);
+  return 0;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -107,6 +132,8 @@ void lje_addfuncs(lua_State* L) {
   LJE_SET_FUNC("disable_hooks", lje_disable_hooks);
   LJE_SET_FUNC("ignore_fn_on_hook", lje_ignore_fn_on_hook);
   LJE_SET_FUNC("include", lje_include);
+  LJE_SET_FUNC("get_env", lje_get_env);
+  LJE_SET_FUNC("set_env", lje_set_env);
   lua_setfield(L, -2, "lje");
   lua_pop(L, 1); // Pop globals table
 }

@@ -3,110 +3,12 @@
 
 -- This script is marked special, so no hook can catch any execution inside this function.
 
+
 lje.disable_hooks()
-lje.con_print("Creating cloned safe environment...")
-local safeEnv = {}
-
-local function cloneTable(tbl, dest, visited)
-    visited = visited or {}
-    dest = dest or {}
-    visited[tbl] = dest
-
-    for k, v in pairs(tbl) do
-        if type(v) == "table" then
-            if visited[v] then
-                dest[k] = visited[v]
-            else
-                dest[k] = cloneTable(v, nil, visited)
-            end
-        else
-            dest[k] = v
-        end
-    end
-
-    return dest
-end
-
-cloneTable(_G, safeEnv)
-safeEnv._G = _G -- expose original _G
-
-lje.con_print("Done! Setting up safe metatables...")
-local function cloneBaseMt(mt)
-    local newMt = {}
-    for k, v in pairs(mt) do
-        newMt[k] = v
-    end
-    return newMt
-end
-
-local function cloneMetaTable(name, base)
-    local mt = FindMetaTable(name)
-
-    local newMt = {}
-    local function deepCopy(orig)
-        if type(orig) ~= "table" then
-            return orig
-        end
-
-        local copy = {}
-        for k, v in pairs(orig) do
-            if type(v) == "table" then
-                copy[k] = deepCopy(v)
-            else
-                copy[k] = v
-            end
-        end
-        return copy
-    end
-
-    newMt = deepCopy(mt)
-    -- link to cloned base metatable if exists
-    if base then
-        newMt.BaseMetaClass = base
-    end
-
-    return newMt
-end
-
-safeEnv.cloned_mts = {}
-safeEnv.cloned_basemts = {}
--- We'll add more later
-safeEnv.cloned_mts["Entity"] = cloneMetaTable("Entity")
-safeEnv.cloned_mts["Player"] = cloneMetaTable("Player", safeEnv.cloned_mts["Entity"])
-safeEnv.cloned_mts["Vector"] = cloneMetaTable("Vector")
-safeEnv.cloned_mts["Angle"] = cloneMetaTable("Angle")
-safeEnv.cloned_basemts["string"] = cloneBaseMt(debug.getmetatable(""))
-safeEnv.insecure_mts = {}
-
-safeEnv.lje.use_safe_basemts = function()
-    local curStringMt = debug.getmetatable("")
-    insecure_mts["string"] = curStringMt
-
-    debug.setmetatable("", cloned_basemts["string"])
-end
-
-safeEnv.lje.restore_basemts = function()
-    local insecureStringMt = insecure_mts["string"]
-    if insecureStringMt then
-        debug.setmetatable("", insecureStringMt)
-    end
-end
-
-setfenv(safeEnv.lje.use_safe_basemts, safeEnv)
-setfenv(safeEnv.lje.restore_basemts, safeEnv)
-
-safeEnv.lje.detour = function(origFn, detourFn)
-    lje.mark_special(detourFn)
-    lje.spoof_debug_info(detourFn, origFn)
-    return detourFn
-end
-
-setfenv(safeEnv.lje.detour, safeEnv)
-
-lje.con_print("Safe environment ready!")
+lje.con_print("Initialized. Running startup script...")
 
 local startup = lje.include("lje_startup.lua", false) -- dont execute
-setfenv(startup, safeEnv)
+setfenv(startup, lje.get_env())
 lje.con_print("Running startup script...")
 startup()
 lje.con_print("Startup script finished.")

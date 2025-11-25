@@ -14,6 +14,11 @@ LJEGlobalState* lje_get_global_state() {
     return lje_global_state;
 }
 
+void lje_clear_global_refs() {
+    LJEG()->env_ref_id = 0;
+    LJEG()->push_string_ref_id = 0;
+}
+
 void lje_insert_spoof_record(GCfunc* spoof, GCfunc* target) {
     LJESpoofRecord* newRecord = (LJESpoofRecord*)malloc(sizeof(LJESpoofRecord));
     newRecord->spoof = spoof;

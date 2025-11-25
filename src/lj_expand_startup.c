@@ -1,14 +1,15 @@
 #include "lj_expand_startup.h"
 
+#include "lauxlib.h"
 #include "lj_expand_globals.h"
 #include "lj_expand_lib.h"
 #include "lj_expand_module.h"
 #include "lj_lib.h"
 #include "stdio.h"
 
-static char* load_startup_file()
+static char* load_lua_file(const char* relative_path)
 {
-    char* path = lje_concat_path(LJE_STARTUP_FILE);
+    char* path = lje_concat_path(relative_path);
     FILE* file = fopen(path, "rb");
     free(path);
 
@@ -64,7 +65,7 @@ void lje_startup_execute(lua_State* L) {
         return;
     }
 
-    char* script = load_startup_file();
+    char* script = load_lua_file(LJE_STARTUP_FILE);
     if (script)
     {
         printf("[LJE] Executing startup script...\n");
@@ -75,6 +76,16 @@ void lje_startup_execute(lua_State* L) {
             LJEfunc* ljeFn = funcextend(func); // guaranteed to exist since it's a Lua function
             ljeFn->is_special = 1;
 
+            if (LJEG()->env_ref_id != 0)
+            {
+                // Set the environment if it exists
+                lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
+                lua_setfenv(L, -2);
+            } else
+            {
+                printf("[LJE] No custom environment set for startup script? Probably not intentional.\n");
+            }
+
             if (original_pcall(L, 0, 0, 0) != 0)
             {
                 printf("[LJE] Error executing startup script: %s\n", lua_tostring(L, -1));
@@ -82,7 +93,6 @@ void lje_startup_execute(lua_State* L) {
             } else
             {
                 printf("[LJE] Startup script executed successfully.\n");
-                lje_removefuncs(L); // Clean up our global functions after execution
             }
         }
         else
@@ -104,29 +114,7 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
         return 0;
     }
 
-    char* path = lje_concat_path(relative_path);
-    FILE* file = fopen(path, "rb");
-    free(path);
-
-    if (!file) {
-        printf("[LJE] Failed to open include script: %s\n", relative_path);
-        return 0;
-    }
-
-    fseek(file, 0, SEEK_END);
-    long length = ftell(file);
-    fseek(file, 0, SEEK_SET);
-
-    char* buffer = (char*)malloc(length + 1);
-    if (!buffer) {
-        fclose(file);
-        return 0;
-    }
-
-    fread(buffer, 1, length, file);
-    buffer[length] = '\0';
-    fclose(file);
-
+    char* buffer = load_lua_file(relative_path);
     printf("[LJE] Including script: %s\n", relative_path);
     if (original_loadbufferx(L, buffer, strlen(buffer), "@lje_include", NULL) == 0)
     {
@@ -157,4 +145,46 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
 
     free(buffer);
     return 0;
+}
+
+void lje_startup_preinit(lua_State* L) {
+    printf("[LJE] Running pre-initialization script...\n");
+    LJEG()->main_state = L;
+
+    luaL_loadbufferx_t original_loadbufferx = NULL;
+    lua_pcall_t original_pcall = NULL;
+    if (!resolve_original_functions(&original_loadbufferx, &original_pcall))
+    {
+        printf("[LJE] Failed to resolve original startup functions necessary...\n");
+        return;
+    }
+
+    char* script = load_lua_file(LJE_PREINIT_FILE);
+    if (!script)
+    {
+        printf("[LJE ERROR] No pre-initialization script found, skipping.\n");
+        return;
+    }
+
+    if (original_loadbufferx(L, script, strlen(script), "@lje_preinit", NULL) == 0)
+    {
+        if (original_pcall(L, 0, 0, 0) != 0)
+        {
+            printf("[LJE ERROR] Error executing pre-initialization script: %s\n", lua_tostring(L, -1));
+            lua_pop(L, 1); // Pop error message
+        } else
+        {
+            printf("[LJE] Pre-initialization script executed successfully.\n");
+            lje_removefuncs(L); // Remove our global functions after preinit, as it is not secure to leave them there
+            printf("[LJE] Removed LJE global functions after pre-initialization.\n");
+        }
+    }
+    else
+    {
+        printf("[LJE ERROR] Error loading pre-initialization script: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1); // Pop error message
+    }
+
+    free(script);
+    return;
 }
