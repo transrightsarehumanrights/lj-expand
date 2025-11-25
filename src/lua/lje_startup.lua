@@ -31,67 +31,39 @@ cloneTable(_G, safeEnv)
 safeEnv._G = _G -- expose original _G
 
 lje.con_print("Done! Setting up safe metatables...")
-local function cloneMetaTable(name, mt)
-    mt = mt or FindMetaTable(name)
+local function cloneBaseMt(mt)
     local newMt = {}
     for k, v in pairs(mt) do
-        -- shallow copy is fine here.
         newMt[k] = v
     end
+    return newMt
+end
 
-    if newMt.MetaBaseClass then
-        local copiedBaseClass = {}
-        for k, v in pairs(newMt.MetaBaseClass) do
-            copiedBaseClass[k] = v
+local function cloneMetaTable(name, base)
+    local mt = FindMetaTable(name)
 
-            if type(v) == "function" then
-                copiedBaseClass[k] = function(...)
-                    local results = {v(...)}
-                    for i = 1, #results do
-                        results[i] = safeEnv.lje.clean_userdata(results[i])
-                    end
-                    return unpack(results)
-                end
+    local newMt = {}
+    local function deepCopy(orig)
+        if type(orig) ~= "table" then
+            return orig
+        end
+
+        local copy = {}
+        for k, v in pairs(orig) do
+            if type(v) == "table" then
+                copy[k] = deepCopy(v)
+            else
+                copy[k] = v
             end
         end
-
-        newMt.MetaBaseClass = copiedBaseClass
+        return copy
     end
 
-    -- Wrap each function (slow, sure, but rather safe) to clean any userdatas returned
-    for k, v in pairs(newMt) do
-        if type(v) == "function" then
-            newMt[k] = function(...)
-                local results = {v(...)}
-                for i = 1, #results do
-                    results[i] = safeEnv.lje.clean_userdata(results[i])
-                end
-                return unpack(results)
-            end
-        end
+    newMt = deepCopy(mt)
+    -- link to cloned base metatable if exists
+    if base then
+        newMt.BaseMetaClass = base
     end
-
-    local oldIndex = newMt.__index
-    newMt.__index = function(self, key)
-        if rawget(newMt, key) then
-            return rawget(newMt, key)
-        end
-
-        return oldIndex(self, key)
-    end
-
-    if newMt.MetaBaseClass and newMt.MetaBaseClass.__index then
-        local oldBaseIndex = newMt.MetaBaseClass.__index
-        newMt.MetaBaseClass.__index = function(self, key)
-            if rawget(newMt.MetaBaseClass, key) then
-                return rawget(newMt.MetaBaseClass, key)
-            end
-
-            return oldBaseIndex(self, key)
-        end
-    end
-    
-    -- This does fuck up the custom property indexes, but oh well. Can't do much about it.
 
     return newMt
 end
@@ -100,37 +72,28 @@ safeEnv.cloned_mts = {}
 safeEnv.cloned_basemts = {}
 -- We'll add more later
 safeEnv.cloned_mts["Entity"] = cloneMetaTable("Entity")
-safeEnv.cloned_mts["Player"] = cloneMetaTable("Player")
+safeEnv.cloned_mts["Player"] = cloneMetaTable("Player", safeEnv.cloned_mts["Entity"])
 safeEnv.cloned_mts["Vector"] = cloneMetaTable("Vector")
 safeEnv.cloned_mts["Angle"] = cloneMetaTable("Angle")
-safeEnv.cloned_basemts["string"] = cloneMetaTable("string", debug.getmetatable(""))
+safeEnv.cloned_basemts["string"] = cloneBaseMt(debug.getmetatable(""))
 safeEnv.insecure_mts = {}
-
-safeEnv.lje.clean_userdata = function(ud)
-    local mtName = type(ud)
-    local clonedMt = cloned_mts[mtName]
-    if clonedMt then
-        debug.setmetatable(ud, clonedMt)
-    end
-
-    return ud
-end
 
 safeEnv.lje.use_safe_basemts = function()
     local curStringMt = debug.getmetatable("")
-    safeEnv.insecure_mts["string"] = curStringMt
+    insecure_mts["string"] = curStringMt
 
-    debug.setmetatable("", safeEnv.cloned_basemts["string"])
+    debug.setmetatable("", cloned_basemts["string"])
 end
 
 safeEnv.lje.restore_basemts = function()
-    local insecureStringMt = safeEnv.insecure_mts["string"]
+    local insecureStringMt = insecure_mts["string"]
     if insecureStringMt then
         debug.setmetatable("", insecureStringMt)
     end
 end
 
-setfenv(safeEnv.lje.clean_userdata, safeEnv)
+setfenv(safeEnv.lje.use_safe_basemts, safeEnv)
+setfenv(safeEnv.lje.restore_basemts, safeEnv)
 
 safeEnv.lje.detour = function(origFn, detourFn)
     lje.mark_special(detourFn)
