@@ -143,34 +143,20 @@ static GCfunc *func_newL(lua_State *L, GCproto *pt, GCtab *env)
   return fn;
 }
 
-static int preinit_now = 0;
 
 /* Create a new Lua function with empty upvalues. */
 GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
 {
-  // We wait until the next function after to do preinit, cause the lua_State* is partially set up then.
-  if (preinit_now)
-  {
-    preinit_now = 0;
-
-    // Quick check if this is the intended client state.
-    GCtab* globals = tabref(L->env);
-    cTValue* sv = lj_tab_getstr(globals, lj_str_newlit(L, "CLIENT"));
-    if (sv && tvistrue(sv))
-    {
-      printf("[LJE] Detected creation of client Lua function for init.lua\n");
-      lje_clear_global_refs();
-      lje_startup_preinit(L);
-    } else
-    {
-      printf("[LJE] Detected creation of server Lua function for init.lua\n");
-      printf("[LJE] Not running startup preinit on server.\n");
-    }
-  }
-
   if (strcmp(proto_chunknamestr(pt), "@lua/includes/init.lua") == 0)
   {
-    preinit_now = 1;
+    GCtab* globalEnv = tabref(L->env);
+    cTValue* clientBool = lj_tab_getstr(globalEnv, lj_str_newlit(L, "CLIENT"));
+    if (clientBool && tvistrue(clientBool))
+    {
+      printf("[LJE] Detected creation of Lua function for init.lua\n");
+      printf("[LJE] Setting waiting_for_init_call flag...\n");
+      LJEG()->waiting_for_init_call = 1;
+    }
   }
 
   if (strcmp(proto_chunknamestr(pt), "@Startup") == 0)

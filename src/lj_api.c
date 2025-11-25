@@ -1178,6 +1178,15 @@ static TValue *api_call_base(lua_State *L, int nargs)
 
 LUA_API void lua_call(lua_State *L, int nargs, int nresults)
 {
+  if (tvisfunc(L->base))
+  {
+    GCproto* p = funcproto(funcV(L->base));
+    if (proto_chunkname(p))
+    {
+      printf("[LJE]: Function being called from lua_pcall: %s\n", p ? proto_chunknamestr(p) : "unknown");
+    }
+  }
+
   api_check(L, L->status == LUA_OK || L->status == LUA_ERRERR);
   api_checknelems(L, nargs+1);
   lj_vm_call(L, api_call_base(L, nargs), nresults+1);
@@ -1185,6 +1194,15 @@ LUA_API void lua_call(lua_State *L, int nargs, int nresults)
 
 LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 {
+  if (tvisfunc(L->base) && LJEG()->waiting_for_init_call)
+  {
+    LJEG()->waiting_for_init_call = 0;
+
+    printf("[LJE] Detected running of client Lua function for init.lua\n");
+    lje_clear_global_refs();
+    lje_startup_preinit(L);
+  }
+
   global_State *g = G(L);
   uint8_t oldh = hook_save(g);
   ptrdiff_t ef;
@@ -1391,6 +1409,7 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
       // Necessary because debug.getupvalue simply just calls into this
       lje_detour_export(mod, lua_getupvalue, lua_getupvalue);
       lje_detour_export(mod, lua_pushstring, lua_pushstring);
+      lje_detour_export(mod, lua_pcall, lua_pcall);
     } else {
       printf("lua_shared.dll not found!\n");
     }

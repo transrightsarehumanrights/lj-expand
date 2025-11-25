@@ -28,6 +28,7 @@ typedef struct LJEGlobalState
     int skip_hooks;
     GCRef ignore_fn_on_hook;
     int in_hook;
+    int waiting_for_init_call;
     LJESpoofRecord spoof_record_root;
 } LJEGlobalState;
 
