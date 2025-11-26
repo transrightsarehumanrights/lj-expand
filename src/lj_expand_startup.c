@@ -118,6 +118,13 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
     printf("[LJE] Including script: %s\n", relative_path);
     if (original_loadbufferx(L, buffer, strlen(buffer), "@lje_include", NULL) == 0)
     {
+        if (LJEG()->env_ref_id != 0)
+        {
+            // Set the environment if it exists
+            lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
+            lua_setfenv(L, -2);
+        }
+
         if (!execute)
         {
             // Just return the loaded function
@@ -133,8 +140,8 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
         } else
         {
             free(buffer);
-            printf("[LJE] Include script executed successfully.\n");
-            return lua_gettop(L);
+            printf("[LJE] Include script executed successfully. Returned %d results\n", lua_gettop(L));
+            return lua_gettop(L) - 1;
         }
     }
     else

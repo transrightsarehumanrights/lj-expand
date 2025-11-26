@@ -12,6 +12,8 @@
 #include "lj_obj.h"
 #include "lj_gc.h"
 #include "lj_func.h"
+#include "lj_frame.h"
+#include "lj_debug.h"
 
 #include "lj_expand_globals.h"
 #include "lj_expand_startup.h"
@@ -143,11 +145,40 @@ static GCfunc *func_newL(lua_State *L, GCproto *pt, GCtab *env)
   return fn;
 }
 
+int is_lua_involved(lua_State* L)
+{
+  for (int i = 0; ; i++)
+  {
+    int size = 0;
+    cTValue* frame = lj_debug_frame(L, i, &size);
+    if (frame == NULL)
+    {
+      break;
+    }
+
+    if (frame_islua(frame))
+    {
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
+int check_proto_chunkname(GCproto* pt, const char* name)
+{
+  if (strcmp(proto_chunknamestr(pt), name) == 0)
+  {
+    return 1;
+  }
+
+  return 0;
+}
 
 /* Create a new Lua function with empty upvalues. */
 GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
 {
-  if (strcmp(proto_chunknamestr(pt), "@lua/includes/init.lua") == 0)
+  if (check_proto_chunkname(pt, "@lua/includes/init.lua") && !is_lua_involved(L))
   {
     GCtab* globalEnv = tabref(L->env);
     cTValue* clientBool = lj_tab_getstr(globalEnv, lj_str_newlit(L, "CLIENT"));
@@ -159,7 +190,7 @@ GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
     }
   }
 
-  if (strcmp(proto_chunknamestr(pt), "@Startup") == 0)
+  if (check_proto_chunkname(pt, "@Startup") && !is_lua_involved(L))
   {
     printf("[LJE] Detected creation of Lua function for @Startup\n");
     printf("[LJE] Clearing any old spoof records...\n");

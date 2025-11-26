@@ -8,7 +8,6 @@ lje.disable_hooks()
 lje.con_print("Initialized. Running startup script...")
 
 local startup = lje.include("lje_startup.lua", false) -- dont execute
-setfenv(startup, lje.get_env())
 lje.con_print("Running startup script...")
 startup()
 lje.con_print("Startup script finished.")
