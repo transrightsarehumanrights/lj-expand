@@ -113,6 +113,31 @@ int lje_set_env(lua_State* L)
   return 0;
 }
 
+int lje_get_bytecode_hash(lua_State* L)
+{
+  GCfunc* func = lj_lib_checkfunc(L, 1);
+  if (!isluafunc(func))
+  {
+    lj_err_arg(L, 1, LJ_ERR_NOLFUNC);
+  }
+
+  GCproto* pt = funcproto(func);
+  // Use a simple hash to create a unique identifier for the bytecode
+  uint32_t hash = 2166136261u;
+  const uint8_t* bytecode = proto_bc(pt);
+  size_t size = pt->sizebc * sizeof(BCIns);
+  for (size_t i = 0; i < size; i++)
+  {
+    hash ^= bytecode[i];
+    hash *= 16777619;
+  }
+
+  hash = hash ^ (hash >> 16);
+  lua_pushinteger(L, hash);
+
+  return 1;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -134,6 +159,7 @@ void lje_addfuncs(lua_State* L) {
   LJE_SET_FUNC("include", lje_include);
   LJE_SET_FUNC("get_env", lje_get_env);
   LJE_SET_FUNC("set_env", lje_set_env);
+  LJE_SET_FUNC("get_bytecode_hash", lje_get_bytecode_hash);
   lua_setfield(L, -2, "lje");
   lua_pop(L, 1); // Pop globals table
 }

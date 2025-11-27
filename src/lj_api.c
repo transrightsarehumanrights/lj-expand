@@ -696,57 +696,8 @@ LUA_API const char *lua_pushfstring(lua_State *L, const char *fmt, ...)
   return ret;
 }
 
-// We inject our globals here, since it functions well enough as a good injection point.
-// Bit of a hack, but it works. Can replace it if we ever add detours with original function calls.
-#define LJE_MAX_STATES 16
-static lua_State* lje_seen_states[LJE_MAX_STATES] = {0};
-
-static void lje_clear_seen_states();
-static int lje_seen_state_length();
-
-static int lje_is_new_state(lua_State* L) {
-  if (lje_seen_state_length() >= LJE_MAX_STATES) {
-      lje_clear_seen_states();
-  }
-
-  for (int i = 0; i < LJE_MAX_STATES; i++) {
-      if (lje_seen_states[i] == L) {
-          return 0;
-      }
-
-      if (lje_seen_states[i] == NULL) {
-          lje_seen_states[i] = L;
-          return 1;
-      }
-  }
-  return 0;
-}
-
-static int lje_seen_state_length() {
-  int count = 0;
-  for (int i = 0; i < LJE_MAX_STATES; i++) {
-      if (lje_seen_states[i] != NULL) {
-          count++;
-      }
-  }
-
-  return count;
-}
-
-static void lje_clear_seen_states() {
-  for (int i = 0; i < LJE_MAX_STATES; i++) {
-      lje_seen_states[i] = NULL;
-  }
-}
-
 LUA_API void lua_pushcclosure(lua_State *L, lua_CFunction f, int n)
 {
-  if (lje_is_new_state(L))
-  {
-    printf("[LJE] Injecting globals into new lua_State %p\n", (void*)L);
-    lje_addfuncs(L);
-  }
-
   GCfunc *fn;
   lj_gc_check(L);
   api_checknelems(L, n);
@@ -1199,6 +1150,8 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     LJEG()->waiting_for_init_call = 0;
 
     printf("[LJE] Detected running of client Lua function for init.lua\n");
+    lje_addfuncs(L);
+    printf("[LJE] Added LJE functions to Lua state\n");
     lje_clear_global_refs();
     lje_startup_preinit(L);
   }
@@ -1402,7 +1355,6 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
 #include "lje_signatures.h"
 #undef SIGDEF
 
-      lje_detour_export(mod, lua_pushcclosure, lua_pushcclosure);
       // This is *very* annoying, but GMod's luaL_traceback seems to have inlined lj_debug_frame,
       // so we have to detour that as well to ensure our debug_frame is used.
       lje_detour_export(mod, luaL_traceback, luaL_traceback);
