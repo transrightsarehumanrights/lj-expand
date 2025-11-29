@@ -1350,9 +1350,13 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
     freopen_s(&fDummy, "CONOUT$", "w", stdout);
     freopen_s(&fDummy, "CONOUT$", "w", stderr);
 
+    SetWindowTextA(GetConsoleWindow(), "LJE Console");
+
     lje_Module* mod = lje_module_find("lua_shared.dll");
     if (mod) {
-      printf("lua_shared.dll found at %p\n", (void*)mod->base);
+      printf("[LJE] LJE loaded successfully!\n");
+      printf("[LJE] lua_shared.dll found at %p\n", mod->base);
+
       // Remap all the necessary functions to our own.
 #define SIGDEF(name, _) lje_remap(mod, name)
 #include "lje_signatures.h"

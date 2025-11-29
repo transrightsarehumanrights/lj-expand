@@ -1,0 +1,160 @@
+#include "ljel_process.h"
+#include <windows.h>
+#include <Psapi.h>
+#include "ljel_log.h"
+
+/* menusystem.dll loads after lua_shared.dll, so we wait for it to load before injecting. */
+
+static const char* TARGET_DLL = "menusystem.dll";
+int is_dll_path_target(const char* dll_path)
+{
+    // Check from the end, as the path may contain directories
+    size_t dll_path_len = strlen(dll_path);
+    size_t target_dll_len = strlen(TARGET_DLL);
+    if (dll_path_len < target_dll_len)
+    {
+        return 0;
+    }
+
+    return _stricmp(dll_path + dll_path_len - target_dll_len, TARGET_DLL) == 0;
+}
+
+void print_error_info()
+{
+    DWORD error_code = GetLastError();
+    LPVOID msg_buffer;
+    FormatMessageA(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL,
+        error_code,
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPSTR)&msg_buffer,
+        0,
+        NULL
+    );
+
+    ljel_log_noline("Error %d: %s", error_code, (char*)msg_buffer);
+    LocalFree(msg_buffer);
+}
+
+/* Very simple RemoteThread injection! */
+void inject_into_process(HANDLE hProcess, const char* dll_path)
+{
+    size_t path_len = strlen(dll_path) + 1;
+    LPVOID remote_mem = VirtualAllocEx(hProcess, NULL, path_len, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (remote_mem == NULL)
+    {
+        print_error_info();
+        ljel_panic("Failed to allocate memory in target process");
+    }
+
+    ljel_log("Allocated memory at %p in target process", remote_mem);
+    if (!WriteProcessMemory(hProcess, remote_mem, dll_path, path_len, NULL))
+    {
+        print_error_info();
+        ljel_panic("Failed to write DLL path to target process memory");
+    }
+
+    ljel_log("Wrote DLL path to target process memory");
+
+    HANDLE hThread = CreateRemoteThread(
+        hProcess,
+        NULL,
+        0,
+        (LPTHREAD_START_ROUTINE)GetProcAddress(GetModuleHandleA("kernel32.dll"), "LoadLibraryA"),
+        remote_mem,
+        0,
+        NULL
+    );
+
+    if (hThread == NULL)
+    {
+        print_error_info();
+        ljel_panic("Failed to create remote thread in target process");
+    }
+
+    ljel_log("Created remote thread in target process, waiting for it to finish...");
+
+    DWORD pid = GetProcessId(hProcess);
+    // Force debug to continue so it can run
+    DebugActiveProcessStop(pid);
+
+    WaitForSingleObject(hThread, INFINITE);
+    ljel_log("Remote thread finished execution");
+    VirtualFreeEx(hProcess, remote_mem, 0, MEM_RELEASE);
+    CloseHandle(hThread);
+    CloseHandle(hProcess);
+
+    ljel_log("DLL injected successfully into process.");
+}
+
+void launch_and_inject(const char* gmod_path, const char* lje_path)
+{
+    STARTUPINFOA si = { 0 };
+    PROCESS_INFORMATION pi = { 0 };
+    si.cb = sizeof(si);
+
+    DEBUG_EVENT debug_event = { 0 };
+
+    if (!CreateProcessA(
+            gmod_path,
+            NULL,
+            NULL,
+            NULL,
+            FALSE,
+            DEBUG_ONLY_THIS_PROCESS | CREATE_SUSPENDED,
+            NULL,
+            NULL,
+            &si,
+            &pi))
+    {
+        print_error_info();
+        ljel_panic("Failed to create process");
+    }
+
+    ljel_log("Process created, PID: %d", pi.dwProcessId);
+    ResumeThread(pi.hThread);
+
+    ljel_log("Waiting for the time to inject DLL...");
+    while (1)
+    {
+        if (!WaitForDebugEvent(&debug_event, INFINITE))
+        {
+            print_error_info();
+            ljel_panic("Failed to wait for debug event");
+        }
+
+        if (debug_event.dwDebugEventCode == LOAD_DLL_DEBUG_EVENT)
+        {
+            char dll_path[MAX_PATH] = { 0 };
+            if (!GetMappedFileNameA(
+                    pi.hProcess,
+                    debug_event.u.LoadDll.lpBaseOfDll,
+                    dll_path,
+                    MAX_PATH))
+            {
+                print_error_info();
+                ljel_panic("Failed to get mapped file name");
+            }
+
+            if (is_dll_path_target(dll_path))
+            {
+                ljel_log("Target DLL loaded: %s", dll_path);
+                inject_into_process(pi.hProcess, lje_path);
+                ljel_log("LJE is now loaded...");
+                break;
+            }
+        }
+
+        /* CRUCIAL: LuaJIT uses exceptions for control flow, so we must not interfere with them. */
+        ContinueDebugEvent(debug_event.dwProcessId, debug_event.dwThreadId, DBG_EXCEPTION_NOT_HANDLED);
+
+        if (debug_event.dwDebugEventCode == EXIT_PROCESS_DEBUG_EVENT)
+        {
+            ljel_log("Process exited!");
+            break;
+        }
+    }
+
+    return;
+}

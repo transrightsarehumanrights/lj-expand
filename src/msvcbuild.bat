@@ -79,7 +79,7 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 @if "%1"=="static" goto :STATIC
 %LJCOMPILE% /MD /DLUA_BUILD_AS_DLL lj_*.c lib_*.c
 @if errorlevel 1 goto :BAD
-%LJLINK% /DLL /out:%LJDLLNAME% lj_*.obj lib_*.obj
+%LJLINK% /DLL /out:%LJDLLNAME% lj_*.obj lib_*.obj kernel32.lib user32.lib
 @if errorlevel 1 goto :BAD
 @goto :MTDLL
 :STATIC
@@ -103,6 +103,12 @@ if exist %LJDLLNAME%.manifest^
 @if errorlevel 1 goto :BAD
 if exist luajit.exe.manifest^
   %LJMT% -manifest luajit.exe.manifest -outputresource:luajit.exe
+
+@rem Compile launcher
+%LJCOMPILE% /I "launcher" launcher/*.c
+@if errorlevel 1 goto :BAD
+%LJLINK% /out:lje-launcher.exe ljel_*.obj %LJLIBNAME%
+@if errorlevel 1 goto :BAD
 
 @del *.obj *.manifest minilua.exe buildvm.exe
 @del host\buildvm_arch.h
