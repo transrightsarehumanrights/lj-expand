@@ -1154,6 +1154,9 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     printf("[LJE] Added LJE functions to Lua state\n");
     lje_clear_global_refs();
     lje_startup_preinit(L);
+
+    // Reset GC total. Might cause some hiccups. Oh well!
+    G(L)->gc.total = LJEG()->original_gc - 1971; // 1971 bytes is about how much we consume during setup and init.
   }
 
   global_State *g = G(L);

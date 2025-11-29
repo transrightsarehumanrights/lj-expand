@@ -184,6 +184,9 @@ GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
     cTValue* clientBool = lj_tab_getstr(globalEnv, lj_str_newlit(L, "CLIENT"));
     if (clientBool && tvistrue(clientBool))
     {
+      // Keep track of original GC total. CLIENT is seven bytes
+      LJEG()->original_gc = G(L)->gc.total - (7 + sizeof(GCstr));
+
       printf("[LJE] Detected creation of Lua function for init.lua\n");
       printf("[LJE] Setting waiting_for_init_call flag...\n");
       LJEG()->waiting_for_init_call = 1;

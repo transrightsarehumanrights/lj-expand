@@ -1,10 +1,12 @@
 #include "lj_expand_lib.h"
 
 #include "lauxlib.h"
+#include "lj_debug.h"
 #include "lj_lib.h"
 #include "lj_err.h"
 #include "lj_expand_globals.h"
 #include "lj_expand_startup.h"
+#include "lj_frame.h"
 
 
 int lje_spoof_debug_info(lua_State* L)
@@ -138,6 +140,63 @@ int lje_get_bytecode_hash(lua_State* L)
   return 1;
 }
 
+int lje_get_call_stack(lua_State* L)
+{
+  // Quick way to get the call stack as a table of structures.
+  // You technically can do this from Lua, but this is easier and faster.
+  // Plus it deals with the fact call stacks aren't fixed so you dont need to implement
+  // a while (true) loop in Lua.
+
+  lua_newtable(L);
+  for (int i = 0; ; i++)
+  {
+    int size = 0;
+    cTValue* frame = lj_debug_frame(L, i, &size);
+
+    if (frame == NULL)
+    {
+      break;
+    }
+
+    lua_newtable(L);
+    lua_pushinteger(L, i + 1);
+    lua_setfield(L, -2, "level");
+
+    // If-else chain might not be pretty, but these macros don't necessarily operate
+    // on the same data.
+    GCfunc* func = frame_func(frame);
+    if (func)
+    {
+      if (isluafunc(func))
+      {
+        lua_pushliteral(L, "lua");
+        lua_setfield(L, -2, "type");
+
+        GCproto* pt = funcproto(func);
+        if (pt && proto_chunkname(pt))
+        {
+          lua_pushstring(L, proto_chunknamestr(pt));
+          lua_setfield(L, -2, "chunkname");
+        }
+
+        setfuncV(L, L->top++, func);
+        lua_setfield(L, -2, "func");
+      } else
+      {
+        lua_pushliteral(L, "c");
+        lua_setfield(L, -2, "type");
+
+        setfuncV(L, L->top++, func);
+        lua_setfield(L, -2, "func");
+      }
+    }
+
+    lua_rawseti(L, -2, i + 1);
+  }
+
+  return 1;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -160,6 +219,7 @@ void lje_addfuncs(lua_State* L) {
   LJE_SET_FUNC("get_env", lje_get_env);
   LJE_SET_FUNC("set_env", lje_set_env);
   LJE_SET_FUNC("get_bytecode_hash", lje_get_bytecode_hash);
+  LJE_SET_FUNC("get_call_stack", lje_get_call_stack);
   lua_setfield(L, -2, "lje");
   lua_pop(L, 1); // Pop globals table
 }
