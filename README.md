@@ -30,7 +30,12 @@ The main primitive that lj-expand adds are:
   - Extra metadata is associated with functions to enable the VM to identify our own functions and treat them differently.
   - This does not interfere with the GC total, making it difficult to detect this extra metadata.
   - It also means the initialization GC total is equal to the vanilla GC total.
-  
+  - Pre-init total is spoofed to match vanilla as well. This means it's difficult/impossible to detect the presence of lj-expand via collectgarbage checks at pre-initialization.
+  - Technically, you can try it after initialization, but at that point there are nondeterministic factors that can affect the GC total (material loading times, http requests, etc). 
+- Call stack authorization
+  - LJE functions can verify whether they were called from authorized code or not.
+  - This allows for stuff like PostRender hooks to be restricted to when the engine is calling them, preventing anti-cheat code from executing them and detecting unauthorized behavior.
+
 These functions are modified to leverage the above primitives:
 - [x] debug.getinfo
 - [x] debug.getlocal
