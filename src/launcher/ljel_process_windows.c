@@ -151,7 +151,13 @@ void launch_and_inject(const char* gmod_path, const char* lje_path)
 
         if (debug_event.dwDebugEventCode == EXIT_PROCESS_DEBUG_EVENT)
         {
-            ljel_log("Process exited!");
+            // This is unexpected. We terminate the loop at injection, it should not reach here.
+            // If it *does*, it probably means the user accidentally tried injecting into GMod's own
+            // launcher which immediately exits.
+            ljel_log("******* UNEXPECTED PROCESS EXIT *******");
+            ljel_log("Target process exited before injection could occur.");
+            ljel_log("This usually happens when trying to inject into GMod's own launcher.");
+            ljel_log("Make sure to inject into bin/win64/gmod.exe instead.");
             break;
         }
     }
