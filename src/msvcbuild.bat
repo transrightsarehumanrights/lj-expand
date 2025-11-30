@@ -21,8 +21,8 @@
 @set DASMDIR=..\dynasm
 @set DASM=%DASMDIR%\dynasm.lua
 @set DASC=vm_x86.dasc
-@set LJDLLNAME=gmcl_lj-expand_win64.dll
-@set LJLIBNAME=gmcl_lj-expand_win64.lib
+@set LJDLLNAME=lje-w64.dll
+@set LJLIBNAME=lje-w64.lib
 @set ALL_LIB=lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c
 
 %LJCOMPILE% host\minilua.c

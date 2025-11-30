@@ -7,7 +7,7 @@
 #endif
 
 #define GMOD_PATH_ENV_NAME "GMOD_PATH"
-#define LJE_DLL "gmcl_lj-expand_win64.dll"
+#define LJE_DLL "lje-w64.dll"
 
 char* resolve_lje_path()
 {
