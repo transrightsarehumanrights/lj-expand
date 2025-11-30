@@ -23,5 +23,5 @@ jobs:
         with:
           name: lje
           path: |
-            lje-w64.dll
-            lje-launcher.exe
+            src/lje-w64.dll
+            src/lje-launcher.exe
