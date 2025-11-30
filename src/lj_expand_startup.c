@@ -7,6 +7,8 @@
 #include "lj_lib.h"
 #include "stdio.h"
 
+#include "generated/lje_preinit.h"
+
 static char* load_lua_file(const char* relative_path)
 {
     char* path = lje_concat_path(relative_path);
@@ -166,13 +168,7 @@ void lje_startup_preinit(lua_State* L) {
         return;
     }
 
-    char* script = load_lua_file(LJE_PREINIT_FILE);
-    if (!script)
-    {
-        printf("[LJE ERROR] No pre-initialization script found, skipping.\n");
-        return;
-    }
-
+    char* script = lje_preinit_data;
     if (original_loadbufferx(L, script, strlen(script), "@lje_preinit", NULL) == 0)
     {
         if (original_pcall(L, 0, 0, 0) != 0)
@@ -192,6 +188,5 @@ void lje_startup_preinit(lua_State* L) {
         lua_pop(L, 1); // Pop error message
     }
 
-    free(script);
     return;
 }

@@ -25,6 +25,17 @@
 @set LJLIBNAME=lje-w64.lib
 @set ALL_LIB=lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c
 
+@rem Compile lua2cc helper program
+
+%LJCOMPILE% lua2c.c
+@if errorlevel 1 goto :BAD
+%LJLINK% /out:lua2c.exe lua2c.obj
+@if errorlevel 1 goto :BAD
+
+@rem Convert script(s) to C headers.
+lua2c lua/lje_preinit.lua generated\lje_preinit.h lje_preinit
+@if errorlevel 1 goto :BAD
+
 %LJCOMPILE% host\minilua.c
 @if errorlevel 1 goto :BAD
 %LJLINK% /out:minilua.exe minilua.obj
