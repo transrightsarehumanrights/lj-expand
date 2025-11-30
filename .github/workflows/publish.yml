@@ -21,7 +21,7 @@ jobs:
       - name: Publish Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: lje
+          name: lje-${{github.sha}}
           path: |
             src/lje-w64.dll
             src/lje-launcher.exe
