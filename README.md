@@ -7,9 +7,17 @@ debugging hooks to facilitate detection. Of course, this is still highly experim
 be possible, so unfortunately there is no perfect solution. It is however much more complicated to detect and mitigate against since this project
 operates at a lower level than traditional methods.
 
-However, lj-expand aims to provide a more robust method of unauthorized Lua execution that is harder to detect and mitigate against. It currently
-bypasses most anti-cheats available for Garry's Mod. There may still be some edge cases where detection is possible, but those will hopefully be
-ironed out in future commits.
+# Installation
+
+**DO NOT INSTALL THIS IN THE GARRY'S MOD FOLDER.** Instead, keep it in a separate folder somewhere else on your computer. Be aware that you will need
+to manually update this folder. Right now, there is no versioning as it is very early in development. You will need to manually download artifacts.
+
+1. Look at the latest commit for a green checkmark icon. Click on it to go to the artifacts page.
+2. At the left sidebar, click on "Summary"
+3. Click on the `lje-***.zip` file to download the latest build.
+4. Extract the zip file somewhere safe.
+5. Setup the `GMOD_PATH` environment variable to point to the GMod 64-bit executable in `bin\win64\gmod.exe`. **DO NOT** point it to the `gmod.exe` in the root folder.
+6. From now on, you can run `lje-launcher.exe` to launch Garry's Mod with lj-expand.
 
 ## Disclaimer
 I don't condone cheating. I do however believe that you should have the freedom to audit and run your own code on your own machine.
