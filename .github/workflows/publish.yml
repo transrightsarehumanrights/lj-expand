@@ -1,0 +1,26 @@
+on:
+  push:
+    branches:
+      - expansion
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build
+        run: |
+          cd src
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          ./msvcbuild.bat gc64
+
+      - name: Publish Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lje
+          path: |
+            lje-w64.dll
+            lje-launcher.exe
