@@ -4,19 +4,15 @@
 #include "lj_expand_globals.h"
 #include "lj_expand_lib.h"
 #include "lj_expand_module.h"
-#include "lj_lib.h"
 #include "stdio.h"
 
 #include "generated/lje_preinit.h"
 
-static char* load_lua_file(const char* relative_path)
+static char* load_lua_file(const char* path)
 {
-    char* path = lje_concat_path(relative_path);
     FILE* file = fopen(path, "rb");
-    free(path);
-
     if (!file) {
-        printf("[LJE] Failed to open startup script: %s\n", path);
+        printf("[LJE] Failed to open script file: %s\n", path);
         return NULL;
     }
 
@@ -56,8 +52,9 @@ static int resolve_original_functions(luaL_loadbufferx_t* out_loadbufferx, lua_p
     return 0;
 }
 
-void lje_startup_execute(lua_State* L) {
+void lje_startup_execute(lua_State* L, LJEScript* script) {
     LJEG()->main_state = L;
+    LJEG()->current_script = script;
 
     luaL_loadbufferx_t original_loadbufferx = NULL;
     lua_pcall_t original_pcall = NULL;
@@ -67,11 +64,11 @@ void lje_startup_execute(lua_State* L) {
         return;
     }
 
-    char* script = load_lua_file(LJE_STARTUP_FILE);
-    if (script)
+    char* script_file = load_lua_file(script->main_path);
+    if (script_file)
     {
-        printf("[LJE] Executing startup script...\n");
-        if (original_loadbufferx(L, script, strlen(script), "@lje_startup", NULL) == 0)
+        printf("[LJE] Executing script '%s'...\n", script->name);
+        if (original_loadbufferx(L, script_file, strlen(script_file), "@lje_script", NULL) == 0)
         {
             // Mark it as a special function first
             GCfunc* func = funcV(L->top-1);
@@ -88,23 +85,30 @@ void lje_startup_execute(lua_State* L) {
                 printf("[LJE] No custom environment set for startup script? Probably not intentional.\n");
             }
 
+            // Disable hooks during execution
+            LJEG()->skip_hooks = 1;
             if (original_pcall(L, 0, 0, 0) != 0)
             {
-                printf("[LJE] Error executing startup script: %s\n", lua_tostring(L, -1));
+                LJEG()->skip_hooks = 0;
+
+                printf("[LJE] Error executing script: %s\n", lua_tostring(L, -1));
                 lua_pop(L, 1); // Pop error message
             } else
             {
-                printf("[LJE] Startup script executed successfully.\n");
+                LJEG()->skip_hooks = 0;
+                printf("[LJE] Script executed successfully.\n");
             }
         }
         else
         {
-            printf("[LJE] Error loading startup script: %s\n", lua_tostring(L, -1));
+            printf("[LJE] Error loading script: %s\n", lua_tostring(L, -1));
             lua_pop(L, 1); // Pop error message
         }
 
-        free(script);
+        free(script_file);
     }
+
+    LJEG()->current_script = NULL;
 }
 
 int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
@@ -116,7 +120,18 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
         return 0;
     }
 
-    char* buffer = load_lua_file(relative_path);
+    if (!LJEG()->current_script)
+    {
+        printf("[LJE] No current script context for include!\n");
+        return 0;
+    }
+
+    // compute relative to current script
+    char full_path[512] = { 0 };
+    strncat_s(full_path, 512, LJEG()->current_script->folder, _TRUNCATE);
+    strncat_s(full_path, 512, relative_path, _TRUNCATE);
+
+    char* buffer = load_lua_file(full_path);
     printf("[LJE] Including script: %s\n", relative_path);
     if (original_loadbufferx(L, buffer, strlen(buffer), "@lje_include", NULL) == 0)
     {
@@ -142,7 +157,7 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
         } else
         {
             free(buffer);
-            printf("[LJE] Include script executed successfully. Returned %d results\n", lua_gettop(L));
+            printf("[LJE] Include script executed successfully. Returned %d results\n", lua_gettop(L) - 1);
             return lua_gettop(L) - 1;
         }
     }

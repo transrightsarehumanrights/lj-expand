@@ -198,7 +198,13 @@ GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
     printf("[LJE] Detected creation of Lua function for @Startup\n");
     printf("[LJE] Clearing any old spoof records...\n");
     lje_clear_spoof_records();
-    lje_startup_execute(L);
+
+    for (int i = 0; i < LJEG()->loaded_script_count; i++)
+    {
+      LJEScript* script = &LJEG()->loaded_scripts[i];
+      printf("[LJE] Loading script '%s' during startup...\n", script->name);
+      lje_startup_execute(L, script);
+    }
   }
 
   GCfunc *fn = func_newL(L, pt, env);

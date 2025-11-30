@@ -33,6 +33,7 @@
 #include "lauxlib.h"
 #include "lj_dispatch.h"
 #include "lj_expand_globals.h"
+#include "lj_expand_script.h"
 
 #include "stdio.h"
 
@@ -1369,6 +1370,30 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
       lje_detour_export(mod, lua_getupvalue, lua_getupvalue);
       lje_detour_export(mod, lua_pushstring, lua_pushstring);
       lje_detour_export(mod, lua_pcall, lua_pcall);
+
+      if (!lje_script_folder_exists())
+      {
+        // Tell them we're creating one for them
+        char path[MAX_PATH];
+        lje_script_resolve_base(path, MAX_PATH);
+        printf("[LJE] %s folder not found, creating it now...\n", LJE_SCRIPT_FOLDER);
+        printf("[LJE] Creating at path: %s\n", path);
+        if (!lje_script_folder_create())
+        {
+          printf("[LJE] Failed to create %s folder! Please create it manually.\n", LJE_SCRIPT_FOLDER);
+        } else {
+          printf("[LJE] Successfully created %s folder!\n", LJE_SCRIPT_FOLDER);
+        }
+      }
+
+      LJEG()->loaded_scripts = lje_script_load_all_scripts(&LJEG()->loaded_script_count);
+      printf("[LJE] Loaded %llu scripts!\n", LJEG()->loaded_script_count);
+      for (size_t i = 0; i < LJEG()->loaded_script_count; i++)
+      {
+        printf("[LJE] - %s\n", LJEG()->loaded_scripts[i].name);
+        printf("[LJE]   Path: %s\n", LJEG()->loaded_scripts[i].main_path);
+        printf("[LJE]   Folder: %s\n", LJEG()->loaded_scripts[i].folder);
+      }
     } else {
       printf("lua_shared.dll not found!\n");
     }

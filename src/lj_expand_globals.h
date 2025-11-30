@@ -2,6 +2,7 @@
 #define _LJ_EXPAND_GLOBALS_H
 #include "lua.h"
 #include "lj_obj.h"
+#include "lj_expand_script.h"
 
 #define LJE_LUA_BASE_PATH "C:/LJE/"
 
@@ -31,6 +32,10 @@ typedef struct LJEGlobalState
     int waiting_for_init_call;
     int original_gc;
     LJESpoofRecord spoof_record_root;
+    LJEScript* loaded_scripts;
+    size_t loaded_script_count;
+    /* Used for script execution context */
+    LJEScript* current_script;
 } LJEGlobalState;
 
 #define LJEG() (lje_get_global_state())

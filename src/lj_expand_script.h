@@ -11,11 +11,15 @@
  */
 typedef struct LJEScript
 {
-    const char* path;
+    const char* folder;
+    const char* main_path;
     const char* name;
 } LJEScript;
 
 void lje_script_resolve_base(char* out_buffer, size_t buffer_size);
 int lje_script_folder_exists();
+int lje_script_folder_create();
+LJEScript* lje_script_load_all_scripts(size_t* out_script_count);
+void lje_script_free_scripts(LJEScript* scripts, size_t script_count);
 
 #endif
