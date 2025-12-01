@@ -682,6 +682,13 @@ int LJ_FASTCALL lj_gc_step(lua_State *L)
   global_State *g = G(L);
   GCSize lim;
   int32_t ostate = g->vmstate;
+  GCSize total_add = 0;
+  if (LJEG()->main_state == L)
+  {
+    /* LJE: Add total memory used by LJE temporarily to the global state */
+    total_add = LJEG()->lje_gc_total;
+  }
+
   setvmstate(g, GC);
   lim = (GCSTEPSIZE/100) * g->gc.stepmul;
   if (lim == 0)
@@ -818,12 +825,58 @@ void *lj_mem_realloc(lua_State *L, void *p, GCSize osz, GCSize nsz)
 {
   global_State *g = G(L);
   lua_assert((osz == 0) == (p == NULL));
+  int is_new = osz == 0;
+  int tag_exists = p && isljegco(p);
+  int gco_tracking = LJEG()->mark_all_gcos && L == LJEG()->main_state;
+  int size_adjustment = 0;
+
+  /* LJE: Major edge case here, if we are reallocating an existing object that
+   * was not previously tracked, but GCO marks are now enabled, we do not want to
+   * add the tag or consider it tracked, as that would corrupt the object.
+   */
+  if (!is_new && !tag_exists && gco_tracking)
+  {
+    // Existing object being realloc'd, but not tracked
+    gco_tracking = 0;
+  }
+
+  if (tag_exists || gco_tracking)
+  {
+    size_adjustment = 4;
+  }
+
+  if (tag_exists)
+  {
+    p = (void *)((char *)p - 4);
+  }
+
+  osz += (GCSize)size_adjustment;
+  nsz += (GCSize)size_adjustment;
+
   p = g->allocf(g->allocd, p, osz, nsz);
   if (p == NULL && nsz > 0)
     lj_err_mem(L);
   lua_assert((nsz == 0) == (p == NULL));
   lua_assert(checkptrGC(p));
+
+  int old_gc_total = g->gc.total;
   g->gc.total = (g->gc.total - osz) + nsz;
+
+  if (gco_tracking || tag_exists)
+  {
+    // Add tag if we need it
+    if (!tag_exists)
+    {
+      *((uint32_t *)p) = LJE_GCO_TAG;
+    }
+
+    p = (void *)((char *)p + 4); // move past tag
+    // Remove it from the GC total, we're doing the tracking ourselves
+    g->gc.total -= 4;
+    // Add to LJE total
+    LJEG()->lje_gc_total = LJEG()->lje_gc_total - osz + nsz - 4;
+  }
+
   return p;
 }
 
@@ -840,22 +893,28 @@ void * LJ_FASTCALL lj_mem_newgco(lua_State *L, GCSize size)
   if (o == NULL)
     lj_err_mem(L);
   lua_assert(checkptrGC(o));
+  int old_gc_total = g->gc.total;
   g->gc.total += size;
   if (LJEG()->mark_all_gcos && L == LJEG()->main_state)
   {
+    //g->gc.total = old_gc_total;  // Remove from GC total
     g->gc.total -= 4;
     /* LJE: We tag objects before their GCHeader so we can find them later */
     *((uint32_t *)o) = LJE_GCO_TAG;
     o = (GCobj *)((char *)o + 4);
     LJEG()->lje_gc_total += size - 4;
-    printf("[LJE] Allocated LJE GC object %p of size %llu (total LJE GC: %llu)\n",
-           o, (unsigned long long)(size - 4),
-           (unsigned long long)LJEG()->lje_gc_total);
   }
 
   setgcrefr(o->gch.nextgc, g->gc.root);
   setgcref(g->gc.root, o);
   newwhite(g, o);
+
+  if (LJEG()->mark_all_gcos && L == LJEG()->main_state)
+  {
+    // Enable FIXED so it never gets collected
+    // o->gch.marked |= LJ_GC_FIXED;
+  }
+
   return o;
 }
 
