@@ -31,6 +31,8 @@
 #include "lj_def.h"
 #include "lj_arch.h"
 #include "lj_alloc.h"
+#include "lj_gc.h"
+#include "lj_expand_globals.h"
 
 #ifndef LUAJIT_USE_SYSMALLOC
 
@@ -1478,6 +1480,17 @@ void *lj_alloc_f(void *msp, void *ptr, size_t osize, size_t nsize)
 {
   (void)osize;
   if (nsize == 0) {
+    if (ptr && isljegco(ptr))
+    {
+      /* LJE: Fix pointer. It was allocated originally at the base of the tag but
+       * shifted 4 bytes away to trick LuaJIT. So we need to fix it back before freeing.
+       * Otherwise, it will find a corrupted chunk header and likely crash.
+       */
+      ptr = (void *)((char *)ptr - sizeof(uint32_t));
+      LJEG()->lje_gc_total -= osize; // Tag not included
+      printf("[LJE]: Freeing LJE GC object. Total LJE GC memory: %zu bytes\n", LJEG()->lje_gc_total);
+    }
+
     return lj_alloc_free(msp, ptr);
   } else if (ptr == NULL) {
     return lj_alloc_malloc(msp, nsize);

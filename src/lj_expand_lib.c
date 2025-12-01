@@ -7,6 +7,7 @@
 #include "lj_expand_globals.h"
 #include "lj_expand_startup.h"
 #include "lj_frame.h"
+#include "lj_gc.h"
 
 
 int lje_spoof_debug_info(lua_State* L)
@@ -197,6 +198,56 @@ int lje_get_call_stack(lua_State* L)
   return 1;
 }
 
+int lje_freeze_gc(lua_State* L)
+{
+  LJEG()->frozen_gc_total = G(L)->gc.total;
+  LJEG()->frozen_gc_threshold = G(L)->gc.threshold;
+
+  return 0;
+}
+
+int lje_unfreeze_gc(lua_State* L)
+{
+  if (LJEG()->frozen_gc_total != 0 && LJEG()->frozen_gc_threshold != 0)
+  {
+    // We can't just lie about the total, we need to make sure we're under the threshold.
+    // To do this, at every unfreeze, we do enough GC steps to get back under the threshold.
+    // This actually frees up memory, rather than just lying about it, and looks as if
+    // nothing ever happened.
+    LJEG()->frozen_gc_total = 0;
+    LJEG()->frozen_gc_threshold = 0;
+  }
+
+  return 0;
+}
+
+int lje_enable_gco_marks(lua_State* L)
+{
+  LJEG()->mark_all_gcos = 1;
+  return 0;
+}
+
+int lje_disable_gco_marks(lua_State* L)
+{
+  LJEG()->mark_all_gcos = 0;
+  return 0;
+}
+
+int lje_check_gco_tag(lua_State* L)
+{
+  GCobj* obj = gcV(lj_lib_checkany(L, 1));
+  uint32_t tag = *((uint32_t*)((char*)obj - 4));
+  if (tag == LJE_GCO_TAG)
+  {
+    lua_pushboolean(L, 1);
+  } else
+  {
+    lua_pushboolean(L, 0);
+  }
+
+  return 1;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -220,6 +271,11 @@ void lje_addfuncs(lua_State* L) {
   LJE_SET_FUNC("set_env", lje_set_env);
   LJE_SET_FUNC("get_bytecode_hash", lje_get_bytecode_hash);
   LJE_SET_FUNC("get_call_stack", lje_get_call_stack);
+  LJE_SET_FUNC("freeze_gc", lje_freeze_gc);
+  LJE_SET_FUNC("unfreeze_gc", lje_unfreeze_gc);
+  LJE_SET_FUNC("enable_gco_marks", lje_enable_gco_marks);
+  LJE_SET_FUNC("disable_gco_marks", lje_disable_gco_marks);
+  LJE_SET_FUNC("check_gco_tag", lje_check_gco_tag);
   lua_setfield(L, -2, "lje");
   lua_pop(L, 1); // Pop globals table
 }

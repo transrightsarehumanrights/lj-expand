@@ -28,6 +28,9 @@ enum {
 #define LJ_GC_COLORS	(LJ_GC_WHITES | LJ_GC_BLACK)
 #define LJ_GC_WEAK	(LJ_GC_WEAKKEY | LJ_GC_WEAKVAL)
 
+#define LJE_GCO_TAG 0x424C4947 /* LJE-specific GCobj tag for our own allocations. This is an implicit tag to quickly identify our own objects. */
+#define isljegco(obj)  (*((uint32_t *)((char *)(obj) - 4)) == LJE_GCO_TAG)
+
 /* Macros to test and set GCobj colors. */
 #define iswhite(x)	((x)->gch.marked & LJ_GC_WHITES)
 #define isblack(x)	((x)->gch.marked & LJ_GC_BLACK)

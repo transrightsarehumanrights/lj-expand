@@ -34,6 +34,7 @@
 #include "lj_dispatch.h"
 #include "lj_expand_globals.h"
 #include "lj_expand_script.h"
+#include "lj_alloc.h"
 
 #include "stdio.h"
 
@@ -1370,6 +1371,7 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
       lje_detour_export(mod, lua_getupvalue, lua_getupvalue);
       lje_detour_export(mod, lua_pushstring, lua_pushstring);
       lje_detour_export(mod, lua_pcall, lua_pcall);
+      lje_detour_export(mod, lua_getfield, lua_getfield);
 
       if (!lje_script_folder_exists())
       {
