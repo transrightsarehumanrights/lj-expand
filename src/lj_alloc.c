@@ -1488,6 +1488,7 @@ void *lj_alloc_f(void *msp, void *ptr, size_t osize, size_t nsize)
        */
       ptr = (void *)((char *)ptr - sizeof(uint32_t));
       LJEG()->lje_gc_total -= osize; // Tag not included
+      printf("[LJE]: Freeing LJE GC object. Total LJE GC memory: %zu bytes\n", LJEG()->lje_gc_total);
     }
 
     return lj_alloc_free(msp, ptr);

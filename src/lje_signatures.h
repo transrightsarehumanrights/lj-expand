@@ -26,9 +26,4 @@ SIGDEF(lj_cf_getfenv, "40 53 48 83 ec 20 48 8b d9 48 8b 49 20 4c 8b 43 28 49 3b 
 SIGDEF(lj_cf_debug_getfenv, "40 53 48 83 ec 20 ba 01 00 00 00 48 8b d9 e8 ?? ?? ?? ?? ba 01 00 00 00 48 8b cb e8 ?? ?? ?? ?? b8 01 00 00 00 48 83 c4 20 5b c3")
 SIGDEF(lj_cf_debug_setfenv, "40 53 48 83 ec 20 ba 02 00 00 00 48 8b d9 e8 ?? ?? ?? ?? 48 8b 43 20 ba 01 00 00 00 48 83 c0 10 48 8b cb 48 89 43 28 e8 ?? ?? ?? ?? 85 c0 74 0b b8 01 00 00 00")
 SIGDEF(lj_mem_newgco, "48 89 5c 24 08 48 89 74 24 10 57 48 83 ec 20 48 8b 59 10 48 8b f2 48 8b f9 4c 8b ca 45 33 c0 33 d2 48 8b 4b 18 ff 53 10")
-SIGDEF(lj_mem_realloc, "48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18 57 48 83 ec 20 48 8b 79 10 48 8b f1 49 8b d9 49 8b e8 48 8b 4f 18")
 SIGDEF(lj_alloc_f, "4d 85 c9 0f 84 ?? ?? ?? ?? 48 85 d2 75 ?? 49 8b d1 e9 ?? ?? ?? ?? 4d 8b c1 e9")
-// GC spoofing
-SIGDEF(lj_cf_collectgarbage, "48 89 5c 24 08 57 48 83 ec 20 ba 01 00 00 00 4c ?? ?? ?? ?? ?? ?? 48 8b d9 44 8d 42 01")
-SIGDEF(lj_cf_gcinfo, "48 8b 51 28 48 8d 42 08 48 89 41 28 48 8b 41 10 48 8b 48 20 b8 01 00 00 00")
-SIGDEF(lj_gc_step, "48 89 4c 24 08 53 55 56 57 41 54 41 55 41 56 48 83 ec 20 4c 8b 69 10 4c 8b c1 49 b9 00 00 00 00 00 80 00 00 4c 89 6c 24 70 41 8b 85 80 00 00 00")

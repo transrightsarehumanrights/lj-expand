@@ -35,7 +35,6 @@
 #include "lj_strscan.h"
 #include "lj_strfmt.h"
 #include "lj_lib.h"
-#include "lj_expand_globals.h"
 
 /* -- Base library: checks ------------------------------------------------ */
 
@@ -434,9 +433,7 @@ LJLIB_CF(dofile)
 
 LJLIB_CF(gcinfo)
 {
-  /* LJE: Spoof total by not counting our objects */
-  GCSize spoofed_total = G(L)->gc.total;
-  setintV(L->top++, (int32_t)(spoofed_total >> 10));
+  setintV(L->top++, (int32_t)(G(L)->gc.total >> 10));
   return 1;
 }
 
@@ -446,9 +443,7 @@ LJLIB_CF(collectgarbage)
     "\4stop\7restart\7collect\5count\1\377\4step\10setpause\12setstepmul\1\377\11isrunning");
   int32_t data = lj_lib_optint(L, 2, 0);
   if (opt == LUA_GCCOUNT) {
-    /* LJE: Spoof total by not counting our objects */
-    GCSize spoofed_total = G(L)->gc.total;
-    setnumV(L->top, (lua_Number)spoofed_total/1024.0);
+    setnumV(L->top, (lua_Number)G(L)->gc.total/1024.0);
   } else {
     int res = lua_gc(L, opt, data);
     if (opt == LUA_GCSTEP || opt == LUA_GCISRUNNING)

@@ -26,8 +26,6 @@
 
 LJE_EXPOSE(setfenv)
 LJE_EXPOSE(getfenv)
-LJE_EXPOSE(collectgarbage)
-LJE_EXPOSE(gcinfo)
 LUALIB_API int luaopen_base(lua_State *L);
 LUALIB_API int luaopen_math(lua_State *L);
 LJE_EXPOSE(string_dump)
