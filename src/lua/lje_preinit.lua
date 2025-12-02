@@ -93,12 +93,12 @@ setfenv(safeEnv.lje.use_safe_basemts, safeEnv)
 setfenv(safeEnv.lje.restore_basemts, safeEnv)
 
 safeEnv.lje.detour = function(origFn, detourFn)
-    lje.mark_special(detourFn)
-    lje.spoof_debug_info(detourFn, origFn)
+    lje.func.mark_special(detourFn)
+    lje.func.spoof(detourFn, origFn)
     return detourFn
 end
 
 setfenv(safeEnv.lje.detour, safeEnv)
 
 lje.con_print("Safe environment ready!")
-lje.set_env(safeEnv)
+lje.env.set(safeEnv)

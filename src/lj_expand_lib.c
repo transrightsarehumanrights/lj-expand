@@ -7,6 +7,7 @@
 #include "lj_expand_globals.h"
 #include "lj_expand_startup.h"
 #include "lj_frame.h"
+#include "lj_gc.h"
 #include "lj_tab.h"
 
 
@@ -204,6 +205,51 @@ int lje_get_registry(lua_State* L)
   return 1;
 }
 
+int lje_get_gc_total(lua_State* L)
+{
+  lua_pushinteger(L, (lua_Integer)G(L)->gc.total);
+  return 1;
+}
+
+int lje_set_gc_total(lua_State* L)
+{
+  size_t new_total = (size_t)luaL_checkinteger(L, 1);
+  G(L)->gc.total = new_total;
+  return 0;
+}
+
+int lje_run_full_gc(lua_State* L)
+{
+  lj_gc_fullgc(L);
+  return 0;
+}
+
+int lje_check_tag(lua_State* L)
+{
+  TValue* val = lj_lib_checkany(L, 1);
+  if (tvisgcv(val))
+  {
+    GCobj* obj = gcV(val);
+    lua_pushboolean(L, obj->gch.unused1 == 0x41);
+  } else
+  {
+    lua_pushboolean(L, 0);
+  }
+  return 1;
+}
+
+int lje_set_tag(lua_State* L)
+{
+  TValue* val = lj_lib_checkany(L, 1);
+  if (tvisgcv(val))
+  {
+    GCobj* obj = gcV(val);
+    obj->gch.unused1 = 0x41; // 'A'
+  }
+
+  return 0;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -212,22 +258,60 @@ int lje_get_registry(lua_State* L)
   lua_pushnil(L); \
   lua_setfield(L, -2, name);
 
+#define LJE_NEW_SECTION() \
+  lua_createtable(L, 0, 0);
+
+#define LJE_END_SECTION(section_name) \
+  lua_setfield(L, -2, section_name);
+
 void lje_addfuncs(lua_State* L) {
   lua_pushvalue(L, LUA_GLOBALSINDEX);
   lua_createtable(L, 0, 0);
-  LJE_SET_FUNC("spoof_debug_info", lje_spoof_debug_info);
-  LJE_SET_FUNC("mark_special", lje_mark_special);
-  LJE_SET_FUNC("con_print", lje_con_print);
-  LJE_SET_FUNC("set_push_string_callback", lje_set_push_string_callback);
-  LJE_SET_FUNC("enable_hooks", lje_enable_hooks);
-  LJE_SET_FUNC("disable_hooks", lje_disable_hooks);
-  LJE_SET_FUNC("ignore_fn_on_hook", lje_ignore_fn_on_hook);
+
+  /* LJE API START */
+
+  /* base: global functions */
   LJE_SET_FUNC("include", lje_include);
-  LJE_SET_FUNC("get_env", lje_get_env);
-  LJE_SET_FUNC("set_env", lje_set_env);
-  LJE_SET_FUNC("get_bytecode_hash", lje_get_bytecode_hash);
-  LJE_SET_FUNC("get_call_stack", lje_get_call_stack);
-  LJE_SET_FUNC("get_registry", lje_get_registry);
+  LJE_SET_FUNC("con_print", lje_con_print);
+
+  /* func: anything to do with functions, e.g: spoofing, stealth */
+  LJE_NEW_SECTION()
+    LJE_SET_FUNC("spoof", lje_spoof_debug_info);
+    LJE_SET_FUNC("mark_special", lje_mark_special);
+  LJE_END_SECTION("func");
+
+  /* hooks: anything to do particularly with LuaJIT's debug hook functionality */
+  LJE_NEW_SECTION()
+    LJE_SET_FUNC("enable", lje_enable_hooks);
+    LJE_SET_FUNC("disable", lje_disable_hooks);
+    LJE_SET_FUNC("ignore_fn_once", lje_ignore_fn_on_hook);
+  LJE_END_SECTION("hooks");
+
+  /* env: custom environment table management */
+  LJE_NEW_SECTION()
+    LJE_SET_FUNC("get", lje_get_env);
+    LJE_SET_FUNC("set", lje_set_env);
+  LJE_END_SECTION("env");
+
+  /* util: unassorted utility functions */
+  LJE_NEW_SECTION()
+    LJE_SET_FUNC("get_bytecode_hash", lje_get_bytecode_hash);
+    LJE_SET_FUNC("get_call_stack", lje_get_call_stack);
+    LJE_SET_FUNC("get_registry", lje_get_registry);
+    LJE_SET_FUNC("set_push_string_callback", lje_set_push_string_callback);
+  LJE_END_SECTION("util");
+
+  /* gc: garbage collector manipulation */
+  LJE_NEW_SECTION()
+    LJE_SET_FUNC("get_total", lje_get_gc_total);
+    LJE_SET_FUNC("set_total", lje_set_gc_total);
+    LJE_SET_FUNC("run_full_gc", lje_run_full_gc);
+    LJE_SET_FUNC("check_tag", lje_check_tag);
+    LJE_SET_FUNC("set_tag", lje_set_tag);
+  LJE_END_SECTION("gc");
+
+  /* LJE API END */
+
   lua_setfield(L, -2, "lje");
   lua_pop(L, 1); // Pop globals table
 }
