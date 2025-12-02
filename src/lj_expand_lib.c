@@ -7,6 +7,7 @@
 #include "lj_expand_globals.h"
 #include "lj_expand_startup.h"
 #include "lj_frame.h"
+#include "lj_tab.h"
 
 
 int lje_spoof_debug_info(lua_State* L)
@@ -197,6 +198,12 @@ int lje_get_call_stack(lua_State* L)
   return 1;
 }
 
+int lje_get_registry(lua_State* L)
+{
+  lua_pushvalue(L, LUA_REGISTRYINDEX);
+  return 1;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -220,6 +227,7 @@ void lje_addfuncs(lua_State* L) {
   LJE_SET_FUNC("set_env", lje_set_env);
   LJE_SET_FUNC("get_bytecode_hash", lje_get_bytecode_hash);
   LJE_SET_FUNC("get_call_stack", lje_get_call_stack);
+  LJE_SET_FUNC("get_registry", lje_get_registry);
   lua_setfield(L, -2, "lje");
   lua_pop(L, 1); // Pop globals table
 }
