@@ -30,17 +30,12 @@ typedef struct LJEGlobalState
     GCRef ignore_fn_on_hook;
     int in_hook;
     int waiting_for_init_call;
-    /* This is pre-init GC total. Not related to frozen_gc_total below. */
     int original_gc;
     LJESpoofRecord spoof_record_root;
     LJEScript* loaded_scripts;
     size_t loaded_script_count;
     /* Used for script execution context */
     LJEScript* current_script;
-    int frozen_gc_total;
-    int frozen_gc_threshold;
-    int mark_all_gcos;
-    int lje_gc_total;
 } LJEGlobalState;
 
 #define LJEG() (lje_get_global_state())

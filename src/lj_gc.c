@@ -24,7 +24,6 @@
 #include "lj_ctype.h"
 #include "lj_cdata.h"
 #endif
-#include "lj_expand_globals.h"
 #include "lj_trace.h"
 #include "lj_vm.h"
 
@@ -830,29 +829,12 @@ void *lj_mem_realloc(lua_State *L, void *p, GCSize osz, GCSize nsz)
 /* Allocate new GC object and link it to the root set. */
 void * LJ_FASTCALL lj_mem_newgco(lua_State *L, GCSize size)
 {
-  if (LJEG()->mark_all_gcos && L == LJEG()->main_state)
-  {
-    size += 4;
-  }
-
   global_State *g = G(L);
   GCobj *o = (GCobj *)g->allocf(g->allocd, NULL, 0, size);
   if (o == NULL)
     lj_err_mem(L);
   lua_assert(checkptrGC(o));
   g->gc.total += size;
-  if (LJEG()->mark_all_gcos && L == LJEG()->main_state)
-  {
-    g->gc.total -= 4;
-    /* LJE: We tag objects before their GCHeader so we can find them later */
-    *((uint32_t *)o) = LJE_GCO_TAG;
-    o = (GCobj *)((char *)o + 4);
-    LJEG()->lje_gc_total += size - 4;
-    printf("[LJE] Allocated LJE GC object %p of size %llu (total LJE GC: %llu)\n",
-           o, (unsigned long long)(size - 4),
-           (unsigned long long)LJEG()->lje_gc_total);
-  }
-
   setgcrefr(o->gch.nextgc, g->gc.root);
   setgcref(g->gc.root, o);
   newwhite(g, o);

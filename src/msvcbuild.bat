@@ -133,8 +133,6 @@ if exist luajit.exe.manifest^
 @echo *******************************************************
 @echo *** Build FAILED -- Please check the error messages ***
 @echo *******************************************************
-@rem Set errorlevel to 1 to indicate failure. Useful mainly for CI.
-@exit /b 1
 @goto :END
 :FAIL
 @echo You must open a "Visual Studio .NET Command Prompt" to run this script
