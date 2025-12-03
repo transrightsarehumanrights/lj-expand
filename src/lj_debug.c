@@ -341,8 +341,14 @@ if (LJEG()->in_hook == 1)
     if (spoof)
     {
         // Rewind 2 frames to get the actual caller
+        cTValue* originalFrame = frame;
         frame = frame_prev(frame);
         frame = frame_prev(frame);
+        if (!frame_islua(frame))
+        {
+            // Likely that there was a tailcall or something. Switch back
+            frame = originalFrame;
+        }
     }
 }
   pframe = frame_prev(frame);
