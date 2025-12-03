@@ -328,6 +328,23 @@ const char *lj_debug_funcname(lua_State *L, cTValue *frame, const char **name)
     return NULL;
   if (frame_isvarg(frame))
     frame = frame_prevd(frame);
+/* LJE: Hooks can run within the real frame of a detour. This frame is *usually* inaccessible to
+ * most scripts because it is marked special and exits immediately. Not with debug.sethook, however.
+ * We disable/enable the hooks, which results in a proper sethook trace but the frame is still there,
+ * messing up the stack trace and function name resolution. So, we skip it here if we are in a hook context.
+ */
+if (LJEG()->in_hook == 1)
+{
+    // Check if this frame function is *meant* to be spoofed
+    GCfunc* possibleFn = frame_func(frame);
+    GCfunc* spoof = lje_find_spoof_by_target(possibleFn);
+    if (spoof)
+    {
+        // Rewind 2 frames to get the actual caller
+        frame = frame_prev(frame);
+        frame = frame_prev(frame);
+    }
+}
   pframe = frame_prev(frame);
   fn = frame_func(pframe);
 /* LJE: Handle spoofed functions, only if we're not in a hook. Hooks have a special frame context and need namewhat to resolve properly */
