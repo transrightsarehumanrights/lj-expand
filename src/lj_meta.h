@@ -35,4 +35,7 @@ LJ_FUNCA void lj_meta_istype(lua_State *L, BCReg ra, BCReg tp);
 LJ_FUNCA void lj_meta_call(lua_State *L, TValue *func, TValue *top);
 LJ_FUNCA void LJ_FASTCALL lj_meta_for(lua_State *L, TValue *o);
 
+// Called from assembler VM for spoofed function equality checks
+LJ_FUNCA int LJ_FASTCALL lje_spoofed_function_equality(TValue *o1, TValue *o2);
+
 #endif

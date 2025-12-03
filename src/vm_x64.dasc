@@ -2964,9 +2964,22 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  je <1				// Same GCobjs or pvalues?
       |  cmp RBd, ITYPEd
       |  jne <2				// Not the same type?
+      |  cmp RBd, LJ_TFUNC // LJE: Any function types?
+      |  jne >9
+      |  // LJE: Call out to spoofed function equality handler
+      |  mov L:RB, SAVE_L
+      |  mov L:RB->base, BASE
+      |  lea CARG1, [RA] // Load raw TValue bits into registers, not an address
+      |  lea CARG2, [RD]
+      |  mov SAVE_PC, PC
+      |  call extern lje_spoofed_function_equality /// (TValue o1, TValue o2)
+      |  mov BASE, L:RB->base
+      |  test eax, eax
+      |  jnz <1 // Equal
+      |  jmp <2 // Not equal
+      |9:
       |  cmp RBd, LJ_TISTABUD
       |  ja <2				// Different objects and not table/ud?
-      |
       |  // Different tables or userdatas. Need to check __eq metamethod.
       |  // Field metatable must be at same offset for GCtab and GCudata!
       |  cleartp TAB:RA

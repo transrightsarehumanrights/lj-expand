@@ -475,3 +475,31 @@ void LJ_FASTCALL lj_meta_for(lua_State *L, TValue *o)
   }
 }
 
+/* LJE: Special assembler VM routine to check if functions are spoofed and if they're equal. */
+int LJ_FASTCALL lje_spoofed_function_equality(TValue o1v, TValue o2v)
+{
+  /* LJE: Routine is specialized to functions, so no tvisfunc checks are needed. */
+  /* Also, TValues are passed as raw bits to avoid a secondary memory load here. */
+  /* Should be fast as possible as this is called in tight interpreter and potential JIT loops. */
+
+  TValue* o1 = (TValue*)&o1v;
+  TValue* o2 = (TValue*)&o2v;
+  GCRef ref1 = o1->gcr;
+  GCRef ref2 = o2->gcr;
+
+  if (tvisspoofedfunc(o1))
+  {
+    ref1.gcptr64 = funcextend(funcV(o1))->spoof.gcptr64;
+  }
+
+  if (tvisspoofedfunc(o2))
+  {
+    ref2.gcptr64 = funcextend(funcV(o2))->spoof.gcptr64;
+  }
+
+  // Mask each with GCV to ignore lower bits
+  ref1.gcptr64 &= LJ_GCVMASK;
+  ref2.gcptr64 &= LJ_GCVMASK;
+
+  return gcrefeq(ref1, ref2);
+}
