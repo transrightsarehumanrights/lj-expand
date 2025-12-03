@@ -102,3 +102,7 @@ setfenv(safeEnv.lje.detour, safeEnv)
 
 lje.con_print("Safe environment ready!")
 lje.env.set(safeEnv)
+
+lje.con_print("Patching bytecodes...")
+lje.vm.patch_bytecodes()
+lje.con_print("Preinit script finished!")

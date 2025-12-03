@@ -27,7 +27,28 @@ int LJ_FASTCALL lj_obj_equal(cTValue *o1, cTValue *o2)
       return 1;
     if (!tvisnum(o1))
     {
-      return gcrefeq(o1->gcr, o2->gcr);
+      GCRef gcrO1 = o1->gcr;
+      GCRef gcrO2 = o2->gcr;
+
+      if (tvisspoofedfunc(o1))
+      {
+        gcrO1 = funcextend(funcV(o1))->spoof;
+        gcrO1.gcptr64 = (uintptr_t)gcrO1.gcptr64 & LJ_GCVMASK;
+        gcrO2.gcptr64 = (uintptr_t)gcrO2.gcptr64 & LJ_GCVMASK;
+
+        /* LJE: Strange issue here, but since these GCRs are unions, the type tag might be used on the TValue, so we need to clear it all out first. */
+        printf("[LJE] Comparing spoofed function (lhs) %p to %p\n", gcrO1, gcrO2);
+      }
+
+      if (tvisspoofedfunc(o2))
+      {
+        gcrO2 = funcextend(funcV(o2))->spoof;
+        gcrO2.gcptr64 = (uintptr_t)gcrO2.gcptr64 & LJ_GCVMASK;
+        gcrO1.gcptr64 = (uintptr_t)gcrO1.gcptr64 & LJ_GCVMASK;
+        printf("[LJE] Comparing %p to spoofed function (rhs) %p (result: %d)\n", gcrO1, gcrO2, gcrefeq(gcrO1, gcrO2));
+      }
+
+      return gcrefeq(gcrO1, gcrO2);
     }
   } else if (!tvisnumber(o1) || !tvisnumber(o2)) {
     return 0;

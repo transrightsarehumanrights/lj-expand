@@ -2,6 +2,7 @@
 
 #include "lauxlib.h"
 #include "lj_debug.h"
+#include "lj_dispatch.h"
 #include "lj_lib.h"
 #include "lj_err.h"
 #include "lj_expand_globals.h"
@@ -9,7 +10,8 @@
 #include "lj_frame.h"
 #include "lj_gc.h"
 #include "lj_tab.h"
-
+#include "lj_trace.h"
+#include "lj_vm.h"
 
 int lje_spoof_debug_info(lua_State* L)
 {
@@ -224,28 +226,18 @@ int lje_run_full_gc(lua_State* L)
   return 0;
 }
 
-int lje_check_tag(lua_State* L)
+int lje_patch_bytecodes(lua_State* L)
 {
-  TValue* val = lj_lib_checkany(L, 1);
-  if (tvisgcv(val))
-  {
-    GCobj* obj = gcV(val);
-    lua_pushboolean(L, obj->gch.unused1 == 0x41);
-  } else
-  {
-    lua_pushboolean(L, 0);
-  }
-  return 1;
-}
+  // Patch bytecodes for this state
+  GG_State* gg = L2GG(L);
+  lj_trace_flushall(L);
 
-int lje_set_tag(lua_State* L)
-{
-  TValue* val = lj_lib_checkany(L, 1);
-  if (tvisgcv(val))
-  {
-    GCobj* obj = gcV(val);
-    obj->gch.unused1 = 0x41; // 'A'
-  }
+  /* ISEQV/ISNEV are used for fast equality comparisons. This
+   * will break for spoofs, so we patch them to use
+   * our spoof-aware versions.
+   */
+  lje_patch_bytecode(gg, BC_ISEQV);
+  lje_patch_bytecode(gg, BC_ISNEV);
 
   return 0;
 }
@@ -306,9 +298,12 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("get_total", lje_get_gc_total);
     LJE_SET_FUNC("set_total", lje_set_gc_total);
     LJE_SET_FUNC("run_full_gc", lje_run_full_gc);
-    LJE_SET_FUNC("check_tag", lje_check_tag);
-    LJE_SET_FUNC("set_tag", lje_set_tag);
   LJE_END_SECTION("gc");
+
+  /* vm: virtual machine manipulation */
+  LJE_NEW_SECTION()
+    LJE_SET_FUNC("patch_bytecodes", lje_patch_bytecodes);
+  LJE_END_SECTION("vm");
 
   /* LJE API END */
 

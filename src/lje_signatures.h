@@ -25,3 +25,4 @@ SIGDEF(lj_cf_setfenv, "48 89 5c 24 10 48 89 74 24 18 57 48 83 ec 20 ba 02 00 00 
 SIGDEF(lj_cf_getfenv, "40 53 48 83 ec 20 48 8b d9 48 8b 49 20 4c 8b 43 28 49 3b c8 73 0f 48 8b 09 48 8b c1 48 c1 f8 2f 83 f8 f7 74 30")
 SIGDEF(lj_cf_debug_getfenv, "40 53 48 83 ec 20 ba 01 00 00 00 48 8b d9 e8 ?? ?? ?? ?? ba 01 00 00 00 48 8b cb e8 ?? ?? ?? ?? b8 01 00 00 00 48 83 c4 20 5b c3")
 SIGDEF(lj_cf_debug_setfenv, "40 53 48 83 ec 20 ba 02 00 00 00 48 8b d9 e8 ?? ?? ?? ?? 48 8b 43 20 ba 01 00 00 00 48 83 c0 10 48 8b cb 48 89 43 28 e8 ?? ?? ?? ?? 85 c0 74 0b b8 01 00 00 00")
+SIGDEF(hashkey, "4c 8b 02 4c 8b c9 49 8b d0 48 c1 fa 2f 83 fa fb")

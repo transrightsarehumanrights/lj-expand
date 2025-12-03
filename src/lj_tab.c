@@ -36,7 +36,7 @@ static LJ_AINLINE Node *hashmask(const GCtab *t, uint32_t hash)
 #endif
 
 /* Hash an arbitrary key and return its anchor position in the hash table. */
-static Node *hashkey(const GCtab *t, cTValue *key)
+Node *hashkey(const GCtab *t, cTValue *key)
 {
   lua_assert(!tvisint(key));
   if (tvisstr(key))
@@ -46,7 +46,19 @@ static Node *hashkey(const GCtab *t, cTValue *key)
   else if (tvisbool(key))
     return hashmask(t, boolV(key));
   else
+  {
+    /* LJE: Check for spoofed functions */
+    if (tvisfunc(key))
+    {
+      GCfunc* fn = funcV(key);
+      if (isluafunc(fn) && funcspoof(fn))
+      {
+        return hashgcref(t, funcextend(fn)->spoof);
+      }
+    }
+
     return hashgcref(t, key->gcr);
+  }
   /* Only hash 32 bits of lightuserdata on a 64 bit CPU. Good enough? */
 }
 

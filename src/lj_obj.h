@@ -782,6 +782,8 @@ typedef union GCobj {
 #define tvispri(o)	(itype(o) >= LJ_TISPRI)
 #define tvistabud(o)	(itype(o) <= LJ_TISTABUD)  /* && !tvisnum() */
 #define tvisgcv(o)	((itype(o) - LJ_TISGCV) > (LJ_TNUMX - LJ_TISGCV))
+#define tvisspoofedfunc(o) \
+  (tvisfunc(o) && isluafunc(funcV(o)) && funcspoof(funcV(o)) != NULL)
 
 /* Special macros to test numbers for NaN, +0, -0, +1 and raw equality. */
 #define tvisnan(o)	((o)->n != (o)->n)

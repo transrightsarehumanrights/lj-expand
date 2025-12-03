@@ -114,6 +114,11 @@ typedef struct GG_State {
 #define GG_DISP2HOT	(GG_OFS(hotcount) - GG_OFS(dispatch))
 #define GG_DISP2STATIC	(GG_LEN_DDISP*(int)sizeof(ASMFunction))
 
+/* LJE: Patch specific bytecodes to ours */
+#define lje_patch_bytecode(gg, bc) \
+  gg->dispatch[bc] = makeasmfunc(lj_bc_ofs[bc]); \
+  gg->dispatch[GG_LEN_DDISP + bc] = makeasmfunc(lj_bc_ofs[bc]);
+
 #define hotcount_get(gg, pc) \
   (gg)->hotcount[(u32ptr(pc)>>2) & (HOTCOUNT_SIZE-1)]
 #define hotcount_set(gg, pc, val) \
