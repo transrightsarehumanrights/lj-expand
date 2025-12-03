@@ -53,7 +53,11 @@ Node *hashkey(const GCtab *t, cTValue *key)
       GCfunc* fn = funcV(key);
       if (isluafunc(fn) && funcspoof(fn))
       {
-        return hashgcref(t, funcextend(fn)->spoof);
+        // Our spoofs dont contain type tag information like usual TValues do. So we'll do that with a fake TValue.
+        TValue spoofed_ref;
+        setgcVraw(&spoofed_ref, (GCobj*)funcspoof(fn), LJ_TFUNC);
+
+        return hashgcref(t, spoofed_ref.gcr);
       }
     }
 
