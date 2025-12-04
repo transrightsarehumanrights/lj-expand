@@ -26,8 +26,6 @@
 cTValue *lj_debug_frame(lua_State *L, int level, int *size)
 {
   cTValue *frame, *nextframe, *bot = tvref(L->stack)+LJ_FR2;
-  LJEfunc* encountered_funcs[256] = { 0 };
-  int last_encountered_index = 0;
   /* Traverse frames backwards. */
   for (nextframe = frame = L->base-1; frame > bot; ) {
     if (frame_gc(frame) == obj2gco(L))
@@ -37,41 +35,17 @@ cTValue *lj_debug_frame(lua_State *L, int level, int *size)
     if (isluafunc(frame_func(frame)) && !LJEG()->show_special_frames)
     {
         LJEfunc* ljeFn = funcextend(frame_func(frame));
-        int encountered_before = 0;
-        for (int i = 0; i < last_encountered_index; i++)
+        if (ljeFn->is_special)
         {
-            if (encountered_funcs[i] == NULL)
-            {
-                break;
-            }
-
-            if (encountered_funcs[i] == ljeFn)
-            {
-                encountered_before = 1;
-                break;
-            }
-        }
-
-        // We need to ensure we do not skip valid frames multiple times if they happen to point to our special functions more than once
-        if (ljeFn->is_special && !encountered_before)
-        {
-            encountered_funcs[last_encountered_index++] = ljeFn;
-            level++; /* Skip special frames */
-        }
-
-        /* LJE: If this is spoofed, then we want to override its frame function to the spoofed target */
-        GCobj* target = gcrefp(ljeFn->spoof, GCobj);
-        if (target != NULL)
-        {
-            /* LJE: Disabled for now. This did work and it actually was pretty cool
-             * but it causes major issues in detouring situations where the debug functions
-             * have an expectation of what the function should be, but the actual frame slots do not match up
-             * and cause a spectacular crash later on down the line.
+            /* LJE: Only skip if the next frame is different, which implies an actual frame transition in the frame link chain.
+             * If we do not do this, we'll end up skipping tailcall-collapsed frames like a main chunk that only calls our special function.
              *
-             * This was only ever used to get debug.getinfo to return the right function, (func), but it does it
-             * without this anyways. I don't think this will be re-enabled unless we can find a way to make it work with detouring.
+             * We also cannot simply just block consecutive special frame chains since legitimate detours may not be consecutive.
              */
-            //setframe_gc((TValue*)frame, target, LJ_TFUNC);
+            if (frame_func(frame) != frame_func(nextframe))
+            {
+                level++;
+            }
         }
     }
 
@@ -352,18 +326,29 @@ const char *lj_debug_funcname(lua_State *L, cTValue *frame, const char **name)
  * We disable/enable the hooks, which results in a proper sethook trace but the frame is still there,
  * messing up the stack trace and function name resolution. So, we skip it here if we are in a hook context.
  */
-// Check if this frame function is *meant* to be spoofed
 GCfunc* possibleFn = frame_func(frame);
 GCfunc* spoof = lje_find_spoof_by_target(possibleFn);
 if (spoof)
 {
-    // Rewind 2 frames to get the actual caller
+    /* LJE: Spoofed function. We need to adjust the frame to point to the original function's frame,
+     * that way LuaJIT can properly resolve stack-based debug information like name and namewhat.
+     *
+     * We go back twice if there is a tailcall-inherited frame link chain detected. Otherwise (normal detours) we
+     * simply go back once.
+     */
     cTValue* originalFrame = frame;
     frame = frame_prev(frame);
-    frame = frame_prev(frame);
+
+    if (frame_func(frame) == frame_func(frame_prev(frame)))
+    {
+        // Go back one more frame. Likely a tailcall situation.
+        // Otherwise, only one will suffice (normal detour call)
+        frame = frame_prev(frame);
+    }
+
     if (!frame_islua(frame))
     {
-        // Likely that there was a tailcall or something. Switch back
+        // This is not right, just restore the original frame
         frame = originalFrame;
     }
 }

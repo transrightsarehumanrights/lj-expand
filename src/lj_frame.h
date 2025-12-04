@@ -108,6 +108,9 @@ enum { LJ_CONT_TAILCALL, LJ_CONT_FFI_CALLBACK };  /* Special continuations. */
 #define frame_prevl(f)		((f) - (1+LJ_FR2+bc_a(frame_pc(f)[-1])))
 #define frame_prevd(f)		((TValue *)((char *)(f) - frame_sized(f)))
 #define frame_prev(f)		(frame_islua(f)?frame_prevl(f):frame_prevd(f))
+#define frame_nextl(f)		((f) + (1+LJ_FR2+bc_a(frame_pc(f)[0])))
+#define frame_nextd(f)		((TValue *)((char *)(f) + frame_sized(f)))
+#define frame_next(f)		(frame_islua(f)?frame_nextl(f):frame_nextd(f))
 /* Note: this macro does not skip over FRAME_VARG. */
 
 /* -- C stack frame ------------------------------------------------------- */
