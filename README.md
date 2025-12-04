@@ -1,4 +1,4 @@
-# lj-expand
+# lj-expand - safer lua execution for gmod
 
 A highly experimental method of unauthorized Lua execution within Garry's Mod. It works by compiling a custom LuaJIT VM and selectively
 remapping Garry's Mod's LuaJIT functions to it, allowing for VM-level access and manipulation of the game's Lua state. This means it is
@@ -20,7 +20,7 @@ to manually update this folder. Right now, there is no versioning as it is very 
 6. From now on, you can run `lje-launcher.exe` to launch Garry's Mod with lj-expand.
 
 ## Disclaimer
-I don't condone cheating. I do however believe that you should have the freedom to audit and run your own code on your own machine.
+I don't condone cheating, or exploiting a server. I do however believe that you should have the freedom to audit and run your own code on your own machine.
 
 ## Mitigations
 The main primitive that lj-expand adds are:
@@ -43,11 +43,23 @@ The main primitive that lj-expand adds are:
 - Call stack authorization
   - LJE functions can verify whether they were called from authorized code or not.
   - This allows for stuff like PostRender hooks to be restricted to when the engine is calling them, preventing anti-cheat code from executing them and detecting unauthorized behavior.
+- Bytecode patching
+  - Certain bytecode instructions are patched at the VM level to improve stealth.
+  - This includes instructions that might bypass spoofing or reveal unauthorized code.
+  - Not all instructions are patched, only the most relevant ones to maintain performance and stability.
+- Hash manipulation
+  - Some anticheats may detect even the best spoofed functions by checking function hashes by assigning them to tables as keys.
+  - LJE has overriden the hashing algorithm to ensure that spoofed functions have the same hash as their original counterparts.
+- Debug hook stack adjustments
+  - It is possible to determine if a detour is present by checking the stack depth and name resolution in a debug hook.
+  - This is also patched in LJE at the VM level to ensure that hooks see the expected stack depth and function names.
 
 These functions are modified to leverage the above primitives:
 - [x] debug.getinfo
 - [x] debug.getlocal
 - [x] debug.getupvalue
+- [x] debug.sethook
+- [x] debug.traceback
 - [x] tostring
 - [x] string.dump
 - [x] jit.util.funcinfo
@@ -58,3 +70,23 @@ And the following internal functions, which cover most of the debug functionalit
 - [x] lj_debug_funcname
 - [x] callhook
 - [x] lj_func_*
+
+# Scripting
+
+Scripting in LJE is a bit bare, and the API is also particularly unstable at the moment, but you can create your own projects with LJE already.
+To get started, create a new folder in the `%USERPROFILE%\.lje_scripts\` directory. Inside that folder, create a `main.lua` file. This file will be executed
+when the game loads startup Lua files (not pre-init).
+
+The entire environment **is secured**, and contains no Lua functions by default. If you need to use one, you will probably need to rewrite it since any external Lua function
+can detect the presence of LJE. Every GMod C-implemented API function is in the environment by default, so you can use those freely.
+
+The API is fairly simple, the two most important functions are `lje.include` and `lje.detour`.
+- `lje.include(path: string)`: Includes and runs a Lua file from the script's folder. The path is relative to the script's root folder.
+- `lje.detour(target: function, detour: function): function`: Detours a target, returns the detour function which is fully spoofed to appear as the target function.
+
+The rest are undocumented, but you can see them [here](https://github.com/yogwoggf/lj-expand/blob/expansion/src/lj_expand_lib.c#L263).
+There is unfortunately no system for hooking GMod hooks yet, so you will manually need to do it, like in [gilbhax](https://github.com/yogwoggf/gilbhax).
+
+# Licensing
+
+No license file on purpose since it is a fork of LuaJIT, which is MIT licensed anyways, which means this project is also MIT licensed.
