@@ -5,6 +5,7 @@
 #include "lj_dispatch.h"
 #include "lj_lib.h"
 #include "lj_err.h"
+#include "lj_expand_frame.h"
 #include "lj_expand_globals.h"
 #include "lj_expand_startup.h"
 #include "lj_frame.h"
@@ -254,6 +255,20 @@ int lje_get_current_script(lua_State* L)
   return 0;
 }
 
+int lje_is_lua_involved(lua_State* L)
+{
+  int frame_offset = luaL_optinteger(L, 1, 0);
+  if (lje_frame_is_lua_involved(L, frame_offset))
+  {
+    lua_pushboolean(L, 1);
+  } else
+  {
+    lua_pushboolean(L, 0);
+  }
+
+  return 1;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -296,6 +311,7 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("get", lje_get_env);
     LJE_SET_FUNC("set", lje_set_env);
     LJE_SET_FUNC("current_script", lje_get_current_script);
+    LJE_SET_FUNC("is_lua_involved", lje_is_lua_involved);
   LJE_END_SECTION("env");
 
   /* util: unassorted utility functions */

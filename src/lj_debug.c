@@ -26,17 +26,36 @@
 cTValue *lj_debug_frame(lua_State *L, int level, int *size)
 {
   cTValue *frame, *nextframe, *bot = tvref(L->stack)+LJ_FR2;
+  LJEfunc* encountered_funcs[256] = { 0 };
+  int last_encountered_index = 0;
   /* Traverse frames backwards. */
   for (nextframe = frame = L->base-1; frame > bot; ) {
     if (frame_gc(frame) == obj2gco(L))
       level++;  /* Skip dummy frames. See lj_err_optype_call(). */
 
     /* LJE: Alternate check if this frame is both lua and marked special, if so then it definitely needs to be skipped */
-    if (isluafunc(frame_func(frame)))
+    if (isluafunc(frame_func(frame)) && !LJEG()->show_special_frames)
     {
         LJEfunc* ljeFn = funcextend(frame_func(frame));
-        if (ljeFn->is_special)
+        int encountered_before = 0;
+        for (int i = 0; i < last_encountered_index; i++)
         {
+            if (encountered_funcs[i] == NULL)
+            {
+                break;
+            }
+
+            if (encountered_funcs[i] == ljeFn)
+            {
+                encountered_before = 1;
+                break;
+            }
+        }
+
+        // We need to ensure we do not skip valid frames multiple times if they happen to point to our special functions more than once
+        if (ljeFn->is_special && !encountered_before)
+        {
+            encountered_funcs[last_encountered_index++] = ljeFn;
             level++; /* Skip special frames */
         }
 
@@ -333,22 +352,19 @@ const char *lj_debug_funcname(lua_State *L, cTValue *frame, const char **name)
  * We disable/enable the hooks, which results in a proper sethook trace but the frame is still there,
  * messing up the stack trace and function name resolution. So, we skip it here if we are in a hook context.
  */
-if (LJEG()->in_hook == 1)
+// Check if this frame function is *meant* to be spoofed
+GCfunc* possibleFn = frame_func(frame);
+GCfunc* spoof = lje_find_spoof_by_target(possibleFn);
+if (spoof)
 {
-    // Check if this frame function is *meant* to be spoofed
-    GCfunc* possibleFn = frame_func(frame);
-    GCfunc* spoof = lje_find_spoof_by_target(possibleFn);
-    if (spoof)
+    // Rewind 2 frames to get the actual caller
+    cTValue* originalFrame = frame;
+    frame = frame_prev(frame);
+    frame = frame_prev(frame);
+    if (!frame_islua(frame))
     {
-        // Rewind 2 frames to get the actual caller
-        cTValue* originalFrame = frame;
-        frame = frame_prev(frame);
-        frame = frame_prev(frame);
-        if (!frame_islua(frame))
-        {
-            // Likely that there was a tailcall or something. Switch back
-            frame = originalFrame;
-        }
+        // Likely that there was a tailcall or something. Switch back
+        frame = originalFrame;
     }
 }
   pframe = frame_prev(frame);

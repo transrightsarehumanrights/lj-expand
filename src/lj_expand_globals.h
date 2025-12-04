@@ -36,6 +36,7 @@ typedef struct LJEGlobalState
     size_t loaded_script_count;
     /* Used for script execution context */
     LJEScript* current_script;
+    int show_special_frames;
 } LJEGlobalState;
 
 #define LJEG() (lje_get_global_state())

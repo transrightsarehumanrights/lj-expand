@@ -1,10 +1,11 @@
 #include "lj_expand_frame.h"
 #include "lj_debug.h"
+#include "lj_expand_globals.h"
 #include "lj_frame.h"
 
-int lje_frame_is_lua_involved(lua_State* L)
+int lje_frame_is_lua_involved(lua_State* L, int frame_offset)
 {
-    for (int i = 0; ; i++)
+    for (int i = frame_offset; ; i++)
     {
         int size = 0;
         cTValue* frame = lj_debug_frame(L, i, &size);
@@ -13,7 +14,7 @@ int lje_frame_is_lua_involved(lua_State* L)
             break;
         }
 
-        if (frame_islua(frame))
+        if (frame_islua(frame) || isluafunc(frame_func(frame)))
         {
             return 1;
         }

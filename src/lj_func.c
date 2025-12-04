@@ -168,7 +168,7 @@ int is_init_lua(const char* chunkname)
 /* Create a new Lua function with empty upvalues. */
 GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
 {
-  if (is_init_lua(proto_chunknamestr(pt)) && !lje_frame_is_lua_involved(L))
+  if (is_init_lua(proto_chunknamestr(pt)) && !lje_frame_is_lua_involved(L, 0))
   {
     GCtab* globalEnv = tabref(L->env);
     cTValue* clientBool = lj_tab_getstr(globalEnv, lj_str_newlit(L, "CLIENT"));
@@ -183,7 +183,7 @@ GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
     }
   }
 
-  if (check_proto_chunkname(pt, "@Startup") && !lje_frame_is_lua_involved(L))
+  if (check_proto_chunkname(pt, "@Startup") && !lje_frame_is_lua_involved(L, 0))
   {
     printf("[LJE] Detected creation of Lua function for @Startup\n");
     printf("[LJE] Clearing any old spoof records...\n");
