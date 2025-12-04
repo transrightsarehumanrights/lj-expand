@@ -242,6 +242,18 @@ int lje_patch_bytecodes(lua_State* L)
   return 0;
 }
 
+int lje_get_current_script(lua_State* L)
+{
+  LJEScript* script = LJEG()->current_script;
+  if (script)
+  {
+    lua_pushstring(L, script->name);
+    return 1;
+  }
+
+  return 0;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -279,10 +291,11 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("ignore_fn_once", lje_ignore_fn_on_hook);
   LJE_END_SECTION("hooks");
 
-  /* env: custom environment table management */
+  /* env: custom environment management */
   LJE_NEW_SECTION()
     LJE_SET_FUNC("get", lje_get_env);
     LJE_SET_FUNC("set", lje_set_env);
+    LJE_SET_FUNC("current_script", lje_get_current_script);
   LJE_END_SECTION("env");
 
   /* util: unassorted utility functions */

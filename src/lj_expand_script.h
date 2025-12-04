@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #define LJE_SCRIPT_MAIN "main.lua"
+#define LJE_SCRIPT_PREINIT "preinit.lua"
 #define LJE_SCRIPT_FOLDER ".lje_scripts"
 
 /* LJEScripts represent a folder containing Lua scripts to be loaded by LJE.
@@ -13,6 +14,7 @@ typedef struct LJEScript
 {
     const char* folder;
     const char* main_path;
+    const char* preinit_path;
     const char* name;
 } LJEScript;
 

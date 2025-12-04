@@ -52,7 +52,7 @@ static int resolve_original_functions(luaL_loadbufferx_t* out_loadbufferx, lua_p
     return 0;
 }
 
-void lje_startup_execute(lua_State* L, LJEScript* script) {
+void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
     LJEG()->main_state = L;
     LJEG()->current_script = script;
 
@@ -64,7 +64,7 @@ void lje_startup_execute(lua_State* L, LJEScript* script) {
         return;
     }
 
-    char* script_file = load_lua_file(script->main_path);
+    char* script_file = load_lua_file(path ? path : script->main_path);
     if (script_file)
     {
         printf("[LJE] Executing script '%s'...\n", script->name);
@@ -82,7 +82,7 @@ void lje_startup_execute(lua_State* L, LJEScript* script) {
                 lua_setfenv(L, -2);
             } else
             {
-                printf("[LJE] No custom environment set for startup script? Probably not intentional.\n");
+                printf("[LJE] No custom environment set for script? Probably not intentional.\n");
             }
 
             // Disable hooks during execution

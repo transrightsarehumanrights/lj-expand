@@ -95,6 +95,21 @@ LJEScript* lje_script_load_all_scripts(size_t* out_script_count) {
                 scripts[script_count].folder = _strdup(folder_path);
                 scripts[script_count].main_path = _strdup(main_lua_path);
                 scripts[script_count].name = _strdup(find_data.cFileName);
+
+                // Check for preinit.lua
+                char preinit_lua_path[MAX_PATH] = { 0 };
+                strcpy_s(preinit_lua_path, MAX_PATH, folder_path);
+                strncat_s(preinit_lua_path, MAX_PATH, LJE_SCRIPT_PREINIT, _TRUNCATE);
+                attribs = GetFileAttributesA(preinit_lua_path);
+                if (attribs != INVALID_FILE_ATTRIBUTES && !(attribs & FILE_ATTRIBUTE_DIRECTORY))
+                {
+                    scripts[script_count].preinit_path = _strdup(preinit_lua_path);
+                }
+                else
+                {
+                    scripts[script_count].preinit_path = NULL;
+                }
+
                 script_count++;
             }
         }

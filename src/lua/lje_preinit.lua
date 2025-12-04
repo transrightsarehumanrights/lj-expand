@@ -100,6 +100,28 @@ end
 
 setfenv(safeEnv.lje.detour, safeEnv)
 
+local includeCache = {}
+safeEnv.lje.require = function(path)
+  local currentScript = lje.env.current_script()
+  if not currentScript then
+    lje.con_print("Error: lje.require called outside of a script context!")
+    return
+  end
+
+  includeCache[currentScript] = includeCache[currentScript] or {}
+  local scriptCache = includeCache[currentScript]
+  if scriptCache[path] then
+    return scriptCache[path]
+  end
+
+  local result = lje.include(path)
+  scriptCache[path] = result
+  lje.con_print("Successfully required " .. path .. " for script: " .. currentScript)
+  return result
+end
+
+setfenv(safeEnv.lje.require, safeEnv)
+
 lje.con_print("Safe environment ready!")
 lje.env.set(safeEnv)
 

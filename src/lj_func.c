@@ -193,7 +193,7 @@ GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
     {
       LJEScript* script = &LJEG()->loaded_scripts[i];
       printf("[LJE] Loading script '%s' during startup...\n", script->name);
-      lje_startup_execute(L, script);
+      lje_startup_execute(L, script, NULL);
     }
   }
 
