@@ -122,6 +122,34 @@ end
 
 setfenv(safeEnv.lje.require, safeEnv)
 
+-- Little printf console helper with color parsing
+-- Usage: lje.con_printf("$red{Error}: Something happened!")
+local ANSI_COLORS = {
+  black = "1;30m",
+  red = "1;31m",
+  green = "1;32m",
+  yellow = "1;33m",
+  blue = "1;34m",
+  magenta = "1;35m",
+  cyan = "1;36m",
+  white = "1;37m",
+  default = "1;39m",
+}
+
+local COLOR_PATTERN = "%$(%a+)(%b{})"
+safeEnv.lje.con_printf = function(fmt, ...)
+  -- First, replace color codes
+  local coloredFmt = string.gsub(fmt, COLOR_PATTERN, function(colorName, text)
+    local colorCode = ANSI_COLORS[string.lower(colorName)] or ANSI_COLORS["default"]
+    return "\x1b[" .. colorCode .. string.sub(text, 2, -2) .. "\x1b[0m" -- remove braces
+  end)
+
+  local result = string.format(coloredFmt, ...)
+  lje.con_print(result .. "\x1b[0m") -- Reset color at the end
+end
+
+setfenv(safeEnv.lje.con_printf, safeEnv)
+
 lje.con_print("Safe environment ready!")
 lje.env.set(safeEnv)
 

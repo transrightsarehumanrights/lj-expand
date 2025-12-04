@@ -1362,6 +1362,12 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
     freopen_s(&fDummy, "CONOUT$", "w", stderr);
 
     SetWindowTextA(GetConsoleWindow(), "LJE Console");
+    // Enable VT processing for colors and stuff
+    DWORD consoleMode;
+    HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+    GetConsoleMode(consoleHandle, &consoleMode);
+    consoleMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    SetConsoleMode(consoleHandle, consoleMode);
 
     lje_Module* mod = lje_module_find("lua_shared.dll");
     if (mod) {
