@@ -26,7 +26,6 @@ int lje_spoof_debug_info(lua_State* L)
   LJEfunc* ljeTarget = funcextend(spoof);
   setgcrefp(ljeTarget->spoof, target);
 
-  printf("[LJE] Spoofing %p -> %p\n", (void*)spoof, (void*)target);
   /* Remove any pre-existing spoof records, can cause memory corruption */
   lje_remove_spoof_record_by_spoof(spoof);
   lje_remove_spoof_record_by_target(target);
@@ -34,6 +33,22 @@ int lje_spoof_debug_info(lua_State* L)
   lje_insert_spoof_record(spoof, target);
 
   return 0;
+}
+
+int lje_is_function_spoofed(lua_State* L)
+{
+  GCfunc* func = lj_lib_checkfunc(L, 1);
+  GCfunc* spoof = lje_find_spoof_by_target(func);
+
+  if (!spoof)
+  {
+    lua_pushboolean(L, 0);
+    return 1;
+  }
+
+  lua_pushboolean(L, 1);
+  lua_pushvalue(L, 1); // Original function
+  return 2;
 }
 
 int lje_mark_special(lua_State* L)
@@ -296,6 +311,7 @@ void lje_addfuncs(lua_State* L) {
   /* func: anything to do with functions, e.g: spoofing, stealth */
   LJE_NEW_SECTION()
     LJE_SET_FUNC("spoof", lje_spoof_debug_info);
+    LJE_SET_FUNC("is_spoofed", lje_is_function_spoofed);
     LJE_SET_FUNC("mark_special", lje_mark_special);
   LJE_END_SECTION("func");
 
