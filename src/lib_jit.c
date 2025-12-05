@@ -226,8 +226,11 @@ LJLIB_CF(jit_util_funcinfo)
     lua_setfield(L, -2, "source");
     lj_debug_pushloc(L, pt, pc);
     lua_setfield(L, -2, "loc");
-    /* LJE: GMod nulls this, so we mimic that behavior. */
-    // setprotoV(L, lj_tab_setstr(L, t, lj_str_newlit(L, "proto")), pt);
+    /* LJE: So, GMod is pretty awkward here. Obviously the work of well, someone who doesn't
+     * understand LuaJIT well. So it actually does *not* set the "proto" field to nil. It sets it to a
+     * NULL GCProto* pointer. So we mimic that behavior here, that is why we cannot just use setnilV.
+     */
+    setprotoV(L, lj_tab_setstr(L, t, lj_str_newlit(L, "proto")), pt);
   } else {
     GCfunc *fn = funcV(L->base);
     /* LJE: check_Lproto can return NULL if a spoofed function is not a Lua function, so we need to handle that case accordingly */
