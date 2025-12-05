@@ -311,6 +311,7 @@ restart:
   return NULL;
 }
 
+static const int ERROR_FFID = 19; /* FFID for error function */
 /* Deduce function name from caller of a frame. */
 const char *lj_debug_funcname(lua_State *L, cTValue *frame, const char **name)
 {
@@ -327,6 +328,16 @@ const char *lj_debug_funcname(lua_State *L, cTValue *frame, const char **name)
  * messing up the stack trace and function name resolution. So, we skip it here if we are in a hook context.
  */
 GCfunc* possibleFn = frame_func(frame);
+GCfunc* prevFn = frame_func(frame_prev(frame));
+if (isluafunc(prevFn) && funcspoof(prevFn) && possibleFn->c.ffid == ERROR_FFID)
+{
+    /* LJE: Cause of how error never returns and calls out to the error handler, last frame is always the actual error call
+     * which is not ideal since it wont resolve the call site properly. So we skip it.
+     */
+    frame = frame_prev(frame);
+    possibleFn = frame_func(frame);
+}
+
 GCfunc* spoof = lje_find_spoof_by_target(possibleFn);
 if (spoof)
 {
@@ -338,7 +349,6 @@ if (spoof)
      */
     cTValue* originalFrame = frame;
     frame = frame_prev(frame);
-
     if (frame_func(frame) == frame_func(frame_prev(frame)))
     {
         // Go back one more frame. Likely a tailcall situation.
