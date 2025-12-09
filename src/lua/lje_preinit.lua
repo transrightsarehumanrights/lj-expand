@@ -47,7 +47,7 @@ local function cloneMetaTable(name, base)
 
         local copy = {}
         for k, v in pairs(orig) do
-            if type(v) == "table" then
+            if type(v) == "table" and v ~= orig then
                 copy[k] = deepCopy(v)
             else
                 copy[k] = v
@@ -72,6 +72,7 @@ safeEnv.cloned_mts["Entity"] = cloneMetaTable("Entity")
 safeEnv.cloned_mts["Player"] = cloneMetaTable("Player", safeEnv.cloned_mts["Entity"])
 safeEnv.cloned_mts["Vector"] = cloneMetaTable("Vector")
 safeEnv.cloned_mts["Angle"] = cloneMetaTable("Angle")
+safeEnv.cloned_mts["CUserCmd"] = cloneMetaTable("CUserCmd")
 safeEnv.cloned_basemts["string"] = cloneBaseMt(debug.getmetatable(""))
 safeEnv.insecure_mts = {}
 
