@@ -37,6 +37,7 @@ typedef struct LJEGlobalState
     /* Used for script execution context */
     LJEScript* current_script;
     int show_special_frames;
+    int disable_metatables;
 } LJEGlobalState;
 
 #define LJEG() (lje_get_global_state())

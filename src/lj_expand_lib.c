@@ -284,6 +284,16 @@ int lje_is_lua_involved(lua_State* L)
   return 1;
 }
 
+int lje_disable_metatables(lua_State* L) {
+  LJEG()->disable_metatables = 1;
+  return 0;
+}
+
+int lje_enable_metatables(lua_State* L) {
+  LJEG()->disable_metatables = 0;
+  return 0;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -328,6 +338,8 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("set", lje_set_env);
     LJE_SET_FUNC("current_script", lje_get_current_script);
     LJE_SET_FUNC("is_lua_involved", lje_is_lua_involved);
+    LJE_SET_FUNC("disable_metatables", lje_disable_metatables);
+    LJE_SET_FUNC("enable_metatables", lje_enable_metatables);
   LJE_END_SECTION("env");
 
   /* util: unassorted utility functions */
