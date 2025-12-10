@@ -1,11 +1,8 @@
-# lj-expand - safer lua execution for gmod
+# lj-expand - stealthy lua execution for 64-bit gmod 🪛
 
-A highly experimental method of unauthorized Lua execution within Garry's Mod. It works by compiling a custom LuaJIT VM and selectively
-remapping Garry's Mod's LuaJIT functions to it, allowing for VM-level access and manipulation of the game's Lua state. This means it is
-possible to essentially mask unauthorized Lua code and evade detection by anti-cheat systems that rely on using introspection functions or
-debugging hooks to facilitate detection. Of course, this is still highly experimental and may not work in all scenarios. Unsafe code will always
-be possible, so unfortunately there is no perfect solution. It is however much more complicated to detect and mitigate against since this project
-operates at a lower level than traditional methods.
+lj-expand (LJE) is a custom LuaJIT fork for Garry's Mod's 64-bit branch, focused on stealth and safety when executing arbitrary Lua code.
+Simply put, LJE makes it significantly harder for anti-cheat systems to detect unauthorized code execution, while also providing
+mechanisms to run and write secure Lua code that cannot be easily tampered with or inspected, while retaining typical patterns and idioms.
 
 # Installation
 
@@ -53,6 +50,10 @@ The main primitive that lj-expand adds are:
 - Debug hook stack adjustments
   - It is possible to determine if a detour is present by checking the stack depth and name resolution in a debug hook.
   - This is also patched in LJE at the VM level to ensure that hooks see the expected stack depth and function names.
+- Global metatable hardening
+  - During any LJE code execution, all metatables globally are (depending on situation) temporarily disabled.
+  - This makes it very difficult to detect LJE code execution via metatable hooks like `__newindex` or `__index`.
+- Probably more...
 
 These functions are modified to leverage the above primitives:
 - [x] debug.getinfo
