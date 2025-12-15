@@ -109,7 +109,13 @@ void launch_and_inject(const char* gmod_path, const char* lje_path)
             &pi))
     {
         print_error_info();
-        ljel_panic("Failed to create process");
+        if (GetLastError() == ERROR_FILE_NOT_FOUND)
+        {
+            ljel_panic("GMod was not found. Are you sure you are on the x86-64 branch?");
+        } else
+        {
+            ljel_panic("Failed to create process");
+        }
     }
 
     ljel_log("Process created, PID: %d", pi.dwProcessId);
