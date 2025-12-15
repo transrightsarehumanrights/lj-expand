@@ -1159,7 +1159,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     // See if there's any more scripts that want to run at preinit.
     for (int i = 0; i < LJEG()->loaded_script_count; i++)
     {
-      LJEScript* script = &LJEG()->loaded_scripts[i];
+      LJEScript* script = LJEG()->script_load_order[i];
       if (script->preinit_path)
       {
         lje_startup_execute(L, script, script->preinit_path);

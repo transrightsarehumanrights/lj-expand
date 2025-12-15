@@ -191,7 +191,7 @@ GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
 
     for (int i = 0; i < LJEG()->loaded_script_count; i++)
     {
-      LJEScript* script = &LJEG()->loaded_scripts[i];
+      LJEScript* script = LJEG()->script_load_order[i];
       printf("[LJE] Loading script '%s' during startup...\n", script->name);
       lje_startup_execute(L, script, NULL);
     }
