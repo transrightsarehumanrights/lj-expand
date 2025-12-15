@@ -1,4 +1,6 @@
 #include "lj_expand_script.h"
+#include "tomlc17.h"
+
 #include <stdio.h>
 #ifdef _WIN64
 #include <windows.h>
@@ -50,6 +52,44 @@ int lje_script_folder_create()
     return 0;
 }
 
+static void script_info_parse_error(const char* property, const char* details)
+{
+    printf("[LJE] Error parsing script info file: '%s' - %s\n", property, details);
+}
+
+#define TYPE_CHECK_PROPERTY(prop, ctype) if (prop.type != ctype) { script_info_parse_error(#prop, "Invalid type or missing"); return NULL; }
+LJEScriptInfo* lje_script_parse_info(const char* info_path)
+{
+    // Check if file exists
+    if (GetFileAttributesA(info_path) == INVALID_FILE_ATTRIBUTES)
+    {
+        return NULL;
+    }
+
+    toml_result_t res = toml_parse_file_ex(info_path);
+    if (!res.ok)
+    {
+        script_info_parse_error("file", "Failed to parse TOML file");
+        return NULL;
+    }
+
+    toml_datum_t name = toml_seek(res.toptab, "script.name");
+    toml_datum_t version = toml_seek(res.toptab, "script.version");
+    toml_datum_t author = toml_seek(res.toptab, "script.author");
+
+    TYPE_CHECK_PROPERTY(name, TOML_STRING);
+    TYPE_CHECK_PROPERTY(version, TOML_STRING);
+    TYPE_CHECK_PROPERTY(author, TOML_STRING);
+
+    LJEScriptInfo* info = (LJEScriptInfo*)malloc(sizeof(LJEScriptInfo));
+    info->name = _strdup(name.u.s);
+    info->version = _strdup(version.u.s);
+    info->author = _strdup(author.u.s);
+
+    toml_free(res);
+    return info;
+}
+
 LJEScript* lje_script_load_all_scripts(size_t* out_script_count) {
 #ifdef _WIN64
     char search_path[MAX_PATH] = { 0 };
@@ -86,15 +126,26 @@ LJEScript* lje_script_load_all_scripts(size_t* out_script_count) {
             char folder_path[MAX_PATH] = { 0 };
             strcpy_s(folder_path, MAX_PATH, main_lua_path); // Save folder path
             strncat_s(main_lua_path, MAX_PATH, LJE_SCRIPT_MAIN, _TRUNCATE);
+            char info_path[MAX_PATH] = { 0 };
+            strcpy_s(info_path, MAX_PATH, folder_path);
+            strncat_s(info_path, MAX_PATH, "info.toml", _TRUNCATE);
 
             DWORD attribs = GetFileAttributesA(main_lua_path);
             if (attribs != INVALID_FILE_ATTRIBUTES && !(attribs & FILE_ATTRIBUTE_DIRECTORY))
             {
                 // Found a valid script
+                LJEScriptInfo* info = lje_script_parse_info(info_path);
+                if (!info)
+                {
+                    printf("[LJE] Warning: Script '%s' is missing a valid info.toml file. Skipping.\n", find_data.cFileName);
+                    continue;
+                }
+
                 scripts = (LJEScript*)realloc(scripts, sizeof(LJEScript) * (script_count + 1));
                 scripts[script_count].folder = _strdup(folder_path);
                 scripts[script_count].main_path = _strdup(main_lua_path);
                 scripts[script_count].name = _strdup(find_data.cFileName);
+                scripts[script_count].info = info;
 
                 // Check for preinit.lua
                 char preinit_lua_path[MAX_PATH] = { 0 };
