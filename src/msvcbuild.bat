@@ -14,7 +14,8 @@
 @if not defined INCLUDE goto :FAIL
 
 @setlocal
-@set LJCOMPILE=cl /nologo /c /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline /DLUAJIT_DISABLE_VMEVENT /DLUAJIT_DISABLE_FFI
+@set LJINCLUDES=/I "libs/tomlc17/src"
+@set LJCOMPILE=cl /nologo /c /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline /DLUAJIT_DISABLE_VMEVENT /DLUAJIT_DISABLE_FFI %LJINCLUDES%
 @set LJLINK=link /nologo
 @set LJMT=mt /nologo
 @set LJLIB=lib /nologo /nodefaultlib
@@ -88,9 +89,9 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 :NODEBUG
 @if "%1"=="amalg" goto :AMALGDLL
 @if "%1"=="static" goto :STATIC
-%LJCOMPILE% /MD /DLUA_BUILD_AS_DLL lj_*.c lib_*.c
+%LJCOMPILE% /MD /DLUA_BUILD_AS_DLL lj_*.c lib_*.c libs/tomlc17/src/tomlc17.c
 @if errorlevel 1 goto :BAD
-%LJLINK% /DLL /out:%LJDLLNAME% lj_*.obj lib_*.obj kernel32.lib user32.lib
+%LJLINK% /DLL /out:%LJDLLNAME% lj_*.obj lib_*.obj kernel32.lib user32.lib tomlc17.obj
 @if errorlevel 1 goto :BAD
 @goto :MTDLL
 :STATIC
