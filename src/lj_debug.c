@@ -348,11 +348,11 @@ if (spoof)
      * simply go back once.
      */
     cTValue* originalFrame = frame;
-    frame = frame_prev(frame);
     if (frame_func(frame) == frame_func(frame_prev(frame)))
     {
         // Go back one more frame. Likely a tailcall situation.
         // Otherwise, only one will suffice (normal detour call)
+        frame = frame_prev(frame);
         frame = frame_prev(frame);
     }
 
