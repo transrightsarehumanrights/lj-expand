@@ -34,6 +34,7 @@ typedef struct LJEGlobalState
     LJESpoofRecord spoof_record_root;
     LJEScript* loaded_scripts;
     size_t loaded_script_count;
+    LJEScript** script_load_order;
     /* Used for script execution context */
     LJEScript* current_script;
     int show_special_frames;

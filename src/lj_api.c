@@ -1410,7 +1410,24 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
         printf("[LJE]   Name: %s\n", LJEG()->loaded_scripts[i].info->name);
         printf("[LJE]   Author: %s\n", LJEG()->loaded_scripts[i].info->author);
         printf("[LJE]   Version: %s\n", LJEG()->loaded_scripts[i].info->version);
+        for (size_t j = 0; j < LJEG()->loaded_scripts[i].info->dependency_count; j++)
+        {
+          printf("[LJE]   Dependency: %s\n", LJEG()->loaded_scripts[i].info->dependencies[j].name);
+        }
       }
+
+      printf("[LJE] Performing dependency resolution...\n");
+      LJEG()->script_load_order = lje_script_compute_load_order(
+        LJEG()->loaded_script_count,
+        LJEG()->loaded_scripts
+      );
+
+      for (size_t i = 0; i < LJEG()->loaded_script_count; i++)
+      {
+        LJEScript* script = LJEG()->script_load_order[i];
+        printf("[LJE] - %d. %s\n", i + 1, script->name);
+      }
+
     } else {
       printf("lua_shared.dll not found!\n");
     }

@@ -57,6 +57,31 @@ static void script_info_parse_error(const char* property, const char* details)
     printf("[LJE] Error parsing script info file: '%s' - %s\n", property, details);
 }
 
+static LJEScriptDependency* script_info_parse_dep(const char* dep_str)
+{
+    // Deps are formatted like:
+    // author.name
+
+    char* dot_pos = strchr(dep_str, '.');
+    if (!dot_pos)
+        return NULL;
+
+    size_t author_start = 0;
+    size_t author_length = dot_pos - dep_str;
+    size_t name_start = author_length + 1;
+    size_t name_length = strlen(dep_str) - name_start;
+
+    LJEScriptDependency* dep = (LJEScriptDependency*)malloc(sizeof(LJEScriptDependency));
+    dep->author = (char*)malloc(author_length + 1);
+    dep->name = (char*)malloc(name_length + 1);
+
+    strncpy_s((char*)dep->author, author_length + 1, dep_str + author_start, author_length);
+    dep->author[author_length] = '\0';
+    strncpy_s((char*)dep->name, name_length + 1, dep_str + name_start, name_length);
+    dep->name[name_length] = '\0';
+
+    return dep;
+}
 #define TYPE_CHECK_PROPERTY(prop, ctype) if (prop.type != ctype) { script_info_parse_error(#prop, "Invalid type or missing"); return NULL; }
 LJEScriptInfo* lje_script_parse_info(const char* info_path)
 {
@@ -76,15 +101,36 @@ LJEScriptInfo* lje_script_parse_info(const char* info_path)
     toml_datum_t name = toml_seek(res.toptab, "script.name");
     toml_datum_t version = toml_seek(res.toptab, "script.version");
     toml_datum_t author = toml_seek(res.toptab, "script.author");
+    toml_datum_t dependencies = toml_seek(res.toptab, "script.dependencies");
 
     TYPE_CHECK_PROPERTY(name, TOML_STRING);
     TYPE_CHECK_PROPERTY(version, TOML_STRING);
     TYPE_CHECK_PROPERTY(author, TOML_STRING);
+    TYPE_CHECK_PROPERTY(dependencies, TOML_ARRAY);
 
     LJEScriptInfo* info = (LJEScriptInfo*)malloc(sizeof(LJEScriptInfo));
     info->name = _strdup(name.u.s);
     info->version = _strdup(version.u.s);
     info->author = _strdup(author.u.s);
+
+    // Parse dependencies
+    info->dependency_count = dependencies.u.arr.size;
+    info->dependencies = (LJEScriptDependency*)malloc(sizeof(LJEScriptDependency) * info->dependency_count);
+    for (size_t i = 0; i < info->dependency_count; i++)
+    {
+        toml_datum_t dep_item = dependencies.u.arr.elem[i];
+        TYPE_CHECK_PROPERTY(dep_item, TOML_STRING);
+        LJEScriptDependency* dep = script_info_parse_dep(dep_item.u.s);
+        if (!dep)
+        {
+            script_info_parse_error("script.dependencies", "Invalid dependency format");
+            free(info);
+            return NULL;
+        }
+
+        info->dependencies[i] = *dep;
+        free(dep);
+    }
 
     toml_free(res);
     return info;
@@ -172,4 +218,96 @@ LJEScript* lje_script_load_all_scripts(size_t* out_script_count) {
 #else
 #error "lje_script_load_all_scripts not implemented for this platform"
 #endif
+}
+
+static char is_script_in_load_order(LJEScript** load_order, size_t load_order_count, LJEScript* script)
+{
+    for (size_t i = 0; i < load_order_count; i++)
+    {
+        if (load_order[i] == script)
+            return 1;
+    }
+
+    return 0;
+}
+
+LJEScript** lje_script_compute_load_order(size_t script_count, LJEScript* scripts)
+{
+    printf("[LJE] Computing script load order for %llu scripts...\n", script_count);
+    // Simple dependency resolution, we traverse scripts on some random, undefined order
+    // and for each newly encountered dependency, we insert it before the script that depends on it.
+    // It is not necessarily the best algorithm, but it works for now. And of course, if a dependency has already
+    // been added, we skip it.
+
+    LJEScript** load_order = (LJEScript**)malloc(sizeof(LJEScript*) * script_count);
+    size_t load_order_index = 0;
+    // Ensure zeroed out
+    for (size_t i = 0; i < script_count; i++)
+        load_order[i] = NULL;
+
+    // Script traversal
+    for (size_t i = 0; i < script_count; i++)
+    {
+        printf("[LJE] Processing script for load order: %s by %s\n",
+            scripts[i].info->name,
+            scripts[i].info->author);
+        if (is_script_in_load_order(load_order, script_count, &scripts[i]))
+            continue; // Already added
+
+        // Process dependencies first
+        LJEScript* current_script = &scripts[i];
+        for (size_t j = 0; j < current_script->info->dependency_count; j++)
+        {
+            printf("[LJE] - Checking dependency: %s by %s\n",
+                current_script->info->dependencies[j].name,
+                current_script->info->dependencies[j].author);
+            LJEScriptDependency* dep = &current_script->info->dependencies[j];
+            char found_dep = 0;
+            // Find the script that matches this dependency
+            for (size_t k = 0; k < script_count; k++)
+            {
+                printf("[LJE]   - Comparing against script: %s by %s\n",
+                    scripts[k].info->name,
+                    scripts[k].info->author);
+                if (strcmp(scripts[k].info->name, dep->name) == 0 &&
+                    strcmp(scripts[k].info->author, dep->author) == 0)
+                {
+                    printf("[LJE]   - Found matching dependency script: %s by %s\n",
+                        scripts[k].info->name,
+                        scripts[k].info->author);
+                    // Found the dependency script
+                    if (!is_script_in_load_order(load_order, script_count, &scripts[k]))
+                    {
+                        printf("[LJE]   - Inserting dependency script into load order: %s by %s\n",
+                            scripts[k].info->name,
+                            scripts[k].info->author);
+                        // Insert dependency first
+                        load_order[load_order_index++] = &scripts[k];
+                    }
+
+                    found_dep = 1;
+                    break;
+                }
+            }
+
+            if (!found_dep)
+            {
+                // Warn user they are missing a dependency
+                printf("[LJE] Warning: Script '%s' by '%s' is missing dependency '%s' by '%s'\n",
+                    current_script->info->name,
+                    current_script->info->author,
+                    dep->name,
+                    dep->author);
+            }
+        }
+
+        // Insert this script
+        printf("[LJE] load_order_index = %llu, inserting script: %s by %s\n",
+            load_order_index,
+            current_script->info->name,
+            current_script->info->author);
+        load_order[load_order_index++] = current_script;
+    }
+
+    return load_order;
 }
