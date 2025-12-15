@@ -78,6 +78,20 @@ Scripting in LJE is a bit bare, and the API is also particularly unstable at the
 To get started, create a new folder in the `%USERPROFILE%\.lje_scripts\` directory. Inside that folder, create a `main.lua` file. This file will be executed
 when the game loads startup Lua files (not pre-init).
 
+Then, add a `info.toml` file. This is a simple TOML file that describes your script. An example `info.toml` file:
+```toml
+# info.toml allows you to specify metadata about your script.
+
+[script]
+name = "gilbhax-utils"
+version = "1.0.0"
+author = "yogwoggf"
+dependencies = []
+```
+
+Dependencies are specified in a format of `author.name`. So for that example you'd refer to it as `yogwoggf.gilbhax-utils` in other scripts.
+Dependencies are automatically loaded before your script is executed.
+
 The entire environment **is secured**, and contains no Lua functions by default. If you need to use one, you will probably need to rewrite it since any external Lua function
 can detect the presence of LJE. Every GMod C-implemented API function is in the environment by default, so you can use those freely.
 
