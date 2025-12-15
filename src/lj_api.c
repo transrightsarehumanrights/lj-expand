@@ -1407,6 +1407,9 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
       for (size_t i = 0; i < LJEG()->loaded_script_count; i++)
       {
         printf("[LJE] - %s\n", LJEG()->loaded_scripts[i].name);
+        printf("[LJE]   Name: %s\n", LJEG()->loaded_scripts[i].info->name);
+        printf("[LJE]   Author: %s\n", LJEG()->loaded_scripts[i].info->author);
+        printf("[LJE]   Version: %s\n", LJEG()->loaded_scripts[i].info->version);
       }
     } else {
       printf("lua_shared.dll not found!\n");
