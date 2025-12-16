@@ -4,8 +4,6 @@
 #include "lj_obj.h"
 #include "lj_expand_script.h"
 
-#define LJE_LUA_BASE_PATH "C:/LJE/"
-
 /* LJE: Fast linked list to hold spoofed functions. Useful for doing a fast lookup of either
  * spoof to target or target to spoof.
  */
