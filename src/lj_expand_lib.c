@@ -307,6 +307,59 @@ int lje_set_script_hook_callback(lua_State* L)
   return 0;
 }
 
+int lje_data_write(lua_State* L)
+{
+  // Simple blob storage, give a name and data, stores it in the `.lje_script_data` folder
+  const char* name = luaL_checkstring(L, 1);
+  size_t data_size = 0;
+  const char* data = luaL_checklstring(L, 2, &data_size);
+
+  if (!lje_script_data_folder_exists())
+  {
+    if (!lje_script_data_folder_create())
+    {
+      printf("[LJE ERROR] Failed to create .lje_script_data folder!\n");
+      lua_pushboolean(L, 0);
+      return 1;
+    }
+  }
+
+  // Always print out whats going on for the user to see
+  printf("[LJE DATA]: Writing data to '%s' (%zu bytes)\n", name, data_size);
+  if (lje_script_data_write_file(name, data, data_size))
+  {
+    lua_pushboolean(L, 1);
+  } else
+  {
+    printf("[LJE DATA ERROR]: Failed to write data to '%s'\n", name);
+    lua_pushboolean(L, 0);
+  }
+
+  return 1;
+}
+
+int lje_data_read(lua_State* L)
+{
+  const char* name = luaL_checkstring(L, 1);
+
+  if (!lje_script_data_folder_exists())
+  {
+    printf("[LJE DATA]: .lje_script_data folder does not exist, cannot read data '%s'\n", name);
+    return 0;
+  }
+
+  size_t data_size = 0;
+  char* data = lje_script_data_read_file(name, &data_size);
+  if (data)
+  {
+    lua_pushlstring(L, data, data_size);
+    free(data);
+    return 1;
+  }
+
+  return 0;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -375,6 +428,12 @@ void lje_addfuncs(lua_State* L) {
   LJE_NEW_SECTION()
     LJE_SET_FUNC("patch_bytecodes", lje_patch_bytecodes);
   LJE_END_SECTION("vm");
+
+  /* data: simple data storage API */
+  LJE_NEW_SECTION()
+    LJE_SET_FUNC("write", lje_data_write);
+    LJE_SET_FUNC("read", lje_data_read);
+  LJE_END_SECTION("data");
 
   /* LJE API END */
 

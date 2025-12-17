@@ -5,6 +5,7 @@
 #define LJE_SCRIPT_MAIN "main.lua"
 #define LJE_SCRIPT_PREINIT "preinit.lua"
 #define LJE_SCRIPT_FOLDER ".lje_scripts"
+#define LJE_SCRIPT_DATA ".lje_script_data"
 
 typedef struct LJEScriptDependency
 {
@@ -36,8 +37,16 @@ typedef struct LJEScript
 } LJEScript;
 
 void lje_script_resolve_base(char* out_buffer, size_t buffer_size);
+void lje_script_data_resolve_base(char* out_buffer, size_t buffer_size);
 int lje_script_folder_exists();
 int lje_script_folder_create();
+int lje_script_data_folder_exists();
+int lje_script_data_folder_create();
+int lje_script_data_write_file(const char* relative_path, const char* data, size_t data_size);
+
+/* Caller is responsible for freeing the returned data buffer. */
+char* lje_script_data_read_file(const char* relative_path, size_t* out_data_size);
+
 LJEScriptInfo* lje_script_parse_info(const char* info_path);
 LJEScript* lje_script_load_all_scripts(size_t* out_script_count);
 /* Computes a load order for the given scripts based on their dependencies.

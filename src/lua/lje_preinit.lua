@@ -151,6 +151,9 @@ end
 
 setfenv(safeEnv.lje.con_printf, safeEnv)
 
+-- Add a circular reference to the safe environment in the safeEnv
+safeEnv._L = safeEnv
+
 lje.con_print("Safe environment ready!")
 lje.env.set(safeEnv)
 

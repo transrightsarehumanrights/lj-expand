@@ -23,6 +23,24 @@ void lje_script_resolve_base(char* out_buffer, size_t buffer_size) {
 #endif
 }
 
+void lje_script_data_resolve_base(char* out_buffer, size_t buffer_size)
+{
+#ifdef _WIN64
+    char base_path[MAX_PATH] = { 0 };
+    strncat_s(base_path, MAX_PATH, "%USERPROFILE%\\", _TRUNCATE);
+    strncat_s(base_path, MAX_PATH, LJE_SCRIPT_DATA, _TRUNCATE);
+
+    DWORD result = ExpandEnvironmentStringsA(base_path, out_buffer, (DWORD)buffer_size);
+    if (result == 0 || result > buffer_size)
+    {
+        // Failed to expand or buffer too small
+        out_buffer[0] = '\0';
+    }
+#else
+#error "lje_script_data_resolve_base not implemented for this platform"
+#endif
+}
+
 int lje_script_folder_exists() {
     // Simple check for folder existence
 #ifdef _WIN64
@@ -34,6 +52,22 @@ int lje_script_folder_exists() {
     }
 #else
 #error "lje_script_folder_exists not implemented for this platform"
+#endif
+    return 0;
+}
+
+int lje_script_data_folder_exists()
+{
+    // Basically just a copy of lje_script_folder_exists but for data
+#ifdef _WIN64
+    char path[MAX_PATH] = { 0 };
+    lje_script_data_resolve_base(path, MAX_PATH);
+    DWORD attribs = GetFileAttributesA(path);
+    if ((attribs != INVALID_FILE_ATTRIBUTES) && (attribs & FILE_ATTRIBUTE_DIRECTORY)) {
+        return 1; // Exists and is a directory
+    }
+#else
+#error "lje_script_data_folder_exists not implemented for this platform"
 #endif
     return 0;
 }
@@ -50,6 +84,118 @@ int lje_script_folder_create()
 #error "lje_script_folder_create not implemented for this platform"
 #endif
     return 0;
+}
+
+int lje_script_data_folder_create()
+{
+#ifdef _WIN64
+    char path[MAX_PATH] = { 0 };
+    lje_script_data_resolve_base(path, MAX_PATH);
+    if (CreateDirectoryA(path, NULL) || GetLastError() == ERROR_ALREADY_EXISTS) {
+        return 1; // Created or already exists
+    }
+#else
+#error "lje_script_data_folder_create not implemented for this platform"
+#endif
+    return 0;
+}
+
+static char is_data_path_safe(const char* relative_path)
+{
+    if (strlen(relative_path) == 0 || strlen(relative_path) > 128)
+    {
+        return 0; // Too long or empty
+    }
+    // Only accept alphanumeric, underscore and hyphen characters
+    // We specifically forbid subdirectories or path weaseling (e.g. ../)
+    // It might seem excessive, but having a completely flat namespace for script data
+    // is much safer and easier to manage.
+    for (const char* p = relative_path; *p; p++)
+    {
+        if (!((*p >= 'a' && *p <= 'z') ||
+              (*p >= 'A' && *p <= 'Z') ||
+              (*p >= '0' && *p <= '9') ||
+              (*p == '_') ||
+              (*p == '-') ))
+        {
+            return 0; // Unsafe character found
+        }
+    }
+
+    return 1; // Safe
+}
+
+int lje_script_data_write_file(const char* relative_path, const char* data, size_t data_size)
+{
+    // We can use standard C file IO here, so no cross-platform issues
+    if (!is_data_path_safe(relative_path))
+    {
+        return 0; // Unsafe path
+    }
+
+    char full_path[MAX_PATH] = { 0 };
+    lje_script_data_resolve_base(full_path, MAX_PATH);
+    strncat_s(full_path, MAX_PATH, "\\", _TRUNCATE);
+    strncat_s(full_path, MAX_PATH, relative_path, _TRUNCATE);
+    strncat_s(full_path, MAX_PATH, ".dat", _TRUNCATE); // No custom extensions allowed here!
+
+    FILE* file = NULL;
+    if (fopen_s(&file, full_path, "wb") != 0 || !file)
+    {
+        return 0; // Failed to open file
+    }
+
+    size_t written = fwrite(data, 1, data_size, file);
+    fclose(file);
+
+    return written == data_size;
+}
+
+char* lje_script_data_read_file(const char* relative_path, size_t* out_data_size)
+{
+    // We can use standard C file IO here, so no cross-platform issues
+    if (!is_data_path_safe(relative_path))
+    {
+        return NULL; // Unsafe path
+    }
+
+    char full_path[MAX_PATH] = { 0 };
+    lje_script_data_resolve_base(full_path, MAX_PATH);
+    strncat_s(full_path, MAX_PATH, "\\", _TRUNCATE);
+    strncat_s(full_path, MAX_PATH, relative_path, _TRUNCATE);
+    strncat_s(full_path, MAX_PATH, ".dat", _TRUNCATE); // No custom extensions allowed here!
+
+    FILE* file = NULL;
+    if (fopen_s(&file, full_path, "rb") != 0 || !file)
+    {
+        return NULL; // Failed to open file
+    }
+
+    fseek(file, 0, SEEK_END);
+    long length = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    char* buffer = (char*)malloc(length + 1);
+    if (!buffer) {
+        fclose(file);
+        return NULL;
+    }
+
+    size_t read_size = fread(buffer, 1, length, file);
+    fclose(file);
+
+    if (read_size != length)
+    {
+        free(buffer);
+        return NULL; // Read error
+    }
+
+    buffer[length] = '\0';
+    if (out_data_size)
+    {
+        *out_data_size = length;
+    }
+    return buffer;
 }
 
 static void script_info_parse_error(const char* property, const char* details)
