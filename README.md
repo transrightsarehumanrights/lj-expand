@@ -102,6 +102,9 @@ The API is fairly simple, the two most important functions are `lje.include` and
 The rest are undocumented, but you can see them [here](https://github.com/yogwoggf/lj-expand/blob/expansion/src/lj_expand_lib.c#L263).
 There is unfortunately no system for hooking GMod hooks yet, so you will manually need to do it, like in [gilbhax](https://github.com/yogwoggf/gilbhax).
 
+You can write/load data blobs using `lje.data.write(name: string, data: string)` and `lje.data.read(name: string): string | nil`. They are stored in `%USERPROFILE%\.lje_script_data`.
+No subdirectories or anything fancy, just flat files that are all named `.dat` for safety.
+
 # Licensing
 
 No license file on purpose since it is a fork of LuaJIT, which is MIT licensed anyways, which means this project is also MIT licensed.
