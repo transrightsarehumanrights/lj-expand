@@ -34,7 +34,7 @@
 #include "lj_dispatch.h"
 #include "lj_expand_globals.h"
 #include "lj_expand_script.h"
-
+#include "lauxlib.h"
 #include "stdio.h"
 
 /* -- Common helper functions --------------------------------------------- */
@@ -666,7 +666,7 @@ LUA_API void lua_pushstring(lua_State *L, const char *str)
   incr_top(L);
 
   /* LJE: Run callback, if it exists, with the pushed string */
-  if (LJEG()->push_string_ref_id != 0 && L == LJEG()->main_state)
+  if (LJEG()->push_string_ref_id != LUA_NOREF && L == LJEG()->main_state)
   {
     lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->push_string_ref_id);
     lua_pushvalue(L, -2); // Push the string
@@ -1386,6 +1386,7 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
       lje_detour_export(mod, lua_getupvalue, lua_getupvalue);
       lje_detour_export(mod, lua_pushstring, lua_pushstring);
       lje_detour_export(mod, lua_pcall, lua_pcall);
+      lje_detour_export(mod, luaL_loadbufferx, luaL_loadbufferx);
 
       if (!lje_script_folder_exists())
       {

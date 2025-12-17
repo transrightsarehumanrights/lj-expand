@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lauxlib.h"
+
 static LJEGlobalState* lje_global_state = NULL;
 
 LJEGlobalState* lje_get_global_state() {
@@ -15,8 +17,9 @@ LJEGlobalState* lje_get_global_state() {
 }
 
 void lje_clear_global_refs() {
-    LJEG()->env_ref_id = 0;
-    LJEG()->push_string_ref_id = 0;
+    LJEG()->env_ref_id = LUA_NOREF;
+    LJEG()->push_string_ref_id = LUA_NOREF;
+    LJEG()->script_hook_ref_id = LUA_NOREF;
 }
 
 void lje_insert_spoof_record(GCfunc* spoof, GCfunc* target) {

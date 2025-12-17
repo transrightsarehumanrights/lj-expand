@@ -112,7 +112,7 @@ int lje_include(lua_State* L)
 
 int lje_get_env(lua_State* L)
 {
-  if (LJEG()->env_ref_id != 0)
+  if (LJEG()->env_ref_id != LUA_NOREF)
   {
     lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
     return 1;
@@ -124,10 +124,10 @@ int lje_get_env(lua_State* L)
 int lje_set_env(lua_State* L)
 {
   lj_lib_checktab(L, 1);
-  if (LJEG()->env_ref_id != 0)
+  if (LJEG()->env_ref_id != LUA_NOREF)
   {
     luaL_unref(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
-    LJEG()->env_ref_id = 0;
+    LJEG()->env_ref_id = LUA_NOREF;
   }
 
   lua_pushvalue(L, 1);
@@ -294,6 +294,19 @@ int lje_enable_metatables(lua_State* L) {
   return 0;
 }
 
+int lje_set_script_hook_callback(lua_State* L)
+{
+  GCfunc* callback = lj_lib_checkfunc(L, 1);
+  if (!isluafunc(callback))
+  {
+    lj_err_arg(L, 1, LJ_ERR_NOLFUNC);
+  }
+
+  funcextend(callback)->is_special = 1;
+  LJEG()->script_hook_ref_id = luaL_ref(L, LUA_REGISTRYINDEX);
+  return 0;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -348,6 +361,7 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("get_call_stack", lje_get_call_stack);
     LJE_SET_FUNC("get_registry", lje_get_registry);
     LJE_SET_FUNC("set_push_string_callback", lje_set_push_string_callback);
+    LJE_SET_FUNC("set_script_hook_callback", lje_set_script_hook_callback);
   LJE_END_SECTION("util");
 
   /* gc: garbage collector manipulation */

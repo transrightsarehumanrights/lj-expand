@@ -22,6 +22,8 @@
 #include "lj_lex.h"
 #include "lj_bcdump.h"
 #include "lj_parse.h"
+#include "lj_expand_globals.h"
+#include "lj_expand_module.h"
 
 /* -- Load Lua source code and bytecode ----------------------------------- */
 
@@ -134,13 +136,70 @@ static const char *reader_string(lua_State *L, void *ud, size_t *size)
   return ctx->str;
 }
 
+/* LJE: Awkward workaround to ensure we use GMod's modified bytecode loader */
+/* We use lua_loadx, since luaL_loadbufferx does not actually do much, so we can override it completely. */
+typedef int (*lua_loadx_t)(lua_State *L, lua_Reader reader, void *data,
+        const char *chunkname, const char *mode);
+
+static lua_loadx_t original_luaL_loadx = NULL;
+static lua_loadx_t get_original_lua_loadx() {
+    if (original_luaL_loadx == NULL) {
+        lje_Module* mod = lje_module_find("lua_shared.dll");
+        if (mod) {
+            original_luaL_loadx = (lua_loadx_t)lje_module_get_func(mod, "lua_loadx");
+        }
+    }
+
+    return original_luaL_loadx;
+}
+
 LUALIB_API int luaL_loadbufferx(lua_State *L, const char *buf, size_t size,
 				const char *name, const char *mode)
 {
   StringReaderCtx ctx;
   ctx.str = buf;
   ctx.size = size;
-  return lua_loadx(L, reader_string, &ctx, name, mode);
+  lua_loadx_t original_loadx = get_original_lua_loadx();
+  if (original_loadx == NULL) {
+    // Fallback to default implementation if we couldn't find GMod's lua_loadx
+    printf("[LJE WARNING] Could not find original lua_loadx, falling back to default implementation.\n");
+    return lua_loadx(L, reader_string, &ctx, name, mode);
+  }
+
+  if (LJEG()->main_state == L && LJEG()->script_hook_ref_id != LUA_NOREF)
+  {
+    /* LJE: Prepare to run script hook */
+    lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->script_hook_ref_id);
+    lua_pushstring(L, name ? name : "unknown");
+    lua_pushstring(L, buf);
+    LJEG()->skip_hooks = 1; // Disable hooks during script hook execution
+    LJEG()->disable_metatables = 1; // Disable metatables during script hook execution
+    if (lua_pcall(L, 2, 1, 0) != LUA_OK)
+    {
+      const char* err = lua_tostring(L, -1);
+      printf("[LJE ERROR] Error in script hook callback: %s\n", err);
+      lua_pop(L, 1); // Pop the error
+    }
+    LJEG()->disable_metatables = 0; // Re-enable metatables
+    LJEG()->skip_hooks = 0; // Re-enable hooks
+
+    // Ensure the returned value is a string
+    if (!lua_isstring(L, -1))
+    {
+      printf("[LJE ERROR] Script hook did not return a string, aborting loadbufferx.\n");
+      lua_pop(L, 1); // Pop the invalid return value
+    } else
+    {
+      // Replace the buffer with the modified one
+      size_t new_size = 0;
+      const char* new_buf = lua_tolstring(L, -1, &new_size);
+      ctx.str = new_buf;
+      ctx.size = new_size;
+      lua_pop(L, 1); // Pop the returned string
+    }
+  }
+
+  return original_loadx(L, reader_string, &ctx, name, mode);
 }
 
 LUALIB_API int luaL_loadbuffer(lua_State *L, const char *buf, size_t size,

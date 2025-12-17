@@ -23,6 +23,7 @@ typedef struct LJEGlobalState
 {
     int push_string_ref_id;
     int env_ref_id;
+    int script_hook_ref_id;
     lua_State* main_state;
     int skip_hooks;
     GCRef ignore_fn_on_hook;

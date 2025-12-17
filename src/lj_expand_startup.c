@@ -75,7 +75,7 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
             LJEfunc* ljeFn = funcextend(func); // guaranteed to exist since it's a Lua function
             ljeFn->is_special = 1;
 
-            if (LJEG()->env_ref_id != 0)
+            if (LJEG()->env_ref_id != LUA_NOREF)
             {
                 // Set the environment if it exists
                 lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
@@ -135,7 +135,7 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
     printf("[LJE] Including script: %s\n", relative_path);
     if (original_loadbufferx(L, buffer, strlen(buffer), "@lje_include", NULL) == 0)
     {
-        if (LJEG()->env_ref_id != 0)
+        if (LJEG()->env_ref_id != LUA_NOREF)
         {
             // Set the environment if it exists
             lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
