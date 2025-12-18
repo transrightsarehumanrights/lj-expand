@@ -64,11 +64,17 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
         return;
     }
 
-    char* script_file = load_lua_file(path ? path : script->main_path);
+    path = path ? path : script->main_path;
+    char* script_file = load_lua_file(path);
+
+    char chunkname[LUA_IDSIZE] = { 0 };
+    strncat_s(chunkname, LUA_IDSIZE, "@lje_script:", _TRUNCATE);
+    strncat_s(chunkname, LUA_IDSIZE, script->info->name, _TRUNCATE);
+
     if (script_file)
     {
         printf("[LJE] Executing script '%s'...\n", script->name);
-        if (original_loadbufferx(L, script_file, strlen(script_file), "@lje_script", NULL) == 0)
+        if (original_loadbufferx(L, script_file, strlen(script_file), chunkname, NULL) == 0)
         {
             // Mark it as a special function first
             GCfunc* func = funcV(L->top-1);
@@ -131,9 +137,13 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
     strncat_s(full_path, 512, LJEG()->current_script->folder, _TRUNCATE);
     strncat_s(full_path, 512, relative_path, _TRUNCATE);
 
+    char chunkname[LUA_IDSIZE] = { 0 };
+    strncat_s(chunkname, LUA_IDSIZE, "@lje_include:", _TRUNCATE);
+    strncat_s(chunkname, LUA_IDSIZE, relative_path, _TRUNCATE);
+
     char* buffer = load_lua_file(full_path);
     printf("[LJE] Including script: %s\n", relative_path);
-    if (original_loadbufferx(L, buffer, strlen(buffer), "@lje_include", NULL) == 0)
+    if (original_loadbufferx(L, buffer, strlen(buffer), chunkname, NULL) == 0)
     {
         if (LJEG()->env_ref_id != LUA_NOREF)
         {
