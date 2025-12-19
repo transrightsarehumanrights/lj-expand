@@ -74,6 +74,7 @@ safeEnv.cloned_mts["Vector"] = cloneMetaTable("Vector")
 safeEnv.cloned_mts["Angle"] = cloneMetaTable("Angle")
 safeEnv.cloned_mts["CUserCmd"] = cloneMetaTable("CUserCmd")
 safeEnv.cloned_mts["File"] = cloneMetaTable("File")
+safeEnv.cloned_mts["ConVar"] = cloneMetaTable("ConVar")
 
 safeEnv.cloned_basemts["string"] = cloneBaseMt(debug.getmetatable(""))
 safeEnv.insecure_mts = {}
