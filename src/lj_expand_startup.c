@@ -88,7 +88,7 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
                 lua_setfenv(L, -2);
             } else
             {
-                printf("[LJE] No custom environment set for script? Probably not intentional.\n");
+                printf("[LJE WARNING] No custom environment set for script? Probably not intentional.\n");
             }
 
             // Disable hooks during execution
@@ -102,7 +102,6 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
             } else
             {
                 LJEG()->skip_hooks = 0;
-                printf("[LJE] Script executed successfully.\n");
             }
         }
         else
@@ -142,7 +141,7 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
     strncat_s(chunkname, LUA_IDSIZE, relative_path, _TRUNCATE);
 
     char* buffer = load_lua_file(full_path);
-    printf("[LJE] Including script: %s\n", relative_path);
+    printf("[LJE] -> %s\n", relative_path);
     if (original_loadbufferx(L, buffer, strlen(buffer), chunkname, NULL) == 0)
     {
         if (LJEG()->env_ref_id != LUA_NOREF)
@@ -155,7 +154,6 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
         if (!execute)
         {
             // Just return the loaded function
-            printf("[LJE] Include script loaded successfully (not executed).\n");
             free(buffer);
             return 1;
         }
@@ -167,7 +165,6 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
         } else
         {
             free(buffer);
-            printf("[LJE] Include script executed successfully. Returned %d results\n", lua_gettop(L) - 1);
             return lua_gettop(L) - 1;
         }
     }

@@ -177,22 +177,19 @@ GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
       // Keep track of original GC total. CLIENT is seven bytes
       LJEG()->original_gc = G(L)->gc.total - (7 + sizeof(GCstr));
 
-      printf("[LJE] Detected creation of Lua function for init.lua\n");
-      printf("[LJE] Setting waiting_for_init_call flag...\n");
+      printf("[LJE] Pre-initializing Lua...\n");
       LJEG()->waiting_for_init_call = 1;
     }
   }
 
   if (check_proto_chunkname(pt, "@Startup") && !lje_frame_is_lua_involved(L, 0))
   {
-    printf("[LJE] Detected creation of Lua function for @Startup\n");
-    printf("[LJE] Clearing any old spoof records...\n");
+    printf("[LJE] Starting up Lua...\n");
     lje_clear_spoof_records();
 
     for (int i = 0; i < LJEG()->loaded_script_count; i++)
     {
       LJEScript* script = LJEG()->script_load_order[i];
-      printf("[LJE] Loading script '%s' during startup...\n", script->name);
       lje_startup_execute(L, script, NULL);
     }
   }

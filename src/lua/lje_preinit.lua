@@ -119,7 +119,6 @@ safeEnv.lje.require = function(path)
 
   local result = lje.include(path)
   scriptCache[path] = result
-  lje.con_print("Successfully required " .. path .. " for script: " .. currentScript)
   return result
 end
 
