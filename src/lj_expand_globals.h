@@ -14,6 +14,13 @@ typedef struct LJESpoofRecord
    struct LJESpoofRecord* next;
 } LJESpoofRecord;
 
+typedef struct LJERandomState
+{
+    /* LJE: It's easier copying the PRNG struct then having to expose it publicly. */
+    uint64_t gen[4];
+    int valid;
+} LJERandomState;
+
 /* LJE: This is our own global state, sysmalloc'd without any
  * interference with LuaJIT's own global_State. This is because
  * it has very *very* specific and precise allocation to facilitate JITed
@@ -38,6 +45,8 @@ typedef struct LJEGlobalState
     LJEScript* current_script;
     int show_special_frames;
     int disable_metatables;
+    /* Used for random state rollback */
+    LJERandomState random_state;
 } LJEGlobalState;
 
 #define LJEG() (lje_get_global_state())
@@ -50,5 +59,14 @@ void lje_remove_spoof_record_by_spoof(GCfunc* spoof);
 void lje_remove_spoof_record_by_target(GCfunc* target);
 void lje_clear_spoof_records();
 char* lje_concat_path(const char* relative_path);
+
+/* LJE: No-ops if environment is not set. */
+void lje_set_random_state(LJERandomState* prev, LJERandomState* new);
+
+#define lje_save_random_state() \
+    lje_set_random_state(NULL, &LJEG()->random_state)
+
+#define lje_restore_random_state() \
+    lje_set_random_state(&LJEG()->random_state, NULL)
 
 #endif

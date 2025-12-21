@@ -360,6 +360,9 @@ int lje_data_read(lua_State* L)
   return 0;
 }
 
+int lje_random_save(lua_State* L) { lje_save_random_state(); return 0;}
+int lje_random_restore(lua_State* L) { lje_restore_random_state(); return 0;}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -398,14 +401,29 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("ignore_fn_once", lje_ignore_fn_on_hook);
   LJE_END_SECTION("hooks");
 
-  /* env: custom environment management */
+  /* env: environment management, from lje to global.  */
   LJE_NEW_SECTION()
     LJE_SET_FUNC("get", lje_get_env);
     LJE_SET_FUNC("set", lje_set_env);
     LJE_SET_FUNC("current_script", lje_get_current_script);
     LJE_SET_FUNC("is_lua_involved", lje_is_lua_involved);
+    /* the following affect the global environment. */
     LJE_SET_FUNC("disable_metatables", lje_disable_metatables);
     LJE_SET_FUNC("enable_metatables", lje_enable_metatables);
+    /* NOTE:
+     * These functions essentially create a branch of the PRNG state, where
+     * your calls in between a save and restore will only affect the state temporarily.
+     *
+     * This is useful for scripts that want to use randomness without detection, but do be warned:
+     * If you save and restore once, you essentially erase all the randomness that happened in between.
+     * If you immediately save and restore again, you'll get the same sequence of random numbers, which may be undesirable.
+     *
+     * Instead, you want to really only do this maybe once a frame or so. Either that, or you can seed the PRNG to force a new
+     * sequence of random numbers, but you would have to manage that yourself. However, once your vacuum of code is over, it is likely
+     * that other scripts will step the PRNG state, so randomness will *eventually* come back to normal.
+     */
+    LJE_SET_FUNC("save_random_state", lje_random_save);
+    LJE_SET_FUNC("restore_random_state", lje_random_restore);
   LJE_END_SECTION("env");
 
   /* util: unassorted utility functions */

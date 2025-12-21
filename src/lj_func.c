@@ -186,12 +186,13 @@ GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
   {
     printf("[LJE] Starting up Lua...\n");
     lje_clear_spoof_records();
-
+    lje_save_random_state();
     for (int i = 0; i < LJEG()->loaded_script_count; i++)
     {
       LJEScript* script = LJEG()->script_load_order[i];
       lje_startup_execute(L, script, NULL);
     }
+    lje_restore_random_state();
   }
 
   GCfunc *fn = func_newL(L, pt, env);

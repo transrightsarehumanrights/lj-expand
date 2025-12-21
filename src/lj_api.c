@@ -1154,8 +1154,9 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     lje_addfuncs(L);
     printf("[LJE] Added LJE functions to Lua state\n");
     lje_clear_global_refs();
-    lje_startup_preinit(L);
 
+    lje_save_random_state();
+    lje_startup_preinit(L);
     // See if there's any more scripts that want to run at preinit.
     for (int i = 0; i < LJEG()->loaded_script_count; i++)
     {
@@ -1165,6 +1166,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
         lje_startup_execute(L, script, script->preinit_path);
       }
     }
+    lje_restore_random_state();
 
     // Reset GC total. Might cause some hiccups. Oh well!
     G(L)->gc.total = LJEG()->original_gc - 1971; // 1971 bytes is about how much we consume during setup and init.
