@@ -1155,8 +1155,10 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     printf("[LJE] Added LJE functions to Lua state\n");
     lje_clear_global_refs();
 
-    lje_save_random_state();
     lje_startup_preinit(L);
+
+    // ENSURE PREINIT DOES NOT AFFECT RANDOM STATE!
+    lje_save_random_state();
     // See if there's any more scripts that want to run at preinit.
     for (int i = 0; i < LJEG()->loaded_script_count; i++)
     {
