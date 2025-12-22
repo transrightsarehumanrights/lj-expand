@@ -1,9 +1,9 @@
-<center>
+<div align="center">
   <img src="doc/lje-logo.png" width="128" height="128" alt="LJE Logo" />
   <h3>lj-expand</h3>
   <p>Stealthy code execution tool for 64-bit Garry's Mod</p>
   <hr />
-</center>
+</div>
 
 # Installation
 
