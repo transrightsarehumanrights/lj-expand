@@ -34,6 +34,7 @@
 #include "lj_dispatch.h"
 #include "lj_expand_globals.h"
 #include "lj_expand_script.h"
+#include "lj_record.h"
 #include "lauxlib.h"
 #include "stdio.h"
 
