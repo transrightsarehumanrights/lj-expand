@@ -2,6 +2,7 @@
   <img src="doc/lje-logo.png" width="128" height="128" alt="LJE Logo" />
   <h3>lj-expand</h3>
   <p>Stealthy code execution tool for 64-bit Garry's Mod</p>
+  <a href="https://discord.gg/ZXP2tG8J"><img alt="Discord" src="https://img.shields.io/discord/1450731263412670518"></a>
   <hr />
 </div>
 
