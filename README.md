@@ -1,8 +1,9 @@
-# lj-expand - stealthy lua execution for 64-bit gmod 🪛
-
-lj-expand (LJE) is a custom LuaJIT fork for Garry's Mod's 64-bit branch, focused on stealth and safety when executing arbitrary Lua code.
-Simply put, LJE makes it significantly harder for anti-cheat systems to detect unauthorized code execution, while also providing
-mechanisms to run and write secure Lua code that cannot be easily tampered with or inspected, while retaining typical patterns and idioms.
+<center>
+  <img src="doc/lje-logo.png" width="128" height="128" alt="LJE Logo" />
+  <h3>lj-expand</h3>
+  <p>Stealthy code execution tool for 64-bit Garry's Mod</p>
+  <hr />
+</center>
 
 # Installation
 
@@ -18,59 +19,6 @@ to manually update this folder. Right now, there is no versioning as it is very 
 
 ## Disclaimer
 I don't condone cheating, or exploiting a server. I do however believe that you should have the freedom to audit and run your own code on your own machine.
-
-## Mitigations
-The main primitive that lj-expand adds are:
-- Spoofing
-  - Functions that are spoofed will appear and act as their original function, making it difficult to detect that they have been detoured.
-  - This includes stack traces, debug info, bytecode and more.
-- Special marks
-  - Special marks are added to functions that need stealth.
-  - These marks are read by the custom VM to hide unauthorized code from introspection functions.
-  - Currently, special functions get hidden from the stack trace and debug hooks.
-- Debug hook manipulation
-  - Completely enable/disable debug hooks on a per-function basis.
-  - Tailcall hook bypassing, specifically allows for the `return unpack(foobar)` idiom in detours.
-- GC spoofing
-  - Extra metadata is associated with functions to enable the VM to identify our own functions and treat them differently.
-  - This does not interfere with the GC total, making it difficult to detect this extra metadata.
-  - It also means the initialization GC total is equal to the vanilla GC total.
-  - Pre-init total is spoofed to match vanilla as well. This means it's difficult/impossible to detect the presence of lj-expand via collectgarbage checks at pre-initialization.
-  - Technically, you can try it after initialization, but at that point there are nondeterministic factors that can affect the GC total (material loading times, http requests, etc). 
-- Call stack authorization
-  - LJE functions can verify whether they were called from authorized code or not.
-  - This allows for stuff like PostRender hooks to be restricted to when the engine is calling them, preventing anti-cheat code from executing them and detecting unauthorized behavior.
-- Bytecode patching
-  - Certain bytecode instructions are patched at the VM level to improve stealth.
-  - This includes instructions that might bypass spoofing or reveal unauthorized code.
-  - Not all instructions are patched, only the most relevant ones to maintain performance and stability.
-- Hash manipulation
-  - Some anticheats may detect even the best spoofed functions by checking function hashes by assigning them to tables as keys.
-  - LJE has overriden the hashing algorithm to ensure that spoofed functions have the same hash as their original counterparts.
-- Debug hook stack adjustments
-  - It is possible to determine if a detour is present by checking the stack depth and name resolution in a debug hook.
-  - This is also patched in LJE at the VM level to ensure that hooks see the expected stack depth and function names.
-- Global metatable hardening
-  - During any LJE code execution, all metatables globally are (depending on situation) temporarily disabled.
-  - This makes it very difficult to detect LJE code execution via metatable hooks like `__newindex` or `__index`.
-- Probably more...
-
-These functions are modified to leverage the above primitives:
-- [x] debug.getinfo
-- [x] debug.getlocal
-- [x] debug.getupvalue
-- [x] debug.sethook
-- [x] debug.traceback
-- [x] tostring
-- [x] string.dump
-- [x] jit.util.funcinfo
-- [x] jit.util.funcbc
-
-And the following internal functions, which cover most of the debug functionality:
-- [x] lj_debug_frame
-- [x] lj_debug_funcname
-- [x] callhook
-- [x] lj_func_*
 
 # Scripting
 
@@ -104,6 +52,10 @@ There is unfortunately no system for hooking GMod hooks yet, so you will manuall
 
 You can write/load data blobs using `lje.data.write(name: string, data: string)` and `lje.data.read(name: string): string | nil`. They are stored in `%USERPROFILE%\.lje_script_data`.
 No subdirectories or anything fancy, just flat files that are all named `.dat` for safety.
+
+# More Information
+
+See [doc/mitigations.md](doc/mitigations.md) for more information about the various anti-detection techniques used in LJE.
 
 # Licensing
 
