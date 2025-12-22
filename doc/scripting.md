@@ -167,7 +167,7 @@ These functions are protected from debug hooks themselves, so you can safely cal
 - `lje.env.set(tbl: table)`: Sets the scripting environment to the specified table. This is typically only used internally by LJE.
 - `lje.env.get() -> table`: Gets the current scripting environment table. This is equal to `_L`.
 - `lje.env.disable_metatables()`: Disables metatable resolution globally. This is useful for code that interacts with tables/userdata that may have custom metatables.
-- `lje.env.enable_metatables()`: Enables metatable resolution globally. This should be called
+- `lje.env.enable_metatables()`: Enables metatable resolution globally. This should be called after `lje.env.disable_metatables()` to restore normal behavior.
 - `lje.env.save_random_state()`: Saves the current PRNG state.
 - `lje.env.restore_random_state()`: Restores the previously saved PRNG state.
 - `lje.env.current_script() -> string`: Returns the name of the currently executing script.
