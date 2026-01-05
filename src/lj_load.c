@@ -29,6 +29,10 @@
 
 static TValue *cpparser(lua_State *L, lua_CFunction dummy, void *ud)
 {
+  // TODO: Figure out how we can "infect" functions created from LJE scripts to mark them as such.
+  // Hopefully, we can use this flag of sorts to then easily detect them later on, such as in the interpreter.
+  // I think we can do it by setting a flag at each lua loadbuffer call, then check for that flag in here.
+  // Then we can mark the final function appropriately.
   LexState *ls = (LexState *)ud;
   GCproto *pt;
   GCfunc *fn;

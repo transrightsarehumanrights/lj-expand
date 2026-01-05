@@ -47,6 +47,8 @@ typedef struct LJEGlobalState
     int disable_metatables;
     /* Used for random state rollback */
     LJERandomState random_state;
+    /* Used for flagging protos */
+    int flag_lje_protos;
 } LJEGlobalState;
 
 #define LJEG() (lje_get_global_state())

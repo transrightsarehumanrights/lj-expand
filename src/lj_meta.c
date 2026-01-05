@@ -18,6 +18,7 @@
 #include "lj_meta.h"
 #include "lj_frame.h"
 #include "lj_bc.h"
+#include "lj_expand_frame.h"
 #include "lj_vm.h"
 #include "lj_strscan.h"
 #include "lj_strfmt.h"
@@ -62,6 +63,16 @@ cTValue *lj_meta_lookup(lua_State *L, cTValue *o, MMS mm)
   /* LJE: Disable metatables globally, and *hopefully* for a vacuum of LJE code. */
   if (LJEG()->disable_metatables)
     return niltv(L);
+
+  /* LJE: Additionally, try and determine if LJE is involved at all.
+   * This will allow for situations like LJE accidentally tostringing a foreign
+   * object and avoid that causing arbitrary code execution within LJE's context.
+   */
+  if (lje_frame_is_lje_involved(L, 0))
+  {
+    printf("[LJE]: Blocked potentially unsafe metamethod lookup for LJE involved frame.\n");
+    return niltv(L);
+  }
 
   GCtab *mt;
   if (tvistab(o))
