@@ -2,6 +2,7 @@ on:
   push:
     branches:
       - expansion
+      - 'experiment/*'
 
 jobs:
   build:
