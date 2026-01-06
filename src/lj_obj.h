@@ -698,6 +698,7 @@ struct lua_State {
 #endif
 #define curr_funcisL(L)		(isluafunc(curr_func(L)))
 #define curr_proto(L)		(funcproto(curr_func(L)))
+#define curr_protoextend(L)	(protoextend(curr_proto(L)))
 #define curr_topL(L)		(L->base + curr_proto(L)->framesize)
 #define curr_top(L)		(curr_funcisL(L) ? curr_topL(L) : L->top)
 
