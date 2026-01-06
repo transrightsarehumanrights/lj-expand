@@ -37,6 +37,8 @@
 #include "lj_record.h"
 #include "lj_parse.h"
 #include "lauxlib.h"
+#include "lj_lib.h"
+#include "lj_ffrecord.h"
 #include "stdio.h"
 
 /* -- Common helper functions --------------------------------------------- */

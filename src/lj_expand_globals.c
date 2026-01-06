@@ -82,43 +82,5 @@ void lje_clear_spoof_records() {
 
 void lje_set_random_state(LJERandomState* prev, LJERandomState* new)
 {
-    if (LJEG()->main_state == NULL || LJEG()->env_ref_id == LUA_NOREF)
-    {
-        return;
-    }
-
-    /* LJE: Random state is stored in a C upvalue for math.random. */
-    lua_rawgeti(LJEG()->main_state, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
-    lua_getfield(LJEG()->main_state, -1, "math");
-    if (lua_istable(LJEG()->main_state, -1))
-    {
-        lua_getfield(LJEG()->main_state, -1, "random");
-        if (lua_iscfunction(LJEG()->main_state, -1))
-        {
-            /* LJE: For simplicity's sake we'll just dig directly into the upvalues. */
-            GCfunc* randomFunc = funcV(LJEG()->main_state->top - 1);
-            if (randomFunc->c.nupvalues > 0)
-            {
-                /* LJE: First upvalue is always the random state. */
-                LJERandomState* state = (LJERandomState*)(uddata(udataV(&randomFunc->c.upvalue[0])));
-                if (new)
-                {
-                    // Save new state
-                    memcpy(new, state, sizeof(LJERandomState));
-                }
-
-                if (prev)
-                {
-                    // Restore previous state
-                    memcpy(state, prev, sizeof(LJERandomState));
-                }
-            } else
-            {
-                printf("[LJE] Unable to save random state, no upvalues found!\n");
-            }
-        }
-
-        lua_pop(LJEG()->main_state, 1); // pop random
-    }
-    lua_pop(LJEG()->main_state, 2); // pop math, then env
+   return; // NO-OP for now
 }

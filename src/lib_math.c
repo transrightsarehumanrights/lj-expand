@@ -15,6 +15,7 @@
 #include "lj_obj.h"
 #include "lj_lib.h"
 #include "lj_vm.h"
+#include "lj_expand_globals.h"
 
 /* ------------------------------------------------------------------------ */
 
@@ -155,6 +156,12 @@ LJLIB_CF(math_random)		LJLIB_REC(.)
 {
   int n = (int)(L->top - L->base);
   RandomState *rs = (RandomState *)(uddata(udataV(lj_lib_upvalue(L, 1))));
+  if (LJEG()->main_state == L && lje_frame_is_lje_involved(L, 0))
+  {
+    /* LJE: Switch to our own random state to avoid detection of PRNG state changes. */
+    rs = (RandomState*)&LJEG()->random_state;
+  }
+
   U64double u;
   double d;
   if (LJ_UNLIKELY(!rs->valid)) random_init(rs, 0.0);
@@ -207,6 +214,12 @@ LJLIB_PUSH(top-2)  /* Upvalue holds userdata with RandomState. */
 LJLIB_CF(math_randomseed)
 {
   RandomState *rs = (RandomState *)(uddata(udataV(lj_lib_upvalue(L, 1))));
+  if (LJEG()->main_state == L && lje_frame_is_lje_involved(L, 0))
+  {
+    /* LJE: Switch to our own random state to avoid detection of PRNG state changes. */
+    rs = (RandomState*)&LJEG()->random_state;
+  }
+
   random_init(rs, lj_lib_checknum(L, 1));
   return 0;
 }

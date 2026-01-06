@@ -360,8 +360,8 @@ int lje_data_read(lua_State* L)
   return 0;
 }
 
-int lje_random_save(lua_State* L) { lje_save_random_state(); return 0;}
-int lje_random_restore(lua_State* L) { lje_restore_random_state(); return 0;}
+int lje_random_save(lua_State* L) { /*lje_save_random_state();*/ return 0;}
+int lje_random_restore(lua_State* L) { /*lje_restore_random_state();*/ return 0;}
 
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \

@@ -36,3 +36,5 @@ SIGDEF(fs_finish, "40 55 56 41 54 41 55 41 56 41 57 48 83 ec 38 48 8b 31")
 // For running a parallel RNG state
 SIGDEF(lj_cf_math_random, "48 89 5c 24 18 56 48 83 ec 40 48 8b 41 20 48 8b d9 48 8b 71 28")
 SIGDEF(lj_cf_math_randomseed, "40 53 48 83 ec 20 48 8b 41 20 48 8b 50 f0 48 b8 ff ff ff ff ff 7f 00 00")
+// Allows LJE code to get JITed but still use the alternate random state.
+SIGDEF(recff_math_random, "48 89 5c 24 10 48 89 6c 24 18 48 89 7c 24 20 41 56 48 83 ec 20 48 8b 81 90 00 00 00 41 b8 0c 00 00 00 48 8b f9 48 8b 58 30")
