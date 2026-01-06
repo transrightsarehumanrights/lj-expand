@@ -28,6 +28,7 @@
 #include "lj_vm.h"
 #include "lj_strscan.h"
 #include "lj_strfmt.h"
+#include "lj_expand_globals.h"
 
 /* Some local macros to save typing. Undef'd at the end. */
 #define IR(ref)			(&J->cur.ir[(ref)])
@@ -642,12 +643,31 @@ static void LJ_FASTCALL recff_math_minmax(jit_State *J, RecordFFData *rd)
   J->base[0] = tr;
 }
 
-static void LJ_FASTCALL recff_math_random(jit_State *J, RecordFFData *rd)
+void LJ_FASTCALL recff_math_random(jit_State *J, RecordFFData *rd)
 {
+  /* LJE: Determine if we are recording in LJE's context. */
+  char is_lje = 0;
+  GCproto* pt = &gcref(J->cur.startpt)->pt;
+  if (pt)
+  {
+    // TODO: Is startpt really the right place to look for LJE context? What about side traces or trace stitches?
+    LJEproto* lje_pt = protoextend(pt);
+    is_lje = lje_pt->is_from_lje;
+  }
+
   GCudata *ud = udataV(&J->fn->c.upvalue[0]);
   TRef tr, one;
   lj_ir_kgc(J, obj2gco(ud), IRT_UDATA);  /* Prevent collection. */
-  tr = lj_ir_call(J, IRCALL_lj_math_random_step, lj_ir_kptr(J, uddata(ud)));
+  if (is_lje)
+  {
+    /* LJE: Give pointer to our custom random state structure. */
+    tr = lj_ir_call(J, IRCALL_lj_math_random_step, lj_ir_kptr(J, &LJEG()->random_state));
+    printf("[LJE JIT]: Using LJE custom random state structure in math.random\n");
+  } else
+  {
+    tr = lj_ir_call(J, IRCALL_lj_math_random_step, lj_ir_kptr(J, uddata(ud)));
+  }
+
   one = lj_ir_knum_one(J);
   tr = emitir(IRTN(IR_SUB), tr, one);
   if (J->base[0]) {

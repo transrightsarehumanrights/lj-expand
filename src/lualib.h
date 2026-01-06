@@ -27,6 +27,8 @@
 LJE_EXPOSE(setfenv)
 LJE_EXPOSE(getfenv)
 LUALIB_API int luaopen_base(lua_State *L);
+LJE_EXPOSE(math_random)
+LJE_EXPOSE(math_randomseed)
 LUALIB_API int luaopen_math(lua_State *L);
 LJE_EXPOSE(string_dump)
 LUALIB_API int luaopen_string(lua_State *L);

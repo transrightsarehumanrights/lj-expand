@@ -370,9 +370,10 @@ void callhook(lua_State *L, int event, BCLine line)
   if (isluafunc(fn))
   {
     LJEfunc* ljeFn = funcextend(fn);
-    if (ljeFn->is_special)
+    LJEproto* ljePt = protoextend(funcproto(fn));
+    if (ljeFn->is_special || ljePt->is_from_lje)
     {
-      return; // Don't let anyone hook into special functions
+      return; // Don't let anyone hook into special functions, or anything from LJE for that matter.
     }
   }
 

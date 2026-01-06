@@ -26,7 +26,8 @@
 
 void LJ_FASTCALL lj_func_freeproto(global_State *g, GCproto *pt)
 {
-  lj_mem_free(g, pt, pt->sizept);
+  /* LJE: We already accounted for the size of LJEproto when allocating the proto */
+  lj_mem_free(g, pt, pt->sizept - sizeof(LJEproto));
 }
 
 /* -- Upvalues ------------------------------------------------------------ */

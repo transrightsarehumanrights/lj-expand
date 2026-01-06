@@ -74,8 +74,10 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
     if (script_file)
     {
         printf("[LJE] Executing script '%s'...\n", script->name);
+        LJEG()->flag_lje_protos = 1;
         if (original_loadbufferx(L, script_file, strlen(script_file), chunkname, NULL) == 0)
         {
+            LJEG()->flag_lje_protos = 0;
             // Mark it as a special function first
             GCfunc* func = funcV(L->top-1);
             LJEfunc* ljeFn = funcextend(func); // guaranteed to exist since it's a Lua function
@@ -106,6 +108,7 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
         }
         else
         {
+            LJEG()->flag_lje_protos = 0;
             printf("[LJE] Error loading script: %s\n", lua_tostring(L, -1));
             lua_pop(L, 1); // Pop error message
         }
@@ -142,8 +145,10 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
 
     char* buffer = load_lua_file(full_path);
     printf("[LJE] -> %s\n", relative_path);
+    LJEG()->flag_lje_protos = 1;
     if (original_loadbufferx(L, buffer, strlen(buffer), chunkname, NULL) == 0)
     {
+        LJEG()->flag_lje_protos = 0;
         if (LJEG()->env_ref_id != LUA_NOREF)
         {
             // Set the environment if it exists
@@ -170,6 +175,7 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
     }
     else
     {
+        LJEG()->flag_lje_protos = 0;
         printf("[LJE] Error loading include script: %s\n", lua_tostring(L, -1));
         lua_pop(L, 1); // Pop error message
     }
@@ -191,8 +197,10 @@ void lje_startup_preinit(lua_State* L) {
     }
 
     char* script = lje_preinit_data;
+    LJEG()->flag_lje_protos = 1;
     if (original_loadbufferx(L, script, strlen(script), "@lje_preinit", NULL) == 0)
     {
+        LJEG()->flag_lje_protos = 0;
         if (original_pcall(L, 0, 0, 0) != 0)
         {
             printf("[LJE ERROR] Error executing pre-initialization script: %s\n", lua_tostring(L, -1));
@@ -206,6 +214,7 @@ void lje_startup_preinit(lua_State* L) {
     }
     else
     {
+        LJEG()->flag_lje_protos = 0;
         printf("[LJE ERROR] Error loading pre-initialization script: %s\n", lua_tostring(L, -1));
         lua_pop(L, 1); // Pop error message
     }
