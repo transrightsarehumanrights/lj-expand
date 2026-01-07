@@ -10,8 +10,8 @@ Some of the key mitigations implemented in LJE include:
 - [Bytecode patching](#bytecode-patching)
 - [Hash manipulation](#hash-manipulation)
 - [Stack spoofing](#stack-spoofing)
-- [Metatable hardening](#metatable-hardening)
-- [PRNG state capture](#prng-state-capture)
+- [Metatable remapping](#metatable-remapping)
+- [PRNG state isolation](#prng-state-isolation)
 - [GC manipulation](#gc-manipulation)
 - [Function spoofing](#function-spoofing)
 - [JIT blacklisting](#jit-blacklisting)
@@ -47,19 +47,16 @@ LJE patches these functions at the VM level to ensure that they see the expected
 Additionally, LJE modifies these at the root (e.g: `lj_debug_frame`, `lj_debug_funcname`, `callhook`, etc.) to ensure that all debug functionality is covered.
 A technique I like to call "frame stitching" is also employed to ensure that any gaps in the stack caused by detours are hidden, and LuaJIT can resolve function names across tailcall frames and other tricky situations.
 
-# Metatable hardening
+# Metatable remapping
 
-During any vacuum of LJE code execution, all metatables globally are (depending on situation) temporarily disabled. This makes it very difficult for anti-cheat systems to pass in
-a modified table/userdata with a custom metatable that hooks into `__newindex` or `__index` to detect LJE code execution.
+LJE adds new behavior to both JITed and interpreted code to ensure any LJE code using metatables is properly remapped to safe and known-good metatables.
+This prevents anti-cheat systems from detecting unauthorized code execution by modifying global metatables and checking for unexpected behavior.
 
-All metatables in this state are simply not resolved and the raw table/userdata is used instead. If a metatable is required, LJE stores a copy of original known good metatables and uses them raw instead of syntax sugar.
+This is also implemented at the trace level to ensure JITed code works correctly with remapped metatables.
 
-# PRNG state capture
-
-If any LJE script uses `math.random(seed)`, it can step and modify the global PRNG state. This can be detected by anti-cheat systems that monitor the PRNG state for unexpected changes.
-To counteract this, LJE captures and restores the PRNG state around startup code and pre-init code. But, scripts can also manually capture and restore the PRNG state via `lje.env.save_random_state()` and `lje.env.restore_random_state()`.
-
-This makes it so that any changes to the PRNG state made by LJE scripts are not detectable by anti-cheat systems, which is very important if a script uses `math.random` at pre-init, because the first `math.random` call in `init.lua` is constant.
+# PRNG state isolation
+`math.random` and `math.randomseed` both use a new LJE-specific PRNG state, isolated from the global Lua state. This prevents anti-cheat systems from detecting unauthorized code execution by seeding the PRNG with known values
+and checking for unexpected random values. It is also implemented at the trace level to ensure JITed code uses the correct PRNG state.
 
 # GC manipulation
 
