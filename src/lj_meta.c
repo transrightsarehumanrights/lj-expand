@@ -60,20 +60,6 @@ cTValue *lj_meta_cache(GCtab *mt, MMS mm, GCstr *name)
 /* Lookup metamethod for object. */
 cTValue *lj_meta_lookup(lua_State *L, cTValue *o, MMS mm)
 {
-  /* LJE: Disable metatables globally, and *hopefully* for a vacuum of LJE code. */
-  if (LJEG()->disable_metatables)
-    return niltv(L);
-
-  /* LJE: Additionally, try and determine if LJE is involved at all.
-   * This will allow for situations like LJE accidentally tostringing a foreign
-   * object and avoid that causing arbitrary code execution within LJE's context.
-   */
-  if (lje_frame_is_lje_involved(L, 0))
-  {
-    printf("[LJE]: Blocked potentially unsafe metamethod lookup for LJE involved frame.\n");
-    return niltv(L);
-  }
-
   GCtab *mt;
   if (tvistab(o))
     mt = tabref(tabV(o)->metatable);
@@ -82,6 +68,39 @@ cTValue *lj_meta_lookup(lua_State *L, cTValue *o, MMS mm)
   else
     mt = tabref(basemt_obj(G(L), o));
   if (mt) {
+    /* LJE: Check if any LJE code has caused this lookup, and if so, remap the metatable if needed.
+     * If there is no remap, we just want to cancel and block the metamethod lookup.
+     */
+    if (LJEG()->main_state == L && cframe_raw(L->cframe) != NULL)
+    {
+      GCfunc* curr_func = curr_func(L);
+      if (isluafunc(curr_func))
+      {
+        LJEproto* pt = protoextend(funcproto(curr_func));
+        if (pt->is_from_lje)
+        {
+          cTValue* metaName = lj_tab_getstr(mt, lj_str_newlit(L, "MetaName"));
+          if (metaName && tvisstr(metaName))
+          {
+            const char* typeName = strdata(strV(metaName));
+            LJEMetatableRemap* remap = lje_get_metatable_remap(typeName);
+            if (remap)
+            {
+              mt = remap->replacement;
+              // No print here since it might lag the metamethod lookup too much, this is the expected case.
+            } else
+            {
+              /* LJE: Block metamethod lookup if no remap is found. */
+              return niltv(L);
+            }
+          } else
+          {
+            return niltv(L);
+          }
+        }
+      }
+    }
+
     cTValue *mo = lj_tab_getstr(mt, mmname_str(G(L), mm));
     if (mo)
       return mo;

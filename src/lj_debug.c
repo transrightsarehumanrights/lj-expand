@@ -35,6 +35,7 @@ cTValue *lj_debug_frame(lua_State *L, int level, int *size)
     if (isluafunc(frame_func(frame)) && !LJEG()->show_special_frames)
     {
         LJEfunc* ljeFn = funcextend(frame_func(frame));
+        // TODO: Determine if we should also just skip LJE functions that are not marked special?
         if (ljeFn->is_special)
         {
             /* LJE: Only skip if the next frame is different, which implies an actual frame transition in the frame link chain.

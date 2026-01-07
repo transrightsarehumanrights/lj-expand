@@ -21,6 +21,14 @@ typedef struct LJERandomState
     int valid;
 } LJERandomState;
 
+#define MAX_REMAP_TYPES 16
+typedef struct LJEMetatableRemap
+{
+    /* LJE: MUST BE A STRING LITERAL */
+    const char* type_name;
+    GCtab* replacement;
+} LJEMetatableRemap;
+
 /* LJE: This is our own global state, sysmalloc'd without any
  * interference with LuaJIT's own global_State. This is because
  * it has very *very* specific and precise allocation to facilitate JITed
@@ -49,6 +57,8 @@ typedef struct LJEGlobalState
     LJERandomState random_state;
     /* Used for flagging protos */
     int flag_lje_protos;
+    /* Metatable remapping */
+    LJEMetatableRemap metatable_remaps[MAX_REMAP_TYPES];
 } LJEGlobalState;
 
 #define LJEG() (lje_get_global_state())
@@ -70,5 +80,8 @@ void lje_set_random_state(LJERandomState* prev, LJERandomState* new);
 
 #define lje_restore_random_state() \
     lje_set_random_state(&LJEG()->random_state, NULL)
+
+LJEMetatableRemap* lje_get_metatable_remap(const char* type_name);
+void lje_set_metatable_remap(const char* type_name, GCtab* replacement);
 
 #endif

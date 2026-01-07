@@ -254,6 +254,11 @@ int lje_patch_bytecodes(lua_State* L)
    */
   lje_patch_bytecode(gg, BC_ISEQV);
   lje_patch_bytecode(gg, BC_ISNEV);
+  /* TGETS is used for metatable lookups. We need to
+   * patch this to our own version that blocks metatable
+   * lookups when LJE is involved and/or remaps are set.
+   */
+  lje_patch_bytecode(gg, BC_TGETS);
 
   return 0;
 }
@@ -363,6 +368,16 @@ int lje_data_read(lua_State* L)
 int lje_random_save(lua_State* L) { /*lje_save_random_state();*/ return 0;}
 int lje_random_restore(lua_State* L) { /*lje_restore_random_state();*/ return 0;}
 
+int lje_remap_metatable(lua_State* L)
+{
+  const char* type_name = luaL_checkstring(L, 1);
+  GCtab* replacement = lj_lib_checktab(L, 2);
+
+  lje_set_metatable_remap(type_name, replacement);
+  printf("[LJE] Remapped metatable for type '%s'\n", type_name);
+  return 0;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -424,6 +439,7 @@ void lje_addfuncs(lua_State* L) {
      */
     LJE_SET_FUNC("save_random_state", lje_random_save);
     LJE_SET_FUNC("restore_random_state", lje_random_restore);
+    LJE_SET_FUNC("remap_metatable", lje_remap_metatable);
   LJE_END_SECTION("env");
 
   /* util: unassorted utility functions */

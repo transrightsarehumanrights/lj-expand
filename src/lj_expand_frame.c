@@ -47,3 +47,25 @@ int lje_frame_is_lje_involved(lua_State* L, int frame_offset)
 
     return 0;
 }
+
+int lje_frame_is_lje(lua_State* L, int frame_offset)
+{
+    int size = 0;
+    LJEG()->show_special_frames = 1;
+    cTValue* frame = lj_debug_frame(L, frame_offset, &size); // Caller is frame 1
+    LJEG()->show_special_frames = 0;
+    if (frame == NULL)
+    {
+        return 0;
+    }
+
+    GCfunc* fn = frame_func(frame);
+    if (isluafunc(fn))
+    {
+        LJEproto* pt = protoextend(funcproto(fn));
+        if (pt->is_from_lje)
+            return 1;
+    }
+
+    return 0;
+}

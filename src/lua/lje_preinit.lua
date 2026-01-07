@@ -60,8 +60,15 @@ local function cloneMetaTable(name, base)
     -- link to cloned base metatable if exists
     if base then
         newMt.BaseMetaClass = base
+        -- Additionally we need to merge the base metatable functions
+        for k, v in pairs(base) do
+          if newMt[k] == nil then -- avoids overwriting important functions
+            newMt[k] = v
+          end
+        end
     end
 
+    newMt.__index = newMt
     return newMt
 end
 
@@ -75,6 +82,11 @@ safeEnv.cloned_mts["Angle"] = cloneMetaTable("Angle")
 safeEnv.cloned_mts["CUserCmd"] = cloneMetaTable("CUserCmd")
 safeEnv.cloned_mts["File"] = cloneMetaTable("File")
 safeEnv.cloned_mts["ConVar"] = cloneMetaTable("ConVar")
+
+for name, mt in pairs(safeEnv.cloned_mts) do
+  lje.con_print("Remapping metatable for " .. name)
+  lje.env.remap_metatable(name, mt)
+end
 
 safeEnv.cloned_basemts["string"] = cloneBaseMt(debug.getmetatable(""))
 safeEnv.insecure_mts = {}

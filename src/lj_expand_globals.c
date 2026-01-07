@@ -21,6 +21,7 @@ void lje_clear_global_refs() {
     LJEG()->env_ref_id = LUA_NOREF;
     LJEG()->push_string_ref_id = LUA_NOREF;
     LJEG()->script_hook_ref_id = LUA_NOREF;
+    memset(&LJEG()->metatable_remaps[0], 0, sizeof(LJEG()->metatable_remaps));
 }
 
 void lje_insert_spoof_record(GCfunc* spoof, GCfunc* target) {
@@ -83,4 +84,31 @@ void lje_clear_spoof_records() {
 void lje_set_random_state(LJERandomState* prev, LJERandomState* new)
 {
    return; // NO-OP for now
+}
+
+LJEMetatableRemap* lje_get_metatable_remap(const char* type_name)
+{
+    for (int i = 0; i < MAX_REMAP_TYPES; i++) {
+        if (LJEG()->metatable_remaps[i].type_name &&
+            strcmp(LJEG()->metatable_remaps[i].type_name, type_name) == 0) {
+            return &LJEG()->metatable_remaps[i];
+        }
+    }
+    return NULL;
+}
+
+void lje_set_metatable_remap(const char* type_name, GCtab* replacement)
+{
+    LJEMetatableRemap* remap = lje_get_metatable_remap(type_name);
+    if (remap) {
+        remap->replacement = replacement;
+    } else {
+        for (int i = 0; i < MAX_REMAP_TYPES; i++) {
+            if (LJEG()->metatable_remaps[i].type_name == NULL) {
+                LJEG()->metatable_remaps[i].type_name = type_name; /* string passed in is always a literal, so this is safe */
+                LJEG()->metatable_remaps[i].replacement = replacement;
+                break;
+            }
+        }
+    }
 }
