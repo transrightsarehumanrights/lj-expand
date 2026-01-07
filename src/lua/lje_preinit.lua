@@ -60,6 +60,12 @@ local function cloneMetaTable(name, base)
     -- link to cloned base metatable if exists
     if base then
         newMt.BaseMetaClass = base
+        -- Additionally we need to merge the base metatable functions
+        for k, v in pairs(base) do
+          if newMt[k] == nil then -- avoids overwriting important functions
+            newMt[k] = v
+          end
+        end
     end
 
     newMt.__index = newMt
