@@ -55,6 +55,7 @@ This prevents anti-cheat systems from detecting unauthorized code execution by m
 This is also implemented at the trace level to ensure JITed code works correctly with remapped metatables.
 
 # PRNG state isolation
+
 `math.random` and `math.randomseed` both use a new LJE-specific PRNG state, isolated from the global Lua state. This prevents anti-cheat systems from detecting unauthorized code execution by seeding the PRNG with known values
 and checking for unexpected random values. It is also implemented at the trace level to ensure JITed code uses the correct PRNG state.
 
