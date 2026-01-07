@@ -973,7 +973,6 @@ int lj_record_mm_lookup(jit_State *J, RecordIndex *ix, MMS mm)
         if (remap)
         {
           mt = remap->replacement;
-          printf("[LJE JIT]: Specialized metatable lookup in trace to remapped metatable for type '%s'\n", typeName);
         }
       }
     }
