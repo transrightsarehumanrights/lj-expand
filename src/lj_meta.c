@@ -60,10 +60,6 @@ cTValue *lj_meta_cache(GCtab *mt, MMS mm, GCstr *name)
 /* Lookup metamethod for object. */
 cTValue *lj_meta_lookup(lua_State *L, cTValue *o, MMS mm)
 {
-  /* LJE: Disable metatables globally, and *hopefully* for a vacuum of LJE code. */
-  if (LJEG()->disable_metatables)
-    return niltv(L);
-
   GCtab *mt;
   if (tvistab(o))
     mt = tabref(tabV(o)->metatable);

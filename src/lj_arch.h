@@ -487,7 +487,7 @@
 #if defined(LUAJIT_DISABLE_FFI) || defined(LJ_ARCH_NOFFI)
 #define LJ_HASFFI		0
 #else
-#define LJ_HASFFI		1
+#define LJ_HASFFI		0
 #endif
 
 #if defined(LUAJIT_DISABLE_PROFILE)
@@ -559,7 +559,7 @@
 
 /* Compatibility with Lua 5.1 vs. 5.2. */
 #ifdef LUAJIT_ENABLE_LUA52COMPAT
-#define LJ_52			1
+#define LJ_52			0
 #else
 #define LJ_52			0
 #endif
