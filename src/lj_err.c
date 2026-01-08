@@ -602,13 +602,87 @@ static ptrdiff_t finderrfunc(lua_State *L)
   return 0;
 }
 
+static void lje_debug_lua_frame_func(cTValue *frame)
+{
+  GCfunc* func = frame_func(frame);
+  if (isluafunc(func))
+    printf("[LJE] Lua function from: %s\n", proto_chunkname(funcproto(func)) ? proto_chunknamestr(funcproto(func)) : "unknown");
+  else
+    printf("[LJE] C function: %p\n", func);
+}
+
+static void lje_debug_frame(lua_State *L, cTValue *frame)
+{
+  switch (frame_typep(frame))
+  {
+  case FRAME_LUA:
+  case FRAME_LUAP:
+    printf("[LJE] Lua frame: %p\n", frame_func(frame));
+    printf("[LJE] Lua frame func type: %s\n", isluafunc(frame_func(frame)) ? "Lua" : "C");
+    lje_debug_lua_frame_func(frame);
+    const char* fname = "?";
+    const char *ftype = lj_debug_funcname(L, frame, &fname);
+    if (ftype)
+      printf("[LJE] Function name: %s (type: %s)\n", fname, ftype);
+    else
+      printf("[LJE] Function name: %s\n", fname);
+
+    break;
+  case FRAME_C:
+    printf("[LJE] C frame: %p\n", frame_func(frame));
+    break;
+  case FRAME_VARG:
+    printf("[LJE] Vararg frame: %p\n", frame_func(frame));
+    const char* fname_varg = "?";
+    const char *ftype_varg = lj_debug_funcname(L, frame, &fname_varg);
+    if (ftype_varg)
+      printf("[LJE] Function name: %s (type: %s)\n", fname_varg, ftype_varg);
+    else
+      printf("[LJE] Function name: %s\n", fname_varg);
+    break;
+  case FRAME_CONT:
+    printf("[LJE] Continuation frame: %p\n", frame_func(frame));
+    break;
+  case FRAME_CP:
+    printf("[LJE] Protected C frame: %p\n", frame_func(frame));
+    const char* fname_cp = "?";
+    const char *ftype_cp = lj_debug_funcname(L, frame, &fname_cp);
+    if (ftype_cp)
+      printf("[LJE] Function name: %s (type: %s)\n", fname_cp, ftype_cp);
+    else
+      printf("[LJE] Function name: %s\n", fname_cp);
+
+    break;
+  case FRAME_PCALL:
+    printf("[LJE] pcall frame: %p\n", frame_func(frame));
+    printf("[LJE] pcall frame func type: %s\n", isluafunc(frame_func(frame)) ? "Lua" : "C");
+    lje_debug_lua_frame_func(frame);
+    break;
+  case FRAME_PCALLH:
+    printf("[LJE] pcall (in hook) frame: %p\n", frame_func(frame));
+    break;
+  default:
+    printf("[LJE] Unknown frame type: %d\n", frame_typep(frame));
+    break;
+  }
+}
+
 char lje_find_pcall(lua_State* L)
 {
   cTValue* frame, *bot = tvref(L->stack) + LJ_FR2;
+  printf("[LJE] Traversing...\n");
+  int index = 0;
+
   for (frame = L->base - 1; frame > bot;)
   {
+    index++;
     if (frame_typep(frame) == FRAME_PCALL || frame_typep(frame) == FRAME_PCALLH)
     {
+      printf("[LJE] Found pcall frame in callstack.\n");
+      /* LJE: Determine if this pcall frame is protecting LJE code. If so, we need to figure out who is handling it before allowing
+       * usual unwinding.
+       */
+
       GCfunc* protected_func = frame_func(frame);
       if (isljefunc(protected_func))
       {
@@ -620,23 +694,34 @@ char lje_find_pcall(lua_State* L)
           /* LJE: The handler frame is not trusted. This could usually be caused by some foreign code pcalling a LJE function.
            * We cannot allow the error to propagate to untrusted code, as that would lead to detection.
            */
+          printf("[LJE] Found untrusted pcall handler frame. Blocking error from propagating to it.\n");
           return 0;
         } else
         {
           /* LJE: The handler frame is trusted LJE code. We can allow the error to be handled here. and not need to block it. */
+          printf("[LJE] Found trusted LJE pcall handler frame. Allowing error to propagate to it.\n");
           return 1;
         }
       }
     }
 
+    GCfunc* func = frame_func(frame);
+    if (func && isluafunc(func))
+      printf("[LJE] %d. Frame: %s\n", index, proto_chunkname(funcproto(func)) ? proto_chunknamestr(funcproto(func)) : "unknown");
+    else
+      printf("[LJE] %d. Frame: C function %p\n", index, func);
+
     if (frame_islua(frame))
     {
+      printf("[LJE] Traversing Lua frame.\n");
       frame = frame_prevl(frame);
     } else
     {
+      printf("[LJE] Traversing non-Lua frame.\n");
       frame = frame_prevd(frame);
     }
   }
+  printf("[LJE] Finished traversing callstack.\n");
 
   return 0;
 }
@@ -676,6 +761,8 @@ LJ_NOINLINE void lj_err_run(lua_State *L)
        * inherit this broken stack.
        */
       L->top = L->base;
+      if (LJ_FR2) setnilV(L->top++);
+
       lj_err_throw(L, LUA_OK);
     }
   }
