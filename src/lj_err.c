@@ -748,7 +748,6 @@ LJ_NOINLINE void lj_err_run(lua_State *L)
       TValue* traceback = L->top - 1;
       if (tvisstr(traceback))
         printf("%s\n", strdata(strV(traceback)));
-      L->top--;
 
       lj_trace_abort(G(L));
 
@@ -761,7 +760,12 @@ LJ_NOINLINE void lj_err_run(lua_State *L)
        * inherit this broken stack.
        */
       L->top = L->base;
-      if (LJ_FR2) setnilV(L->top++);
+      if (LJ_FR2) {
+        setnilV(L->top++);
+      }
+
+      L->top++;
+      setstrV(L, L->top - 1, lj_err_str(L, LJ_ERR_BADARG)); /* Random placeholder so that GMod-specific C Lua usage wont over-pop the stack */
 
       lj_err_throw(L, LUA_OK);
     }
