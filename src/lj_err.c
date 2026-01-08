@@ -9,6 +9,8 @@
 #include "lj_obj.h"
 #include "lj_err.h"
 #include "lj_debug.h"
+#include "lj_expand_frame.h"
+#include "lj_expand_globals.h"
 #include "lj_str.h"
 #include "lj_func.h"
 #include "lj_state.h"
@@ -604,6 +606,36 @@ static ptrdiff_t finderrfunc(lua_State *L)
 LJ_NOINLINE void lj_err_run(lua_State *L)
 {
   ptrdiff_t ef = finderrfunc(L);
+  /* LJE: Block any errors surfacing from LJE code. */
+  if (lje_frame_is_lje_involved(L, 0))
+  {
+    printf("[LJE] Detected runtime error from LJE code. Blocking error from reaching GMod.\n");
+    cTValue* potential_error_msg = L->top - 1;
+    if (tvisstr(potential_error_msg))
+      printf("[LJE] Error message: %s\n", strdata(strV(potential_error_msg)));
+
+    LJEG()->show_special_frames = 1;
+    luaL_traceback(L, L, "[LJE] stack traceback:", 1);
+    LJEG()->show_special_frames = 0;
+    TValue* traceback = L->top - 1;
+    if (tvisstr(traceback))
+      printf("%s\n", strdata(strV(traceback)));
+    L->top--;
+
+    /* Before we throw, we need to manually fix the stack since we arent causing an actual error to be thrown */
+    if (ef)
+    {
+      lj_trace_abort(G(L));
+
+      /* Clean the callstack */
+      L->base = tvref(L->stack) + 1 + LJ_FR2;  // Reset to bottom of stack
+      L->cframe = NULL;                        // Clear C frame chain
+      unwindstack(L, L->base);                 // Close upvalues and clean stack
+    }
+
+    lj_err_throw(L, LUA_OK);
+  }
+
   if (ef) {
     TValue *errfunc = restorestack(L, ef);
     TValue *top = L->top;
