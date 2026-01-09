@@ -1589,8 +1589,6 @@ GCproto *fs_finish(LexState *ls, BCLine line)
   /* LJE: Determine if we're currently compiling LJE */
   if (LJEG()->flag_lje_protos && LJEG()->main_state == ls->L)
   {
-    printf("[LJE]: Parsed proto marked as from LJE!\n");
-    printf("[LJE]: Chunkname: %s\n", strdata(ls->chunkname));
     lje_pt->is_from_lje = 1;
   }
 
