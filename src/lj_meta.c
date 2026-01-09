@@ -71,9 +71,20 @@ cTValue *lj_meta_lookup(lua_State *L, cTValue *o, MMS mm)
     /* LJE: Check if any LJE code has caused this lookup, and if so, remap the metatable if needed.
      * If there is no remap, we just want to cancel and block the metamethod lookup.
      */
-    if (LJEG()->main_state == L && cframe_raw(L->cframe) != NULL)
+    if (LJEG()->main_state == L)
     {
       GCfunc* curr_func = curr_func(L);
+      if (!isluafunc(curr_func(L)))
+      {
+        /* LJE: Sometimes, a C function can be doing the metamethod lookup on behalf of a Lua function (usually tostring).
+         * In that case, we need to get the caller function.
+         */
+        cTValue* bottom = tvref(L->stack)+LJ_FR2;
+        TValue* caller_frame = frame_prev(L->base - 1);
+        if (caller_frame && caller_frame > bottom)
+          curr_func = frame_func(caller_frame);
+      }
+
       if (isluafunc(curr_func))
       {
         LJEproto* pt = protoextend(funcproto(curr_func));
@@ -93,8 +104,9 @@ cTValue *lj_meta_lookup(lua_State *L, cTValue *o, MMS mm)
               /* LJE: Block metamethod lookup if no remap is found. */
               return niltv(L);
             }
-          } else
+          } else if (!lje_is_metatable_authorized(mt))
           {
+            lj_err_optype(L, o, LJ_ERR_LJE_UNAUTH);
             return niltv(L);
           }
         }
@@ -175,8 +187,25 @@ cTValue *lj_meta_tget(lua_State *L, cTValue *o, cTValue *k)
     if (LJ_LIKELY(tvistab(o))) {
       GCtab *t = tabV(o);
       cTValue *tv = lj_tab_get(L, t, k);
+      /* LJE: Handle the fast-path __index chain. Unfortunately... this
+       * kind of does slow down things a *tad* amount, but it's necessary for LJE.
+       */
+      GCtab* mt = tabref(t->metatable);
+      GCfunc* func = curr_func(L);
+      if (mt && isljefunc(func))
+      {
+        /* LJE: Remaps don't exist for table-based objects, so no need to check for that. All we need to do is the
+         * authentication check.
+         */
+        if (!lje_is_metatable_authorized(mt))
+        {
+          /* LJE: Block metamethod lookup if not authorized. */
+          lj_err_optype(L, o, LJ_ERR_LJE_UNAUTH);
+          return NULL;  /* unreachable */
+        }
+      }
       if (!tvisnil(tv) ||
-	  !(mo = lj_meta_fast(L, tabref(t->metatable), MM_index)))
+	  !(mo = lj_meta_fast(L, mt, MM_index)))
 	return tv;
     } else if (tvisnil(mo = lj_meta_lookup(L, o, MM_index))) {
       lj_err_optype(L, o, LJ_ERR_OPINDEX);

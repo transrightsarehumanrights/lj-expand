@@ -378,6 +378,15 @@ int lje_remap_metatable(lua_State* L)
   return 0;
 }
 
+int lje_lib_auth_metatable(lua_State* L)
+{
+  GCtab* metatable = lj_lib_checktab(L, 1);
+  lje_auth_metatable(metatable);
+  printf("[LJE] Authorized metatable %p\n", (void*)metatable);
+
+  return 0;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -440,6 +449,7 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("save_random_state", lje_random_save);
     LJE_SET_FUNC("restore_random_state", lje_random_restore);
     LJE_SET_FUNC("remap_metatable", lje_remap_metatable);
+    LJE_SET_FUNC("auth_metatable", lje_lib_auth_metatable);
   LJE_END_SECTION("env");
 
   /* util: unassorted utility functions */
