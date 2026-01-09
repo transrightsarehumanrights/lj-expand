@@ -468,9 +468,13 @@ typedef struct LJEproto
 
 #define FF_LUA		0
 #define FF_C		1
+#define protoextend(pt) \
+(LJEproto*)((char*)(pt) + (pt->sizept - sizeof(LJEproto)))
 #define isluafunc(fn)	((fn)->c.ffid == FF_LUA)
 #define iscfunc(fn)	((fn)->c.ffid == FF_C)
 #define isffunc(fn)	((fn)->c.ffid > FF_C)
+#define isljefunc(fn) \
+  (isluafunc(fn) && ((protoextend(funcproto(fn)))->is_from_lje))
 #define funcproto(fn) \
   check_exp(isluafunc(fn), (GCproto *)(mref((fn)->l.pc, char)-sizeof(GCproto)))
 #define funcextend(fn) \
@@ -482,8 +486,6 @@ typedef struct LJEproto
   if (isluafunc(fn) && funcspoof(fn)) { \
       fn = funcspoof(fn); \
   }
-#define protoextend(pt) \
-  (LJEproto*)((char*)(pt) + (pt->sizept - sizeof(LJEproto)))
 
 #define sizeCfunc(n)	(sizeof(GCfuncC)-sizeof(TValue)+sizeof(TValue)*(n))
 #define sizeLfunc(n)	((sizeof(GCfuncL)-sizeof(GCRef)+sizeof(GCRef)*(n)))

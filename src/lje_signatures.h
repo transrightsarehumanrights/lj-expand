@@ -41,3 +41,6 @@ SIGDEF(lj_cf_math_random, "48 89 5c 24 18 56 48 83 ec 40 48 8b 41 20 48 8b d9 48
 SIGDEF(lj_cf_math_randomseed, "40 53 48 83 ec 20 48 8b 41 20 48 8b 50 f0 48 b8 ff ff ff ff ff 7f 00 00")
 // Allows LJE code to get JITed but still use the alternate random state.
 SIGDEF(recff_math_random, "48 89 5c 24 10 48 89 6c 24 18 48 89 7c 24 20 41 56 48 83 ec 20 48 8b 81 90 00 00 00 41 b8 0c 00 00 00 48 8b f9 48 8b 58 30")
+
+// Allows LJE to block errors
+SIGDEF(lj_err_run, "48 89 5c 24 08 57 48 83 ec 20 4c 8b 49 38 48 8b f9 4c 8b 41 20")

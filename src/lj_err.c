@@ -9,6 +9,8 @@
 #include "lj_obj.h"
 #include "lj_err.h"
 #include "lj_debug.h"
+#include "lj_expand_frame.h"
+#include "lj_expand_globals.h"
 #include "lj_str.h"
 #include "lj_func.h"
 #include "lj_state.h"
@@ -600,10 +602,93 @@ static ptrdiff_t finderrfunc(lua_State *L)
   return 0;
 }
 
+char lje_find_pcall(lua_State* L)
+{
+  cTValue* frame, *bot = tvref(L->stack) + LJ_FR2;
+  for (frame = L->base - 1; frame > bot;)
+  {
+    if (frame_typep(frame) == FRAME_PCALL || frame_typep(frame) == FRAME_PCALLH)
+    {
+      /* LJE: Determine if this pcall frame is protecting LJE code. If so, we need to figure out who is handling it before allowing
+       * usual unwinding.
+       */
+
+      GCfunc* protected_func = frame_func(frame);
+      if (isljefunc(protected_func))
+      {
+        /* LJE: This is protected LJE code. We need to find the handler for it, which is located after the pcall's C frame. */
+        cTValue* pcall_cframe = frame_prev(frame);
+        cTValue* handler_frame = frame_prev(pcall_cframe);
+        if (!isljefunc(frame_func(handler_frame)))
+        {
+          /* LJE: The handler frame is not trusted. This could usually be caused by some foreign code pcalling a LJE function.
+           * We cannot allow the error to propagate to untrusted code, as that would lead to detection.
+           */
+          return 0;
+        } else
+        {
+          /* LJE: The handler frame is trusted LJE code. We can allow the error to be handled here. and not need to block it. */
+          return 1;
+        }
+      }
+    }
+
+    if (frame_islua(frame))
+    {
+      frame = frame_prevl(frame);
+    } else
+    {
+      frame = frame_prevd(frame);
+    }
+  }
+
+  return 0;
+}
+
 /* Runtime error. */
 LJ_NOINLINE void lj_err_run(lua_State *L)
 {
   ptrdiff_t ef = finderrfunc(L);
+  /* LJE: Block any errors surfacing from LJE code. */
+  if (lje_frame_is_lje_involved(L, 0))
+  {
+    /* LJE: However, we need to ensure that there is no LJE pcall expecting to handle it. */
+    char lje_pcall_found = lje_find_pcall(L);
+    if (!lje_pcall_found)
+    {
+      cTValue* potential_error_msg = L->top - 1;
+      if (tvisstr(potential_error_msg))
+        printf("[LJE ERROR] %s\n", strdata(strV(potential_error_msg)));
+
+      LJEG()->show_special_frames = 1;
+      luaL_traceback(L, L, NULL, 1);
+      LJEG()->show_special_frames = 0;
+      TValue* traceback = L->top - 1;
+      if (tvisstr(traceback))
+        printf("%s\n", strdata(strV(traceback)));
+
+      lj_trace_abort(G(L));
+
+      /* Clean the callstack */
+      L->base = tvref(L->stack) + 1 + LJ_FR2;  // Reset to bottom of stack
+      L->cframe = NULL;                        // Clear C frame chain
+      unwindstack(L, L->base);                 // Close upvalues and clean stack
+
+      /* Before leaving, we also need to clear the stack too. Coroutines can sometimes
+       * inherit this broken stack.
+       */
+      L->top = L->base;
+      if (LJ_FR2) {
+        setnilV(L->top++);
+      }
+
+      L->top++;
+      setstrV(L, L->top - 1, lj_err_str(L, LJ_ERR_BADARG)); /* Random placeholder so that GMod-specific C Lua usage wont over-pop the stack */
+
+      lj_err_throw(L, LUA_OK);
+    }
+  }
+
   if (ef) {
     TValue *errfunc = restorestack(L, ef);
     TValue *top = L->top;
