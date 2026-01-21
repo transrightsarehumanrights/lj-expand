@@ -225,6 +225,15 @@ cTValue *lj_meta_tget(lua_State *L, cTValue *o, cTValue *k)
       return NULL;  /* unreachable */
     }
     if (tvisfunc(mo)) {
+      /* LJE: This caused a huuuge bug that took weeks to track down.
+       * LuaJIT performs **raw** pointer comparisons with the jump targets
+       * stored in any continuation frame since they're very specific and ephemeral
+       * things. However, since we patch certain functions (TGETS to call our version), **anything** that
+       * makes a continuation frame like this one will have the wrong pointer if we don't fix it here.
+       *
+       * So any patched function that makes a continuation frame MUST use GMod's lj_cont_* function, not LJE's, or it will
+       * crash very randomly in any place that does metamethod lookups.
+       */
       L->top = mmcall(L, (ASMFunction)gmod_lj_cont_ra, mo, o, k);
       return NULL;  /* Trigger metamethod call. */
     }
