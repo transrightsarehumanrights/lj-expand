@@ -329,11 +329,14 @@ int dasm_link(Dst_DECL, size_t *szp)
 	  pos += 2;
 	  break;
 	}
+	  /* fallthrough */
 	case DASM_SPACE: case DASM_IMM_LG: case DASM_VREG: p++;
+	  /* fallthrough */
 	case DASM_DISP: case DASM_IMM_S: case DASM_IMM_B: case DASM_IMM_W:
 	case DASM_IMM_D: case DASM_IMM_WB: case DASM_IMM_DB:
 	case DASM_SETLABEL: case DASM_REL_A: case DASM_IMM_PC: pos++; break;
 	case DASM_LABEL_LG: p++;
+	  /* fallthrough */
 	case DASM_LABEL_PC: b[pos++] += ofs; break; /* Fix label offset. */
 	case DASM_ALIGN: ofs -= (b[pos++]+ofs)&*p++; break; /* Adjust ofs. */
 	case DASM_EXTERN: p += 2; break;
@@ -432,6 +435,7 @@ int dasm_encode(Dst_DECL, void *buffer)
 	}
 	case DASM_IMM_LG:
 	  p++; if (n < 0) { n = (int)(ptrdiff_t)D->globals[-n]; goto wd; }
+	  /* fallthrough */
 	case DASM_IMM_PC: {
 	  int *pb = DASM_POS2PTR(D, n);
 	  n = *pb < 0 ? pb[1] : (*pb + (int)(ptrdiff_t)base);
@@ -452,6 +456,7 @@ int dasm_encode(Dst_DECL, void *buffer)
 	case DASM_EXTERN: n = DASM_EXTERN(Dst, cp, p[1], *p); p += 2; goto wd;
 	case DASM_MARK: mark = cp; break;
 	case DASM_ESC: action = *p++;
+	  /* fallthrough */
 	default: *cp++ = action; break;
 	case DASM_SECTION: case DASM_STOP: goto stop;
 	}

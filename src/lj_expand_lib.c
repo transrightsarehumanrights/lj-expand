@@ -258,6 +258,7 @@ int lje_patch_bytecodes(lua_State* L)
    * patch this to our own version that blocks metatable
    * lookups when LJE is involved and/or remaps are set.
    */
+
   lje_patch_bytecode(gg, BC_TGETS);
 
   return 0;

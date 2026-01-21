@@ -1382,6 +1382,23 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
       printf("[LJE] LJE loaded successfully!\n");
       printf("[LJE] lua_shared.dll found at %p\n", mod->base);
 
+      printf("sizeof(jit_State): %llu\n", sizeof(jit_State));
+      printf("GG_LEN_DDISP = %d\n", GG_LEN_DDISP);
+      printf("BC_TGETS = %d\n", BC_TGETS);
+      printf("GG_LEN_DDISP + BC_TGETS = %d\n", GG_LEN_DDISP + BC_TGETS);
+      printf("sizeof(RecordIndex) = %zu\n", sizeof(RecordIndex));
+      printf("offsetof(RecordIndex, tab) = %zu\n", offsetof(RecordIndex, tab));
+      printf("offsetof(RecordIndex, tabv) = %zu\n", offsetof(RecordIndex, tabv));
+      printf("offsetof(RecordIndex, key) = %zu\n", offsetof(RecordIndex, key));
+      printf("offsetof(RecordIndex, keyv) = %zu\n", offsetof(RecordIndex, keyv));
+      printf("offsetof(RecordIndex, val) = %zu\n", offsetof(RecordIndex, val));
+      printf("offsetof(RecordIndex, valv) = %zu\n", offsetof(RecordIndex, valv));
+      printf("offsetof(RecordIndex, mobjv) = %zu\n", offsetof(RecordIndex, mobjv));
+      printf("offsetof(RecordIndex, mobj) = %zu\n", offsetof(RecordIndex, mobj));
+      printf("offsetof(RecordIndex, mt) = %zu\n", offsetof(RecordIndex, mt));
+      printf("offsetof(RecordIndex, oldv) = %zu\n", offsetof(RecordIndex, oldv));
+      printf("offsetof(RecordIndex, idxchain) = %zu\n", offsetof(RecordIndex, idxchain));
+      printf("lj_cont_ra address in LJE: %p\n", lj_cont_ra);
       // Remap all the necessary functions to our own.
 #define SIGDEF(name, _) lje_remap(mod, name)
 #include "lje_signatures.h"
