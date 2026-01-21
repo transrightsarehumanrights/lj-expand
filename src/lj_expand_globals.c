@@ -22,6 +22,8 @@ void lje_clear_global_refs() {
     LJEG()->push_string_ref_id = LUA_NOREF;
     LJEG()->script_hook_ref_id = LUA_NOREF;
     memset(&LJEG()->metatable_remaps[0], 0, sizeof(LJEG()->metatable_remaps));
+    memset(&LJEG()->auth_metatables[0], 0, sizeof(LJEG()->auth_metatables));
+    LJEG()->auth_metatable_count = 0;
 }
 
 void lje_insert_spoof_record(GCfunc* spoof, GCfunc* target) {
@@ -111,4 +113,21 @@ void lje_set_metatable_remap(const char* type_name, GCtab* replacement)
             }
         }
     }
+}
+
+void lje_auth_metatable(GCtab* mt)
+{
+    if (LJEG()->auth_metatable_count < MAX_AUTH_METATABLES) {
+        LJEG()->auth_metatables[LJEG()->auth_metatable_count++] = mt;
+    }
+}
+
+int lje_is_metatable_authorized(GCtab* mt)
+{
+    for (size_t i = 0; i < LJEG()->auth_metatable_count; i++) {
+        if (LJEG()->auth_metatables[i] == mt) {
+            return 1;
+        }
+    }
+    return 0;
 }

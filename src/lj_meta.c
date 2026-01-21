@@ -24,6 +24,7 @@
 #include "lj_strfmt.h"
 #include "lj_lib.h"
 #include "lj_expand_globals.h"
+#include "lj_expand_module.h"
 
 /* -- Metamethod handling ------------------------------------------------- */
 
@@ -71,9 +72,20 @@ cTValue *lj_meta_lookup(lua_State *L, cTValue *o, MMS mm)
     /* LJE: Check if any LJE code has caused this lookup, and if so, remap the metatable if needed.
      * If there is no remap, we just want to cancel and block the metamethod lookup.
      */
-    if (LJEG()->main_state == L && cframe_raw(L->cframe) != NULL)
+    if (LJEG()->main_state == L)
     {
       GCfunc* curr_func = curr_func(L);
+      if (!isluafunc(curr_func(L)))
+      {
+        /* LJE: Sometimes, a C function can be doing the metamethod lookup on behalf of a Lua function (usually tostring).
+         * In that case, we need to get the caller function.
+         */
+        cTValue* bottom = tvref(L->stack)+LJ_FR2;
+        TValue* caller_frame = frame_prev(L->base - 1);
+        if (caller_frame && caller_frame > bottom)
+          curr_func = frame_func(caller_frame);
+      }
+
       if (isluafunc(curr_func))
       {
         LJEproto* pt = protoextend(funcproto(curr_func));
@@ -93,8 +105,9 @@ cTValue *lj_meta_lookup(lua_State *L, cTValue *o, MMS mm)
               /* LJE: Block metamethod lookup if no remap is found. */
               return niltv(L);
             }
-          } else
+          } else if (!lje_is_metatable_authorized(mt))
           {
+            lj_err_optype(L, o, LJ_ERR_LJE_UNAUTH);
             return niltv(L);
           }
         }
@@ -166,24 +179,62 @@ static TValue *mmcall(lua_State *L, ASMFunction cont, cTValue *mo,
 
 /* -- C helpers for some instructions, called from assembler VM ----------- */
 
+static void* gmod_lj_cont_ra = NULL;
 /* Helper for TGET*. __index chain and metamethod. */
 cTValue *lj_meta_tget(lua_State *L, cTValue *o, cTValue *k)
 {
+  /* Check if we need to initialize gmod_lj_cont_ra */
+  if (!gmod_lj_cont_ra)
+  {
+    /* 0f b6 4e fd 48 8b 28 48 89 2c ca 8b 06 0f b6 cc 0f b6 e8 48 83 c6 04 */
+    lje_Module* mod = lje_module_find("lua_shared.dll");
+    if (mod)
+    {
+      gmod_lj_cont_ra = lje_module_scan(mod, "0f b6 4e fd 48 8b 28 48 89 2c ca 8b 06 0f b6 cc 0f b6 e8 48 83 c6 04");
+    }
+  }
+
   int loop;
   for (loop = 0; loop < LJ_MAX_IDXCHAIN; loop++) {
     cTValue *mo;
     if (LJ_LIKELY(tvistab(o))) {
       GCtab *t = tabV(o);
       cTValue *tv = lj_tab_get(L, t, k);
+      /* LJE: Handle the fast-path __index chain. Unfortunately... this
+       * kind of does slow down things a *tad* amount, but it's necessary for LJE.
+       */
+      GCtab* mt = tabref(t->metatable);
+      GCfunc* func = curr_func(L);
+      if (mt && isljefunc(func))
+      {
+        /* LJE: Remaps don't exist for table-based objects, so no need to check for that. All we need to do is the
+         * authentication check.
+         */
+        if (!lje_is_metatable_authorized(mt))
+        {
+          /* LJE: Block metamethod lookup if not authorized. */
+          lj_err_optype(L, o, LJ_ERR_LJE_UNAUTH);
+          return NULL;  /* unreachable */
+        }
+      }
       if (!tvisnil(tv) ||
-	  !(mo = lj_meta_fast(L, tabref(t->metatable), MM_index)))
+	  !(mo = lj_meta_fast(L, mt, MM_index)))
 	return tv;
     } else if (tvisnil(mo = lj_meta_lookup(L, o, MM_index))) {
       lj_err_optype(L, o, LJ_ERR_OPINDEX);
       return NULL;  /* unreachable */
     }
     if (tvisfunc(mo)) {
-      L->top = mmcall(L, lj_cont_ra, mo, o, k);
+      /* LJE: This caused a huuuge bug that took weeks to track down.
+       * LuaJIT performs **raw** pointer comparisons with the jump targets
+       * stored in any continuation frame since they're very specific and ephemeral
+       * things. However, since we patch certain functions (TGETS to call our version), **anything** that
+       * makes a continuation frame like this one will have the wrong pointer if we don't fix it here.
+       *
+       * So any patched function that makes a continuation frame MUST use GMod's lj_cont_* function, not LJE's, or it will
+       * crash very randomly in any place that does metamethod lookups.
+       */
+      L->top = mmcall(L, (ASMFunction)gmod_lj_cont_ra, mo, o, k);
       return NULL;  /* Trigger metamethod call. */
     }
     o = mo;

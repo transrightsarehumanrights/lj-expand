@@ -183,6 +183,7 @@ ERRDEF(FFI_NYIPACKBIT,	"NYI: packed bit fields")
 ERRDEF(FFI_NYICALL,	"NYI: cannot call this C function (yet)")
 #endif
 
+ERRDEF(LJE_UNAUTH, "access untrusted metatable by")
 #undef ERRDEF
 
 /* Detecting unused error messages:

@@ -661,7 +661,7 @@ LJ_NOINLINE void lj_err_run(lua_State *L)
         printf("[LJE ERROR] %s\n", strdata(strV(potential_error_msg)));
 
       LJEG()->show_special_frames = 1;
-      luaL_traceback(L, L, NULL, 1);
+      luaL_traceback(L, L, NULL, 0);
       LJEG()->show_special_frames = 0;
       TValue* traceback = L->top - 1;
       if (tvisstr(traceback))
