@@ -278,7 +278,7 @@ int lje_get_current_script(lua_State* L)
 
 int lje_is_lua_involved(lua_State* L)
 {
-  int frame_offset = luaL_optinteger(L, 1, 0);
+  int frame_offset = luaL_optinteger(L, 1, 1);
   if (lje_frame_is_lua_involved(L, frame_offset))
   {
     lua_pushboolean(L, 1);
