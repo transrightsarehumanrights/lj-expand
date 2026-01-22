@@ -14,7 +14,7 @@ The only differences are:
 - `lje` table: This table contains all LJE-specific functionality, such as environment management, logging, and utility functions.
 - `_L` table: This is a circular reference *back* to the scripting environment.
 - `_G` table: This is a reference to the actual GMod global environment, useful for detouring or accessing global functions directly.
-- No Lua-based API functions included: LJE does not include any Lua-based API functions (e.g., `hook.Add`, `timer.Create`, etc.) in the scripting environment. This is to prevent easy detection of LJE via these functions.
+- No Lua-based API functions included: LJE does not include any Lua-based API functions (e.g., `hook.Add`, `file.Read`, etc.) in the scripting environment. This is to prevent easy detection of LJE via these functions.
 
 Otherwise, everything else is identical and the entire C-based API is available as normal.
 You can monkeypatch/share global functions and variables, and other scripts will see the changes.
@@ -65,24 +65,33 @@ This allows scripts to share functionality and build upon each other like GMod a
 
 # Writing safe scripts
 
-When writing scripts for LJE, it is important to consider the following best practices to ensure compatibility and safety:
-- Wrap runtime code in `lje.hooks.disable` and `lje.hooks.enable` to avoid detection via debug hooks.
-- Avoid modifying global state unless absolutely necessary.
-- Use `lje.env.save_random_state()` and `lje.env.restore_random_state()` when using `math.random` to avoid PRNG state detection.
-- Test scripts thoroughly to ensure they do not cause instability or detection issues.
-- If you are writing code that operates with *objects*, use metatable copies in `cloned_mts` and *do not* use `object:method()` syntax sugar. Instead, use `cloned_mts.type.method(object, ...)` syntax to avoid metatable detection.
-- To ensure greater metatable safety, consider using `lje.env.disable_metatables()` and `lje.env.enable_metatables()` around code that interacts with tables/userdata that may have custom metatables.
+LJE is advanced enough to make most code undetectable by default, but there are still some pitfalls to avoid when writing scripts.
+- Don't call arbitrary Lua functions from LJE code, as they may be able to inspect the call stack or trigger a flag to ban you.
+- Avoid detouring random functions unless absolutely necessary, as this increases the attack surface for detection.
+- Be cautious when interacting with foreign code (e.g: a custom hook.Add detour that calls user hooks)
+  - This does not always lead to detection, but it increases the risk.
+  - Additionally, foreign code can create unexpected assumptions for your code, leading to errors.
+- Always test your scripts thoroughly in a replica of the target environment to ensure they are undetectable.
 
-Note that all entrypoint code is automatically wrapped in `lje.hooks.disable` and `lje.hooks.enable`, so you do not need to do this manually in `main.lua` or `preinit.lua`.
-The random state is also automatically saved and restored around entrypoint code.
+## Errors
 
-## Writing safe detours
+Errors are a big part of detection. Anticheats can use the native error reporting system to log any suspicious errors that occur during execution.
+They can also wrap functions in pcall/xpcall to catch errors and inspect them for suspicious content.
 
-When writing detours for functions, it is important to ensure that the detour is as undetectable as possible.
-This is typically very simple if you wrap your detour code in `lje.hooks.disable` and `lje.hooks.enable`, as this will prevent debug hooks from seeing the detour.
-Additionally, spoofing makes it even more difficult to detect detours at face value.
+LJE automatically sinks any unhandled LJE errors to avoid this. Additionally (and quite helpfully), LJE automatically
+determines if there is a foreign pcall/xpcall in the call stack, and if so, it will sink the error to avoid detection.
+Any LJE pcall or xpcall will behave as normal.
 
-Here is a simple detour that is detectable:
+All errors are logged to the LJE console for debugging purposes. Code should still strive to avoid errors as much as possible, as they can potentially be used to fingerprint detour behavior or other LJE-specific code paths,
+leading to detection. Any LJE error that happens to surface to foreign code is a potential detection vector since any foreign code above LJE will terminate abnormally, which may or may not get
+detected by anti-cheat systems. However, any LJE error which happens entirely within LJE code is not a detection vector, as it is fully contained within LJE.
+
+As of writing, any C-handled errors tend to be unstable as LJE's error handling mechanism is inherently quite contrary to Lua's normal error handling model. Most issues are fixed,
+but some edge cases remain, such as unhandled LJE errors in simple timers leading to a Lua stack leak. Do note, even in these edge cases, detection is still avoided, but stability may be compromised.
+
+## Writing detours
+
+Here is a simple detour that is undetectable in LJE:
 ```lua
 _G.blah = lje.detour(_G.blah, function(...)
     print("Detoured!")
@@ -90,44 +99,30 @@ _G.blah = lje.detour(_G.blah, function(...)
 end)
 ```
 
-This is how you would write it safely with LJE:
+The entire point of LJE is to make it so that simple code is undetectable, and you can keep writing your idioms and patterns as normal.
+Things like function calls or metatable accesses are automatically remapped or silenced to avoid detection.
+
+Of course, any kind of introspection done by foreign code is *fundamentally* blocked. It is basically impossible for foreign code to
+detect LJE code using any introspection facility. That being said, very advanced anti-cheat systems may still be able to detect LJE code via side-channels or timing attacks.
+
+It's for this reason that writing LJE code should still be done with care, and you should avoid doing anything that involves heavy interaction with foreign code as much as possible.
+For example, *never* call an arbitrary Lua function from LJE code, barring detours, as that function may be able to inspect the call stack or trigger a flag to ban you.
+
+Detouring a metatable should be done as follows:
 ```lua
-local original_blah = _G.blah
-_G.blah = lje.detour(original_blah, function(...)
-    lje.hooks.disable()
-    print("Detoured!")
-    lje.hooks.enable()
-    return original_blah(...) -- This is safe!
-end)
-```
-
-Callers cannot access your detour frame's locals or upvalues, and debug hooks will not see the detour at all. Additionally, it wont even
-be present in `debug.getinfo` calls or tracebacks, making it very difficult to detect.
-
-If you are using object methods, ensure you use the correct syntax to avoid metatable detection:
-```lua
-local P = cloned_mts.Player -- Shorthand
-local original_SetHealth = P.SetHealth
-
-FindMetaTable("Player").SetHealth = lje.detour(original_SetHealth, function(self, health)
-    lje.hooks.disable()
+local playerMetaTable = FindMetaTable("Player")
+playerMetaTable.SetHealth = lje.detour(playerMetaTable.SetHealth, function(self, health)
     lje.con_printf("Setting health to $red{%d}", health)
-    lje.hooks.enable()
-    return original_SetHealth(self, health) -- Safe!
+    return self:SetHealth(health)
 end)
 ```
 
-If you do anything else with the object, use `lje.env.disable_metatables()` and `lje.env.enable_metatables()` around the code to avoid any potential  metatable detection as well.
-And, for math.random, use PRNG state capture functions if necessary.
+It is possible to continue using the `:` syntax sugar here, because LJE automatically remaps metatable accesses to known-good metatables in `cloned_mts`.
+It also means you don't need to store the original function yourself, as LJE handles that internally for **known-good** metatables. These are simply
+just pre-init copies of the metatables that LJE knows about at that time, which are most of the base GMod metatables.
 
-```lua
---- ... detour code ...
-lje.env.save_random_state()
-math.randomseed(os.time())
-local rand = math.random(1, 100)
--- do something with rand
-lje.env.restore_random_state()
-```
+Random number generation can be freely used no matter where, as LJE automatically isolates the PRNG state for you.
+
 
 # API Reference
 
@@ -140,7 +135,7 @@ The `lje` table contains all LJE-specific functionality for scripts.
 - (lua) `lje.con_printf(format: string, ...)`: Prints a formatted message to the LJE console with LJE formatting. You can wrap text in color tags like `$red{this is red}`.
 - (lua) `lje.detour(original: function, detour: function) -> function`: Detours a function. The detour function should call the original function as needed. Returns the detoured function.
 - (lua) `lje.require(path: string) -> any`: Requires a Lua module from the script's folder. The difference between this and `lje.include` is that `lje.require` caches the module, so subsequent calls to `lje.require` with the same path will return the cached module instead of reloading it.
-- (lua) `cloned_mts`: A table containing copies of known good metatables for various object types. This is useful for interacting with objects without triggering metatable-based detections.
+- (lua) `cloned_mts`: A table containing copies of known good metatables for various object types.
 
 ## `func` API
 
