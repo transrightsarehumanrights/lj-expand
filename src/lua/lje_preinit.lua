@@ -82,6 +82,8 @@ safeEnv.cloned_mts["Angle"] = cloneMetaTable("Angle")
 safeEnv.cloned_mts["CUserCmd"] = cloneMetaTable("CUserCmd")
 safeEnv.cloned_mts["File"] = cloneMetaTable("File")
 safeEnv.cloned_mts["ConVar"] = cloneMetaTable("ConVar")
+safeEnv.cloned_mts["VMatrix"] = cloneMetaTable("VMatrix")
+safeEnv.cloned_mts["Weapon"] = cloneMetaTable("Weapon", safeEnv.cloned_mts["Entity"])
 
 for name, mt in pairs(safeEnv.cloned_mts) do
   lje.con_print("Remapping metatable for " .. name)
