@@ -156,13 +156,13 @@ local ANSI_COLORS = {
 local COLOR_PATTERN = "%$(%a+)(%b{})"
 safeEnv.lje.con_printf = function(fmt, ...)
   -- First, replace color codes
-  local coloredFmt = string.gsub(fmt, COLOR_PATTERN, function(colorName, text)
+  local result = string.format(fmt, ...)
+  local coloredResult = string.gsub(result, COLOR_PATTERN, function(colorName, text)
     local colorCode = ANSI_COLORS[string.lower(colorName)] or ANSI_COLORS["default"]
     return "\x1b[" .. colorCode .. string.sub(text, 2, -2) .. "\x1b[0m" -- remove braces
   end)
 
-  local result = string.format(coloredFmt, ...)
-  lje.con_print(result .. "\x1b[0m") -- Reset color at the end
+  lje.con_print(coloredResult .. "\x1b[0m") -- Reset color at the end
 end
 
 setfenv(safeEnv.lje.con_printf, safeEnv)

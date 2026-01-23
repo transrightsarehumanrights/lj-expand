@@ -453,6 +453,20 @@ int lje_set_engine_call_hook(lua_State* L)
   return 0;
 }
 
+int lje_compile_string(lua_State* L)
+{
+  const char* script = luaL_checkstring(L, 1);
+  if (!script)
+  {
+    lj_err_arg(L, 1, LJ_ERR_NOVAL);
+  }
+
+  if (!lje_startup_compile(L, script))
+    lua_pushnil(L);
+
+  return 1; // Return compiled function
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -482,6 +496,7 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("spoof", lje_spoof_debug_info);
     LJE_SET_FUNC("is_spoofed", lje_is_function_spoofed);
     LJE_SET_FUNC("mark_special", lje_mark_special);
+    LJE_SET_FUNC("compile", lje_compile_string);
   LJE_END_SECTION("func");
 
   /* hooks: anything to do particularly with LuaJIT's debug hook functionality */

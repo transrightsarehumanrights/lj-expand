@@ -1252,13 +1252,13 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
           lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->engine_call_hook_ref_id);
           lua_pushinteger(L, nargs);
           lua_pushinteger(L, nresults);
-          for (int i = 0; i < nargs; i++)
+          for (int i = 0; i < nargs + 1; i++)
           {
             lua_pushvalue(L, 2 + i); // push each argument
           }
 
           /* we can't use lua_pcall again since it'd re-enter this function.. so we have to do it manually */
-          int status = lj_vm_pcall(L, api_call_base(L, nargs + 2), LUA_MULTRET+1, 0);
+          int status = lj_vm_pcall(L, api_call_base(L, nargs + 2 + 1), LUA_MULTRET+1, 0);
           if (status != LUA_OK)
           {
             printf("[LJE ERROR] Error in engine call hook: %s\n", lua_tostring(L, -1));

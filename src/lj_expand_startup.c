@@ -44,7 +44,8 @@ static int resolve_original_functions(luaL_loadbufferx_t* out_loadbufferx, lua_p
     if (mod)
     {
         *out_loadbufferx = (luaL_loadbufferx_t)lje_module_get_func(mod, "luaL_loadbufferx");
-        *out_pcall = (lua_pcall_t)lje_module_get_func(mod, "lua_pcall");
+        if (out_pcall)
+            *out_pcall = (lua_pcall_t)lje_module_get_func(mod, "lua_pcall");
 
         return 1;
     }
@@ -220,4 +221,33 @@ void lje_startup_preinit(lua_State* L) {
     }
 
     return;
+}
+
+int lje_startup_compile(lua_State* L, const char* source) {
+    luaL_loadbufferx_t original_loadbufferx = NULL;
+    if (!resolve_original_functions(&original_loadbufferx, NULL))
+    {
+        printf("[LJE] Failed to resolve original startup functions necessary...\n");
+        return 0;
+    }
+
+    LJEG()->flag_lje_protos = 1;
+    if (original_loadbufferx(L, source, strlen(source), "@lje_dynamic_compile", NULL) == 0)
+    {
+        LJEG()->flag_lje_protos = 0;
+        // Mark it as a special function first
+        GCfunc* func = funcV(L->top-1);
+        LJEfunc* ljeFn = funcextend(func); // guaranteed to exist since it's a Lua function
+        ljeFn->is_special = 1;
+
+        return 1; // success, function is on top of stack
+    }
+    else
+    {
+        LJEG()->flag_lje_protos = 0;
+        printf("[LJE ERROR] Error compiling dynamic script: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1); // Pop error message
+    }
+
+    return 0;
 }
