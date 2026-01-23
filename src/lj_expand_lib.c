@@ -464,6 +464,16 @@ int lje_compile_string(lua_State* L)
   if (!lje_startup_compile(L, script))
     lua_pushnil(L);
 
+  if (!lua_isnil(L, -1))
+  {
+    /* Set the environment if it exists */
+    if (LJEG()->env_ref_id != LUA_NOREF)
+    {
+      lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
+      lua_setfenv(L, -2);
+    }
+  }
+
   return 1; // Return compiled function
 }
 
