@@ -167,6 +167,25 @@ end
 
 setfenv(safeEnv.lje.con_printf, safeEnv)
 
+safeEnv.lje.get_global = function(path)
+    -- Basically just a wrapper over rawget to traverse global tables safely
+    -- So given concommand.Run it's gonna rawget concommand, then rawget Run
+    local current = _G
+    for part in string.gmatch(path, "[^%.]+") do
+        if type(current) ~= "table" then
+            return nil
+        end
+        current = rawget(current, part)
+        if current == nil then
+            return nil
+        end
+    end
+
+    return current
+end
+
+setfenv(safeEnv.lje.get_global, safeEnv)
+
 local engineCallHooks = {}
 safeEnv.lje.vm.add_engine_call_hook = function(fn)
   table.insert(engineCallHooks, fn)
