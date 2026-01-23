@@ -1148,6 +1148,31 @@ LUA_API void lua_call(lua_State *L, int nargs, int nresults)
   lj_vm_call(L, api_call_base(L, nargs), nresults+1);
 }
 
+static void lje_dump_stack(lua_State* L)
+{
+  /* Really simple stack dump for debugging purposes. */
+  /* It prints out a visual like this:
+   * [function][number][number][string]
+   * ----------------------------^ = L->top
+   */
+
+  int top = lua_gettop(L);
+  int chars_printed = 0;
+  printf("[LJE STACK DUMP] Stack (top=%d):", top);
+  chars_printed += strlen("[LJE STACK DUMP] Stack (top=XX):");
+  for (int i = 1; i <= top; i++)
+  {
+    int t = lua_type(L, i);
+    const char* tname = lua_typename(L, t);
+    printf("[%s]", tname);
+    chars_printed += (int)(strlen(tname) + 2); // +2 for the brackets
+  }
+  printf("\n");
+  for (int i = 0; i < chars_printed - 8; i++)
+    printf("-");
+  printf("^ = L->top\n");
+}
+
 LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 {
   if (tvisfunc(L->base) && LJEG()->waiting_for_init_call)
@@ -1176,6 +1201,131 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 
     // Reset GC total. Might cause some hiccups. Oh well!
     G(L)->gc.total = LJEG()->original_gc - 1971; // 1971 bytes is about how much we consume during setup and init.
+  }
+
+  /* LJE: Determine if this is an engine call. */
+  if (tvisfunc(L->base) && L == LJEG()->main_state)
+  {
+    GCfunc* f = funcV(L->base);
+    char is_adv_error_reporter = iscfunc(f) ? f->c.f == LJEG()->adv_error_reporter : 0;
+
+    if (is_adv_error_reporter)
+    {
+      /* Means the real function is just above this in the stack. */
+      cTValue* real_func = L->base + 1;
+      if (tvisfunc(real_func))
+      {
+        /* LJE: Call our engine hook, if we have one. */
+        if (LJEG()->engine_call_hook_ref_id != LUA_NOREF)
+        {
+          TValue leftovers[16] = {0}; // to store any leftover args that the engine might have pushed that aren't in nargs
+          int leftover_count = 0;
+          int total_args = nargs; // error reporter, function, args... (function is a part of nargs)
+          if (lua_gettop(L) - 1 > total_args)
+          {
+            // we have leftovers
+            leftover_count = (lua_gettop(L) - 1) - total_args;
+            if (leftover_count > 16)
+            {
+              printf("[LJE WARNING] Too many leftover engine call arguments (%d), max is 16, truncating!\n", leftover_count);
+              leftover_count = 16;
+            }
+
+            for (int i = 0; i < leftover_count; i++)
+            {
+              copyTV(L, &leftovers[i], L->base + 1 + total_args + i);
+            }
+            /* it's way too annoying to try to remove them here, we'll just leave it be for now and composite it on later. */
+          }
+
+          /* LJE: Engine hooks expect these arguments:
+           * 1. number of arguments
+           * 2. results needed
+           * 3... followed by the arguments, the real function being the first argument.
+           *
+           * Additionally, it returns a single boolean, true to continue the call, false to abort.
+           * In the false case, we expect it returns the necessary results on the stack to spoof the call.
+           * So brace yourself.. it's quite complicated.
+           */
+
+          int lje_hook_base = lua_gettop(L) + 1; // base where LJE hook results will start
+          lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->engine_call_hook_ref_id);
+          lua_pushinteger(L, nargs);
+          lua_pushinteger(L, nresults);
+          for (int i = 0; i < nargs; i++)
+          {
+            lua_pushvalue(L, 2 + i); // push each argument
+          }
+
+          /* we can't use lua_pcall again since it'd re-enter this function.. so we have to do it manually */
+          int status = lj_vm_pcall(L, api_call_base(L, nargs + 2), LUA_MULTRET+1, 0);
+          if (status != LUA_OK)
+          {
+            printf("[LJE ERROR] Error in engine call hook: %s\n", lua_tostring(L, -1));
+            lua_pop(L, 1); // pop error
+            return status; // at this point, we can't lie, we have to return the error.
+          }
+
+          /* check if we should continue, the continue boolean is the first result returned, so after pcall it should be the lje hook base */
+          int continue_call = lua_toboolean(L, lje_hook_base);
+          lua_remove(L, lje_hook_base); // remove the first return value (the boolean), rest shift down
+
+          if (!continue_call)
+          {
+            /* LJE: The hook has decided to abort the call.
+             * It should have the spoofed results on the stack.
+             * All we need to do now is just leave said results on the stack, at this point
+             * the error reporter, function and args are all still on the stack.
+             *
+             * visual:
+             * L->base ................................................................ L->top
+             * [error reporter][function][arg1][arg2]...[argN] | [result1][result2]...[resultM]
+             * ------------------------------------------------^ = LJE results begin here
+             */
+
+            int result_count = lua_gettop(L) - (lje_hook_base - 1); // total results returned by hook
+            // Move the results down to overwrite the function and args.
+            // However, the engine might push an extra data item, and not include it in nargs, so it expects that to
+            // still be intact. Incredibly annoying since we need to majorly compensate for it.
+
+            // Restore leftover args, if any
+            for (int i = 0; i < leftover_count; i++)
+            {
+              /* It's just too damn annoying to do this with usual stack operations, so we'll just directly set them back. */
+              /* To emulate the actual call being done, our base is .. well .. literally the base now. */
+              copyTV(L, L->base + i, &leftovers[i]);
+            }
+
+            for (int i = 0; i < result_count; i++)
+            {
+              lua_pushvalue(L, lje_hook_base + i); // push result
+              lua_replace(L, 1 + leftover_count + i); // replace function/arg slot
+            }
+
+            lua_settop(L, result_count + leftover_count); // set the top to just after the leftovers + results
+            /* Double check it lines up with nresults, and if not, pad with nils and warn about it cause that's not really good */
+            if (nresults != LUA_MULTRET && result_count != nresults)
+            {
+              printf("[LJE WARNING] Engine call hook returned %d results, but %d were expected!\n", result_count, nresults);
+              if (result_count < nresults)
+              {
+                // pad with nils
+                for (int i = result_count; i < nresults; i++)
+                {
+                  lua_pushnil(L);
+                }
+              }
+              // if more results were returned than expected, we just leave them be.
+            }
+
+            return LUA_OK; // all done!
+          } else
+          {
+            // continue as normal, we don't need to pop anything or do anything, the stack is as it should be after popping the boolean.
+          }
+        }
+      }
+    }
   }
 
   global_State *g = G(L);
@@ -1395,6 +1545,18 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
       lje_detour_export(mod, lua_pushstring, lua_pushstring);
       lje_detour_export(mod, lua_pcall, lua_pcall);
       lje_detour_export(mod, luaL_loadbufferx, luaL_loadbufferx);
+
+      /* LJE: This is a *tad* bit out-of-scope for LJE since we are very
+       * vehemently avoiding having to deal with the engine as opposed to LuaJIT, but
+       * given that the game makes *all* engine calls via this function, we have no choice.
+       */
+      LJEG()->adv_error_reporter = (lua_CFunction)lje_module_get_func(mod, "?AdvancedLuaErrorReporter@@YAHPEAUlua_State@@@Z");
+      if (LJEG()->adv_error_reporter)
+      {
+        printf("[LJE] Found AdvancedLuaErrorReporter at %p\n", LJEG()->adv_error_reporter);
+      } else {
+        printf("[LJE] AdvancedLuaErrorReporter not found!\n");
+      }
 
       if (!lje_script_folder_exists())
       {

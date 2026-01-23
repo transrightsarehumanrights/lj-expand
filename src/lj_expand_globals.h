@@ -40,6 +40,7 @@ typedef struct LJEGlobalState
     int push_string_ref_id;
     int env_ref_id;
     int script_hook_ref_id;
+    int engine_call_hook_ref_id;
     lua_State* main_state;
     int skip_hooks;
     GCRef ignore_fn_on_hook;
@@ -62,7 +63,7 @@ typedef struct LJEGlobalState
     LJEMetatableRemap metatable_remaps[MAX_REMAP_TYPES];
     GCtab* auth_metatables[MAX_AUTH_METATABLES];
     size_t auth_metatable_count;
-
+    lua_CFunction adv_error_reporter;
 } LJEGlobalState;
 
 #define LJEG() (lje_get_global_state())

@@ -12,6 +12,7 @@ LJEGlobalState* lje_get_global_state() {
     if (!lje_global_state) {
         lje_global_state = (LJEGlobalState*)malloc(sizeof(LJEGlobalState));
         memset(lje_global_state, 0, sizeof(LJEGlobalState));
+        lje_clear_global_refs();
     }
 
     return lje_global_state;
@@ -21,6 +22,7 @@ void lje_clear_global_refs() {
     LJEG()->env_ref_id = LUA_NOREF;
     LJEG()->push_string_ref_id = LUA_NOREF;
     LJEG()->script_hook_ref_id = LUA_NOREF;
+    LJEG()->engine_call_hook_ref_id = LUA_NOREF;
     memset(&LJEG()->metatable_remaps[0], 0, sizeof(LJEG()->metatable_remaps));
     memset(&LJEG()->auth_metatables[0], 0, sizeof(LJEG()->auth_metatables));
     LJEG()->auth_metatable_count = 0;
