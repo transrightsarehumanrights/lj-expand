@@ -290,6 +290,34 @@ int lje_is_lua_involved(lua_State* L)
   return 1;
 }
 
+int lje_is_lje_involved(lua_State* L)
+{
+  int frame_offset = luaL_optinteger(L, 1, 1);
+  if (lje_frame_is_lje_involved(L, frame_offset))
+  {
+    lua_pushboolean(L, 1);
+  } else
+  {
+    lua_pushboolean(L, 0);
+  }
+
+  return 1;
+}
+
+int lje_is_lje_frame(lua_State* L)
+{
+  int frame_offset = luaL_optinteger(L, 1, 1);
+  if (lje_frame_is_lje(L, frame_offset))
+  {
+    lua_pushboolean(L, 1);
+  } else
+  {
+    lua_pushboolean(L, 0);
+  }
+
+  return 1;
+}
+
 int lje_disable_metatables(lua_State* L) {
   LJEG()->disable_metatables = 1;
   return 0;
@@ -445,6 +473,8 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("set", lje_set_env);
     LJE_SET_FUNC("current_script", lje_get_current_script);
     LJE_SET_FUNC("is_lua_involved", lje_is_lua_involved);
+    LJE_SET_FUNC("is_lje_involved", lje_is_lje_involved);
+    LJE_SET_FUNC("is_lje_frame", lje_is_lje_frame);
     /* the following affect the global environment. */
     LJE_SET_FUNC("disable_metatables", lje_disable_metatables);
     LJE_SET_FUNC("enable_metatables", lje_enable_metatables);

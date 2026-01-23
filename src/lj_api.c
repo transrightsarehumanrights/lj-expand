@@ -1292,7 +1292,8 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
             for (int i = 0; i < leftover_count; i++)
             {
               /* It's just too damn annoying to do this with usual stack operations, so we'll just directly set them back. */
-              /* To emulate the actual call being done, our base is .. well .. literally the base now. */
+              /* We set it at L->base since technically after a pcall, func + args are all popped off but since we're emulating one,
+               * that's not true *yet*. It is true after the lua_settop call which trims the rest of the garbage tvs off. */
               copyTV(L, L->base + i, &leftovers[i]);
             }
 
@@ -1302,7 +1303,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
               lua_replace(L, 1 + leftover_count + i); // replace function/arg slot
             }
 
-            lua_settop(L, result_count + leftover_count); // set the top to just after the leftovers + results
+            lua_settop(L, result_count + leftover_count);
             /* Double check it lines up with nresults, and if not, pad with nils and warn about it cause that's not really good */
             if (nresults != LUA_MULTRET && result_count != nresults)
             {
