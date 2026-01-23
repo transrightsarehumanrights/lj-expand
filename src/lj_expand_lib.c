@@ -553,7 +553,6 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("get_registry", lje_get_registry);
     LJE_SET_FUNC("set_push_string_callback", lje_set_push_string_callback);
     LJE_SET_FUNC("set_script_hook_callback", lje_set_script_hook_callback);
-    LJE_SET_FUNC("set_engine_call_hook", lje_set_engine_call_hook);
   LJE_END_SECTION("util");
 
   /* gc: garbage collector manipulation */
@@ -566,6 +565,7 @@ void lje_addfuncs(lua_State* L) {
   /* vm: virtual machine manipulation */
   LJE_NEW_SECTION()
     LJE_SET_FUNC("patch_bytecodes", lje_patch_bytecodes);
+    LJE_SET_FUNC("set_engine_call_hook", lje_set_engine_call_hook);
   LJE_END_SECTION("vm");
 
   /* data: simple data storage API */
