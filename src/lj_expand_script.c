@@ -457,3 +457,68 @@ LJEScript** lje_script_compute_load_order(size_t script_count, LJEScript* script
 
     return load_order;
 }
+
+char** lje_script_find(LJEScript* script, const char* relative_path, size_t* out_path_count)
+{
+    if (strstr(relative_path, ".."))
+    {
+        // Forbid path weaseling
+        printf("[LJE] lje_script_find: Forbidding path weaseling in path '%s'\n", relative_path);
+        *out_path_count = 0;
+        return NULL;
+    }
+
+    // Simple search for files in the script's folder matching the given relative path
+    // Supports wildcards (* and ?)
+    // Returns relative paths from the script's folder
+#ifdef _WIN64
+    char search_path[MAX_PATH] = { 0 };
+    strcpy_s(search_path, MAX_PATH, script->folder);
+    strncat_s(search_path, MAX_PATH, "\\", _TRUNCATE);
+    strncat_s(search_path, MAX_PATH, relative_path, _TRUNCATE);
+
+    WIN32_FIND_DATAA find_data;
+    HANDLE hFind = FindFirstFileA(search_path, &find_data);
+
+    if (hFind == INVALID_HANDLE_VALUE) {
+        *out_path_count = 0;
+        return NULL; // No files found
+    }
+
+    char** found_paths = NULL;
+    size_t found_count = 0;
+
+    do
+    {
+        if (!(find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+        {
+            // Found a matching file, add to results (and make it relative to script folder)
+            found_paths = (char**)realloc(found_paths, sizeof(char*) * (found_count + 1));
+            char* full_path = (char*)malloc(MAX_PATH);
+            full_path[0] = '\0';
+
+            // Get directory portion of relative_path (everything before the last slash)
+            const char* last_slash = strrchr(relative_path, '\\');
+            const char* last_fslash = strrchr(relative_path, '/');
+            if (last_fslash > last_slash) last_slash = last_fslash;
+
+            if (last_slash)
+            {
+                // Copy the directory part (e.g., "modules/" from "modules/*")
+                size_t dir_len = last_slash - relative_path + 1;
+                strncpy_s(full_path, MAX_PATH, relative_path, dir_len);
+                full_path[dir_len] = '\0';
+            }
+
+            strncat_s(full_path, MAX_PATH, find_data.cFileName, _TRUNCATE);
+            found_paths[found_count++] = full_path;
+        }
+    } while (FindNextFileA(hFind, &find_data) != 0);
+    FindClose(hFind);
+
+    *out_path_count = found_count;
+    return found_paths;
+#else
+#error "lje_script_find not implemented for this platform"
+#endif
+}

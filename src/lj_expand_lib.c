@@ -276,6 +276,30 @@ int lje_get_current_script(lua_State* L)
   return 0;
 }
 
+int lje_find_script_files(lua_State* L)
+{
+  if (!LJEG()->current_script)
+  {
+    lua_pushnil(L);
+    return 1;
+  }
+
+  const char* search_path = luaL_checkstring(L, 1);
+  size_t file_count = 0;
+  char** files = lje_script_find(LJEG()->current_script, search_path, &file_count);
+
+  lua_newtable(L);
+  for (size_t i = 0; i < file_count; i++)
+  {
+    lua_pushstring(L, files[i]);
+    lua_rawseti(L, -2, i + 1);
+    free(files[i]);
+  }
+
+  free(files);
+  return 1;
+}
+
 int lje_is_lua_involved(lua_State* L)
 {
   int frame_offset = luaL_optinteger(L, 1, 1);
@@ -472,6 +496,7 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("get", lje_get_env);
     LJE_SET_FUNC("set", lje_set_env);
     LJE_SET_FUNC("current_script", lje_get_current_script);
+    LJE_SET_FUNC("find_script_files", lje_find_script_files);
     LJE_SET_FUNC("is_lua_involved", lje_is_lua_involved);
     LJE_SET_FUNC("is_lje_involved", lje_is_lje_involved);
     LJE_SET_FUNC("is_lje_frame", lje_is_lje_frame);

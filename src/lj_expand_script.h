@@ -54,5 +54,6 @@ LJEScript* lje_script_load_all_scripts(size_t* out_script_count);
  */
 LJEScript** lje_script_compute_load_order(size_t script_count, LJEScript* scripts);
 void lje_script_free_scripts(LJEScript* scripts, size_t script_count);
+char** lje_script_find(LJEScript* script, const char* relative_path, size_t* out_path_count);
 
 #endif
