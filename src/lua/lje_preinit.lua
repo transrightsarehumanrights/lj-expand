@@ -193,7 +193,7 @@ end
 
 setfenv(safeEnv.lje.vm.add_engine_call_hook, safeEnv)
 
-lje.vm.set_engine_call_hook(function(...)
+local function engineCallHookDispatcher(...)
   for _, hookFn in ipairs(engineCallHooks) do
     -- Really important that we set up a LJE-pcall, we cant handle errors here normally since
     -- well, it's in the middle of a pcall and it'll just crash the engine otherwise.
@@ -208,8 +208,10 @@ lje.vm.set_engine_call_hook(function(...)
   end
 
   return true
-end)
+end
 
+setfenv(engineCallHookDispatcher, safeEnv)
+lje.vm.set_engine_call_hook(engineCallHookDispatcher)
 lje.con_print("Engine call hook set!")
 
 -- Add a circular reference to the safe environment in the safeEnv
