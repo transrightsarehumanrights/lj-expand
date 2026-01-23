@@ -50,6 +50,19 @@ cTValue *lj_debug_frame(lua_State *L, int level, int *size)
         }
     }
 
+    /* LJE: We also want to hide any pcalls that were called *by* LJE code. */
+    if (isffunc(frame_func(frame)))
+    {
+        GCfunc* pcall_func = frame_func(frame);
+        if (pcall_func->c.ffid == 20/*pcall*/)
+        {
+            /* Get the caller frame */
+            cTValue* caller_frame = frame_prev(frame);
+            if (isljefunc(frame_func(caller_frame)))
+                level++; /* Skip pcall frame called by LJE code */
+        }
+    }
+
     if (level-- == 0) {
       *size = (int)(nextframe - frame);
       return frame;  /* Level found. */
