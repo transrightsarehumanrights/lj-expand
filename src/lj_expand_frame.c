@@ -23,9 +23,14 @@ int lje_frame_is_lua_involved(lua_State* L, int frame_offset)
     return 0;
 }
 
-int lje_frame_is_lje_involved(lua_State* L, int frame_offset)
+int lje_frame_is_lje_involved(lua_State* L, int frame_offset, int max_level)
 {
-    for (int i = frame_offset; ; i++)
+    if (max_level < 0)
+    {
+        max_level = INT32_MAX;
+    }
+
+    for (int i = frame_offset; i < frame_offset + max_level; i++)
     {
         int size = 0;
         LJEG()->show_special_frames = 1;

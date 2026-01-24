@@ -317,7 +317,7 @@ int lje_is_lua_involved(lua_State* L)
 int lje_is_lje_involved(lua_State* L)
 {
   int frame_offset = luaL_optinteger(L, 1, 1);
-  if (lje_frame_is_lje_involved(L, frame_offset))
+  if (lje_frame_is_lje_involved(L, frame_offset, -1))
   {
     lua_pushboolean(L, 1);
   } else
@@ -477,6 +477,13 @@ int lje_compile_string(lua_State* L)
   return 1; // Return compiled function
 }
 
+int lje_lib_hide_caller(lua_State* L)
+{
+  GCfunc* func = lj_lib_checkfunc(L, 1);
+  lje_hide_caller(func);
+  return 0;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -507,6 +514,7 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("is_spoofed", lje_is_function_spoofed);
     LJE_SET_FUNC("mark_special", lje_mark_special);
     LJE_SET_FUNC("compile", lje_compile_string);
+    LJE_SET_FUNC("hide_caller", lje_lib_hide_caller);
   LJE_END_SECTION("func");
 
   /* hooks: anything to do particularly with LuaJIT's debug hook functionality */

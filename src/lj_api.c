@@ -1204,7 +1204,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
   }
 
   /* LJE: Determine if this is an engine call. */
-  if (tvisfunc(L->base) && L == LJEG()->main_state)
+  if (tvisfunc(L->base) && L == LJEG()->main_state && !LJEG()->using_error_reporter)
   {
     GCfunc* f = funcV(L->base);
     char is_adv_error_reporter = iscfunc(f) ? f->c.f == LJEG()->adv_error_reporter : 0;
@@ -1218,112 +1218,45 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
         /* LJE: Call our engine hook, if we have one. */
         if (LJEG()->engine_call_hook_ref_id != LUA_NOREF)
         {
-          TValue leftovers[16] = {0}; // to store any leftover args that the engine might have pushed that aren't in nargs
-          int leftover_count = 0;
-          int total_args = nargs; // error reporter, function, args... (function is a part of nargs)
-          if (lua_gettop(L) - 1 > total_args)
-          {
-            // we have leftovers
-            leftover_count = (lua_gettop(L) - 1) - total_args;
-            if (leftover_count > 16)
-            {
-              printf("[LJE WARNING] Too many leftover engine call arguments (%d), max is 16, truncating!\n", leftover_count);
-              leftover_count = 16;
-            }
-
-            for (int i = 0; i < leftover_count; i++)
-            {
-              copyTV(L, &leftovers[i], L->base + 1 + total_args + i);
-            }
-            /* it's way too annoying to try to remove them here, we'll just leave it be for now and composite it on later. */
-          }
-
-          /* LJE: Engine hooks expect these arguments:
-           * 1. number of arguments
-           * 2. results needed
-           * 3... followed by the arguments, the real function being the first argument.
+          /* This is how the stack is laid out, and it *must* remain this way for the engine:
+           * [errfunc][func][args...][leftovers]
+           * after call..
+           * [leftovers][results...]
            *
-           * Additionally, it returns a single boolean, true to continue the call, false to abort.
-           * In the false case, we expect it returns the necessary results on the stack to spoof the call.
-           * So brace yourself.. it's quite complicated.
+           * What we do, is just replace the func with our hook, and push the real func as the first argument:
+           * [errfunc][hook][real_func][args...][leftovers]
+           * after call..
+           * [leftovers][results...]
+           *
+           * This has the benefit of being simpler and handling errors properly, but it does mean the hook needs to
+           * dispatch each call to the real function.
            */
 
-          int lje_hook_base = lua_gettop(L) + 1; // base where LJE hook results will start
+          /* Push hook, replace it at index 2 */
+          lua_pushvalue(L, 2); /* save original func (after errfunc, so index 2) */
           lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->engine_call_hook_ref_id);
+          lua_replace(L, 2); // Replace function with hook
+          /* Insert the real function as first argument, which is still at the top */
+          lua_insert(L, 3); // Move real func to be first argument (after errfunc and hook)
+          /* Now we can also add our nargs and nresults integers as well */
           lua_pushinteger(L, nargs);
+          lua_insert(L, 4); // Move nargs to be after real func
           lua_pushinteger(L, nresults);
-          for (int i = 0; i < nargs + 1; i++)
+          lua_insert(L, 5); // Move nresults to be after nargs
+          nargs += 3; // We added 3 arguments
+
+          /* Stack is ready at this point. We need to resolve the errfunc now. */
+          ptrdiff_t ef = 0;
+          if (errfunc != 0)
           {
-            lua_pushvalue(L, 2 + i); // push each argument
+            cTValue *o = stkindex2adr(L, errfunc);
+            api_checkvalidindex(L, o);
+            ef = savestack(L, o);
           }
 
-          /* we can't use lua_pcall again since it'd re-enter this function.. so we have to do it manually */
-          int status = lj_vm_pcall(L, api_call_base(L, nargs + 2 + 1), LUA_MULTRET+1, 0);
-          if (status != LUA_OK)
-          {
-            printf("[LJE ERROR] Error in engine call hook: %s\n", lua_tostring(L, -1));
-            lua_pop(L, 1); // pop error
-            return status; // at this point, we can't lie, we have to return the error.
-          }
-
-          /* check if we should continue, the continue boolean is the first result returned, so after pcall it should be the lje hook base */
-          int continue_call = lua_toboolean(L, lje_hook_base);
-          lua_remove(L, lje_hook_base); // remove the first return value (the boolean), rest shift down
-
-          if (!continue_call)
-          {
-            /* LJE: The hook has decided to abort the call.
-             * It should have the spoofed results on the stack.
-             * All we need to do now is just leave said results on the stack, at this point
-             * the error reporter, function and args are all still on the stack.
-             *
-             * visual:
-             * L->base ................................................................ L->top
-             * [error reporter][function][arg1][arg2]...[argN] | [result1][result2]...[resultM]
-             * ------------------------------------------------^ = LJE results begin here
-             */
-
-            int result_count = lua_gettop(L) - (lje_hook_base - 1); // total results returned by hook
-            // Move the results down to overwrite the function and args.
-            // However, the engine might push an extra data item, and not include it in nargs, so it expects that to
-            // still be intact. Incredibly annoying since we need to majorly compensate for it.
-
-            // Restore leftover args, if any
-            for (int i = 0; i < leftover_count; i++)
-            {
-              /* It's just too damn annoying to do this with usual stack operations, so we'll just directly set them back. */
-              /* We set it at L->base since technically after a pcall, func + args are all popped off but since we're emulating one,
-               * that's not true *yet*. It is true after the lua_settop call which trims the rest of the garbage tvs off. */
-              copyTV(L, L->base + i, &leftovers[i]);
-            }
-
-            for (int i = 0; i < result_count; i++)
-            {
-              lua_pushvalue(L, lje_hook_base + i); // push result
-              lua_replace(L, 1 + leftover_count + i); // replace function/arg slot
-            }
-
-            lua_settop(L, result_count + leftover_count);
-            /* Double check it lines up with nresults, and if not, pad with nils and warn about it cause that's not really good */
-            if (nresults != LUA_MULTRET && result_count != nresults)
-            {
-              printf("[LJE WARNING] Engine call hook returned %d results, but %d were expected!\n", result_count, nresults);
-              if (result_count < nresults)
-              {
-                // pad with nils
-                for (int i = result_count; i < nresults; i++)
-                {
-                  lua_pushnil(L);
-                }
-              }
-              // if more results were returned than expected, we just leave them be.
-            }
-
-            return LUA_OK; // all done!
-          } else
-          {
-            // continue as normal, we don't need to pop anything or do anything, the stack is as it should be after popping the boolean.
-          }
+          /* fire it off! */
+          int status = lj_vm_pcall(L, api_call_base(L, nargs), nresults + 1, ef);
+          return status;
         }
       }
     }

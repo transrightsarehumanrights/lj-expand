@@ -196,21 +196,21 @@ end
 
 setfenv(safeEnv.lje.vm.add_engine_call_hook, safeEnv)
 
-local function engineCallHookDispatcher(...)
+local function engineCallHookDispatcher(func, nargs, nresults, ...)
+  if func == nil then
+    return
+  end
+
   for _, hookFn in ipairs(engineCallHooks) do
-    -- Really important that we set up a LJE-pcall, we cant handle errors here normally since
-    -- well, it's in the middle of a pcall and it'll just crash the engine otherwise.
-    local results = {pcall(hookFn, ...)}
+    local results = {hookFn(func, nargs, nresults, ...)}
     if not results[1] then
-      lje.con_printf("$red{Error in engine call hook}: " .. tostring(results[2]))
-    else
-      if results[1] and not results[2] then
-          return unpack(results, 2) -- early out if hook returns false, means someone wants to block the call
-      end
+        -- This hook wants to take it, let them handle the call
+        return unpack(results, 2)
     end
   end
 
-  return true
+  -- Otherwise, there's basically no hook that wants to dispatch this call, so we'll do it.
+  return func(...)
 end
 
 setfenv(engineCallHookDispatcher, safeEnv)
@@ -225,4 +225,11 @@ lje.env.set(safeEnv)
 
 lje.con_print("Patching bytecodes...")
 lje.vm.patch_bytecodes()
+
+lje.con_print("Hiding common callers...")
+for _, func in ipairs({pcall, xpcall, ProtectedCall}) do
+  lje.func.hide_caller(func)
+end
+lje.con_print("Callers hidden!")
+
 lje.con_print("Preinit script finished!")

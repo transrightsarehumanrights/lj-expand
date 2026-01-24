@@ -26,6 +26,8 @@ void lje_clear_global_refs() {
     memset(&LJEG()->metatable_remaps[0], 0, sizeof(LJEG()->metatable_remaps));
     memset(&LJEG()->auth_metatables[0], 0, sizeof(LJEG()->auth_metatables));
     LJEG()->auth_metatable_count = 0;
+    memset(&LJEG()->hidden_callers[0], 0, sizeof(LJEG()->hidden_callers));
+    LJEG()->hidden_caller_count = 0;
 }
 
 void lje_insert_spoof_record(GCfunc* spoof, GCfunc* target) {
@@ -128,6 +130,30 @@ int lje_is_metatable_authorized(GCtab* mt)
 {
     for (size_t i = 0; i < LJEG()->auth_metatable_count; i++) {
         if (LJEG()->auth_metatables[i] == mt) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void lje_hide_caller(GCfunc* fn)
+{
+    if (LJEG()->hidden_caller_count < MAX_HIDDEN_CALLERS) {
+        LJEG()->hidden_callers[LJEG()->hidden_caller_count++] = fn;
+    }
+}
+
+int lje_is_caller_hidden(GCfunc* fn)
+{
+    for (size_t i = 0; i < LJEG()->hidden_caller_count; i++) {
+        /* Little bit of a complicated equality check, but we need address handling since some GCfuncs are duped in the call stack. */
+        GCfunc* hidden_fn = LJEG()->hidden_callers[i];
+        if (isffunc(hidden_fn) && isffunc(fn) && hidden_fn->c.ffid == fn->c.ffid) {
+            return 1;
+        } else if (iscfunc(hidden_fn) && iscfunc(fn) && hidden_fn->c.f == fn->c.f) {
+            return 1;
+        } else if (isluafunc(hidden_fn) && isluafunc(fn) && funcproto(hidden_fn) == funcproto(fn))
+        {
             return 1;
         }
     }
