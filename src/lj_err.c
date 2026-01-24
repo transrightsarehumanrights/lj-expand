@@ -650,7 +650,7 @@ LJ_NOINLINE void lj_err_run(lua_State *L)
 {
   ptrdiff_t ef = finderrfunc(L);
   /* LJE: Block any errors surfacing from LJE code. */
-  if (lje_frame_is_lje_involved(L, 0))
+  if (lje_frame_is_lje_involved(L, 0, 2)) /* Only considered involved if it is within 2 frames of the error point */
   {
     /* LJE: However, we need to ensure that there is no LJE pcall expecting to handle it. */
     char lje_pcall_found = lje_find_pcall(L);

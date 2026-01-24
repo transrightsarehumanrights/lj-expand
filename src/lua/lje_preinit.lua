@@ -156,16 +156,66 @@ local ANSI_COLORS = {
 local COLOR_PATTERN = "%$(%a+)(%b{})"
 safeEnv.lje.con_printf = function(fmt, ...)
   -- First, replace color codes
-  local coloredFmt = string.gsub(fmt, COLOR_PATTERN, function(colorName, text)
+  local result = string.format(fmt, ...)
+  local coloredResult = string.gsub(result, COLOR_PATTERN, function(colorName, text)
     local colorCode = ANSI_COLORS[string.lower(colorName)] or ANSI_COLORS["default"]
     return "\x1b[" .. colorCode .. string.sub(text, 2, -2) .. "\x1b[0m" -- remove braces
   end)
 
-  local result = string.format(coloredFmt, ...)
-  lje.con_print(result .. "\x1b[0m") -- Reset color at the end
+  lje.con_print(coloredResult .. "\x1b[0m") -- Reset color at the end
 end
 
 setfenv(safeEnv.lje.con_printf, safeEnv)
+
+safeEnv.lje.get_global = function(...)
+    -- Basically just a wrapper over rawget to traverse global tables safely
+    local paths = {...}
+    local current = _G
+
+    for _, key in ipairs(paths) do
+        if type(current) ~= "table" then
+            return nil
+        end
+
+        current = rawget(current, key)
+        if current == nil then
+            return nil
+        end
+    end
+
+    return current
+end
+
+setfenv(safeEnv.lje.get_global, safeEnv)
+
+local engineCallHooks = {}
+safeEnv.lje.vm.add_engine_call_hook = function(fn)
+  lje.func.mark_special(fn)
+  table.insert(engineCallHooks, fn)
+end
+
+setfenv(safeEnv.lje.vm.add_engine_call_hook, safeEnv)
+
+local function engineCallHookDispatcher(func, nargs, nresults, ...)
+  if func == nil then
+    return
+  end
+
+  for _, hookFn in ipairs(engineCallHooks) do
+    local results = {hookFn(func, nargs, nresults, ...)}
+    if not results[1] then
+        -- This hook wants to take it, let them handle the call
+        return unpack(results, 2)
+    end
+  end
+
+  -- Otherwise, there's basically no hook that wants to dispatch this call, so we'll do it.
+  return func(...)
+end
+
+setfenv(engineCallHookDispatcher, safeEnv)
+lje.vm.set_engine_call_hook(engineCallHookDispatcher)
+lje.con_print("Engine call hook set!")
 
 -- Add a circular reference to the safe environment in the safeEnv
 safeEnv._L = safeEnv
@@ -175,4 +225,11 @@ lje.env.set(safeEnv)
 
 lje.con_print("Patching bytecodes...")
 lje.vm.patch_bytecodes()
+
+lje.con_print("Hiding common callers...")
+for _, func in ipairs({pcall, xpcall, ProtectedCall}) do
+  lje.func.hide_caller(func)
+end
+lje.con_print("Callers hidden!")
+
 lje.con_print("Preinit script finished!")

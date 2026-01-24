@@ -50,6 +50,19 @@ cTValue *lj_debug_frame(lua_State *L, int level, int *size)
         }
     }
 
+    /* LJE: We also want to hide any explicitly-requested callers if they are being called from LJE. */
+    if (frame_func(frame) && L == LJEG()->main_state)
+    {
+        GCfunc* func = frame_func(frame);
+        if (lje_is_caller_hidden(func))
+        {
+            /* Get the caller frame */
+            cTValue* caller_frame = frame_prev(frame);
+            if (isljefunc(frame_func(caller_frame)))
+                level++; /* Skip frame called by LJE code */
+        }
+    }
+
     if (level-- == 0) {
       *size = (int)(nextframe - frame);
       return frame;  /* Level found. */

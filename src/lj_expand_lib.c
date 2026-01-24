@@ -276,10 +276,62 @@ int lje_get_current_script(lua_State* L)
   return 0;
 }
 
+int lje_find_script_files(lua_State* L)
+{
+  if (!LJEG()->current_script)
+  {
+    lua_pushnil(L);
+    return 1;
+  }
+
+  const char* search_path = luaL_checkstring(L, 1);
+  size_t file_count = 0;
+  char** files = lje_script_find(LJEG()->current_script, search_path, &file_count);
+
+  lua_newtable(L);
+  for (size_t i = 0; i < file_count; i++)
+  {
+    lua_pushstring(L, files[i]);
+    lua_rawseti(L, -2, i + 1);
+    free(files[i]);
+  }
+
+  free(files);
+  return 1;
+}
+
 int lje_is_lua_involved(lua_State* L)
 {
   int frame_offset = luaL_optinteger(L, 1, 1);
   if (lje_frame_is_lua_involved(L, frame_offset))
+  {
+    lua_pushboolean(L, 1);
+  } else
+  {
+    lua_pushboolean(L, 0);
+  }
+
+  return 1;
+}
+
+int lje_is_lje_involved(lua_State* L)
+{
+  int frame_offset = luaL_optinteger(L, 1, 1);
+  if (lje_frame_is_lje_involved(L, frame_offset, -1))
+  {
+    lua_pushboolean(L, 1);
+  } else
+  {
+    lua_pushboolean(L, 0);
+  }
+
+  return 1;
+}
+
+int lje_is_lje_frame(lua_State* L)
+{
+  int frame_offset = luaL_optinteger(L, 1, 1);
+  if (lje_frame_is_lje(L, frame_offset))
   {
     lua_pushboolean(L, 1);
   } else
@@ -388,6 +440,50 @@ int lje_lib_auth_metatable(lua_State* L)
   return 0;
 }
 
+int lje_set_engine_call_hook(lua_State* L)
+{
+  GCfunc* callback = lj_lib_checkfunc(L, 1);
+  if (!isluafunc(callback))
+  {
+    lj_err_arg(L, 1, LJ_ERR_NOLFUNC);
+  }
+
+  funcextend(callback)->is_special = 1;
+  LJEG()->engine_call_hook_ref_id = luaL_ref(L, LUA_REGISTRYINDEX);
+  return 0;
+}
+
+int lje_compile_string(lua_State* L)
+{
+  const char* script = luaL_checkstring(L, 1);
+  if (!script)
+  {
+    lj_err_arg(L, 1, LJ_ERR_NOVAL);
+  }
+
+  if (!lje_startup_compile(L, script))
+    lua_pushnil(L);
+
+  if (!lua_isnil(L, -1))
+  {
+    /* Set the environment if it exists */
+    if (LJEG()->env_ref_id != LUA_NOREF)
+    {
+      lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
+      lua_setfenv(L, -2);
+    }
+  }
+
+  return 1; // Return compiled function
+}
+
+int lje_lib_hide_caller(lua_State* L)
+{
+  GCfunc* func = lj_lib_checkfunc(L, 1);
+  lje_hide_caller(func);
+  return 0;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -417,6 +513,8 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("spoof", lje_spoof_debug_info);
     LJE_SET_FUNC("is_spoofed", lje_is_function_spoofed);
     LJE_SET_FUNC("mark_special", lje_mark_special);
+    LJE_SET_FUNC("compile", lje_compile_string);
+    LJE_SET_FUNC("hide_caller", lje_lib_hide_caller);
   LJE_END_SECTION("func");
 
   /* hooks: anything to do particularly with LuaJIT's debug hook functionality */
@@ -431,7 +529,10 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("get", lje_get_env);
     LJE_SET_FUNC("set", lje_set_env);
     LJE_SET_FUNC("current_script", lje_get_current_script);
+    LJE_SET_FUNC("find_script_files", lje_find_script_files);
     LJE_SET_FUNC("is_lua_involved", lje_is_lua_involved);
+    LJE_SET_FUNC("is_lje_involved", lje_is_lje_involved);
+    LJE_SET_FUNC("is_lje_frame", lje_is_lje_frame);
     /* the following affect the global environment. */
     LJE_SET_FUNC("disable_metatables", lje_disable_metatables);
     LJE_SET_FUNC("enable_metatables", lje_enable_metatables);
@@ -472,6 +573,7 @@ void lje_addfuncs(lua_State* L) {
   /* vm: virtual machine manipulation */
   LJE_NEW_SECTION()
     LJE_SET_FUNC("patch_bytecodes", lje_patch_bytecodes);
+    LJE_SET_FUNC("set_engine_call_hook", lje_set_engine_call_hook);
   LJE_END_SECTION("vm");
 
   /* data: simple data storage API */

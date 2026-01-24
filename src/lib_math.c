@@ -156,7 +156,7 @@ LJLIB_CF(math_random)		LJLIB_REC(.)
 {
   int n = (int)(L->top - L->base);
   RandomState *rs = (RandomState *)(uddata(udataV(lj_lib_upvalue(L, 1))));
-  if (LJEG()->main_state == L && lje_frame_is_lje_involved(L, 0))
+  if (LJEG()->main_state == L && lje_frame_is_lje_involved(L, 0, -1))
   {
     /* LJE: Switch to our own random state to avoid detection of PRNG state changes. */
     rs = (RandomState*)&LJEG()->random_state;
@@ -214,7 +214,7 @@ LJLIB_PUSH(top-2)  /* Upvalue holds userdata with RandomState. */
 LJLIB_CF(math_randomseed)
 {
   RandomState *rs = (RandomState *)(uddata(udataV(lj_lib_upvalue(L, 1))));
-  if (LJEG()->main_state == L && lje_frame_is_lje_involved(L, 0))
+  if (LJEG()->main_state == L && lje_frame_is_lje_involved(L, 0, -1))
   {
     /* LJE: Switch to our own random state to avoid detection of PRNG state changes. */
     rs = (RandomState*)&LJEG()->random_state;

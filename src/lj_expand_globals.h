@@ -23,6 +23,8 @@ typedef struct LJERandomState
 
 #define MAX_REMAP_TYPES 16
 #define MAX_AUTH_METATABLES 128
+#define MAX_HIDDEN_CALLERS 128
+
 typedef struct LJEMetatableRemap
 {
     /* LJE: MUST BE A STRING LITERAL */
@@ -40,6 +42,7 @@ typedef struct LJEGlobalState
     int push_string_ref_id;
     int env_ref_id;
     int script_hook_ref_id;
+    int engine_call_hook_ref_id;
     lua_State* main_state;
     int skip_hooks;
     GCRef ignore_fn_on_hook;
@@ -62,7 +65,10 @@ typedef struct LJEGlobalState
     LJEMetatableRemap metatable_remaps[MAX_REMAP_TYPES];
     GCtab* auth_metatables[MAX_AUTH_METATABLES];
     size_t auth_metatable_count;
-
+    lua_CFunction adv_error_reporter;
+    int using_error_reporter;
+    GCfunc* hidden_callers[MAX_HIDDEN_CALLERS];
+    size_t hidden_caller_count;
 } LJEGlobalState;
 
 #define LJEG() (lje_get_global_state())
@@ -90,5 +96,8 @@ void lje_set_metatable_remap(const char* type_name, GCtab* replacement);
 
 void lje_auth_metatable(GCtab* mt);
 int lje_is_metatable_authorized(GCtab* mt);
+
+void lje_hide_caller(GCfunc* func);
+int lje_is_caller_hidden(GCfunc* func);
 
 #endif

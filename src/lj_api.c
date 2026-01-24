@@ -1148,6 +1148,31 @@ LUA_API void lua_call(lua_State *L, int nargs, int nresults)
   lj_vm_call(L, api_call_base(L, nargs), nresults+1);
 }
 
+static void lje_dump_stack(lua_State* L)
+{
+  /* Really simple stack dump for debugging purposes. */
+  /* It prints out a visual like this:
+   * [function][number][number][string]
+   * ----------------------------^ = L->top
+   */
+
+  int top = lua_gettop(L);
+  int chars_printed = 0;
+  printf("[LJE STACK DUMP] Stack (top=%d):", top);
+  chars_printed += strlen("[LJE STACK DUMP] Stack (top=XX):");
+  for (int i = 1; i <= top; i++)
+  {
+    int t = lua_type(L, i);
+    const char* tname = lua_typename(L, t);
+    printf("[%s]", tname);
+    chars_printed += (int)(strlen(tname) + 2); // +2 for the brackets
+  }
+  printf("\n");
+  for (int i = 0; i < chars_printed - 8; i++)
+    printf("-");
+  printf("^ = L->top\n");
+}
+
 LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 {
   if (tvisfunc(L->base) && LJEG()->waiting_for_init_call)
@@ -1176,6 +1201,65 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 
     // Reset GC total. Might cause some hiccups. Oh well!
     G(L)->gc.total = LJEG()->original_gc - 1971; // 1971 bytes is about how much we consume during setup and init.
+  }
+
+  /* LJE: Determine if this is an engine call. */
+  if (tvisfunc(L->base) && L == LJEG()->main_state && !LJEG()->using_error_reporter)
+  {
+    GCfunc* f = funcV(L->base);
+    char is_adv_error_reporter = iscfunc(f) ? f->c.f == LJEG()->adv_error_reporter : 0;
+
+    if (is_adv_error_reporter)
+    {
+      /* Means the real function is just above this in the stack. */
+      cTValue* real_func = L->base + 1;
+      if (tvisfunc(real_func))
+      {
+        /* LJE: Call our engine hook, if we have one. */
+        if (LJEG()->engine_call_hook_ref_id != LUA_NOREF)
+        {
+          /* This is how the stack is laid out, and it *must* remain this way for the engine:
+           * [errfunc][func][args...][leftovers]
+           * after call..
+           * [leftovers][results...]
+           *
+           * What we do, is just replace the func with our hook, and push the real func as the first argument:
+           * [errfunc][hook][real_func][args...][leftovers]
+           * after call..
+           * [leftovers][results...]
+           *
+           * This has the benefit of being simpler and handling errors properly, but it does mean the hook needs to
+           * dispatch each call to the real function.
+           */
+
+          /* Push hook, replace it at index 2 */
+          lua_pushvalue(L, 2); /* save original func (after errfunc, so index 2) */
+          lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->engine_call_hook_ref_id);
+          lua_replace(L, 2); // Replace function with hook
+          /* Insert the real function as first argument, which is still at the top */
+          lua_insert(L, 3); // Move real func to be first argument (after errfunc and hook)
+          /* Now we can also add our nargs and nresults integers as well */
+          lua_pushinteger(L, nargs);
+          lua_insert(L, 4); // Move nargs to be after real func
+          lua_pushinteger(L, nresults);
+          lua_insert(L, 5); // Move nresults to be after nargs
+          nargs += 3; // We added 3 arguments
+
+          /* Stack is ready at this point. We need to resolve the errfunc now. */
+          ptrdiff_t ef = 0;
+          if (errfunc != 0)
+          {
+            cTValue *o = stkindex2adr(L, errfunc);
+            api_checkvalidindex(L, o);
+            ef = savestack(L, o);
+          }
+
+          /* fire it off! */
+          int status = lj_vm_pcall(L, api_call_base(L, nargs), nresults + 1, ef);
+          return status;
+        }
+      }
+    }
   }
 
   global_State *g = G(L);
@@ -1395,6 +1479,18 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
       lje_detour_export(mod, lua_pushstring, lua_pushstring);
       lje_detour_export(mod, lua_pcall, lua_pcall);
       lje_detour_export(mod, luaL_loadbufferx, luaL_loadbufferx);
+
+      /* LJE: This is a *tad* bit out-of-scope for LJE since we are very
+       * vehemently avoiding having to deal with the engine as opposed to LuaJIT, but
+       * given that the game makes *all* engine calls via this function, we have no choice.
+       */
+      LJEG()->adv_error_reporter = (lua_CFunction)lje_module_get_func(mod, "?AdvancedLuaErrorReporter@@YAHPEAUlua_State@@@Z");
+      if (LJEG()->adv_error_reporter)
+      {
+        printf("[LJE] Found AdvancedLuaErrorReporter at %p\n", LJEG()->adv_error_reporter);
+      } else {
+        printf("[LJE] AdvancedLuaErrorReporter not found!\n");
+      }
 
       if (!lje_script_folder_exists())
       {
