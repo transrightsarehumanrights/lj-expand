@@ -71,6 +71,7 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
     char chunkname[LUA_IDSIZE] = { 0 };
     strncat_s(chunkname, LUA_IDSIZE, "@lje_script:", _TRUNCATE);
     strncat_s(chunkname, LUA_IDSIZE, script->info->name, _TRUNCATE);
+    chunkname[LUA_IDSIZE - 1] = '\0';
 
     if (script_file)
     {
@@ -96,7 +97,7 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
 
             // Disable hooks during execution
             LJEG()->skip_hooks = 1;
-            if (original_pcall(L, 0, 0, 0) != 0)
+            if (lua_pcall(L, 0, LUA_MULTRET, 0) != 0) /* mental note: figure out why this seems to randomly not work? */
             {
                 LJEG()->skip_hooks = 0;
 

@@ -1178,6 +1178,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
   if (tvisfunc(L->base) && LJEG()->waiting_for_init_call)
   {
     LJEG()->waiting_for_init_call = 0;
+    LJEG()->using_error_reporter = 1; /* Prevent recursion in error reporter */
 
     printf("[LJE] Detected running of client Lua function for init.lua\n");
     lje_addfuncs(L);
@@ -1185,7 +1186,6 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     lje_clear_global_refs();
 
     lje_startup_preinit(L);
-
     // ENSURE PREINIT DOES NOT AFFECT RANDOM STATE!
     lje_save_random_state();
     // See if there's any more scripts that want to run at preinit.
@@ -1199,6 +1199,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     }
     lje_restore_random_state();
 
+    LJEG()->using_error_reporter = 0; /* Allow error reporter again */
     // Reset GC total. Might cause some hiccups. Oh well!
     G(L)->gc.total = LJEG()->original_gc - 1971; // 1971 bytes is about how much we consume during setup and init.
   }
