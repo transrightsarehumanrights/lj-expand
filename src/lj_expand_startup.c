@@ -146,7 +146,6 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
     strncat_s(chunkname, LUA_IDSIZE, relative_path, _TRUNCATE);
 
     char* buffer = load_lua_file(full_path);
-    printf("[LJE] -> %s\n", relative_path);
     LJEG()->flag_lje_protos = 1;
     if (original_loadbufferx(L, buffer, strlen(buffer), chunkname, NULL) == 0)
     {
