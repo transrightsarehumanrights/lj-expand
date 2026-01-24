@@ -32,6 +32,29 @@ This example intercepts calls to `hook.Call` with the first argument being `"Cal
 Returning `false` from the hook indicates that you are handling the call, and the subsequent return values are passed back to the original caller.
 Returning `true` indicates that you are not handling the call, and it should be dispatched as normal.
 
+Here is another example that intercepts console commands:
+
+```lua
+AddConsoleCommand("gilbhax_fart", "Hi!", 0)
+
+lje.vm.add_engine_call_hook(function(func, nargs, nresults, ...)
+    if nargs > 0 then
+        if func == lje.get_global("concommand", "Run") then
+            local ply, cmd, args, argStr = ...
+            if cmd == "gilbhax_fart" then
+                lje.con_printf("Fart completed.")
+                return false, true -- Block the original function call.
+            end
+        end
+    end
+
+    return true -- Let em go through!
+end)
+```
+
+This example intercepts calls to `concommand.Run`, and if the command is `"gilbhax_fart"`, it prints a message to the console and blocks the original function call,
+returning `true` to indicate success (this is specific to `concommand.Run`, which returns a boolean indicating success).
+
 All engine hooks are marked special, so they won't be detectable or visible to the called function, instead it will appear as if it was called normally via
 the engine.
 
