@@ -11,7 +11,7 @@
 **DO NOT INSTALL THIS IN THE GARRY'S MOD FOLDER.** Instead, keep it in a separate folder somewhere else on your computer. Be aware that you will need
 to manually update this folder. Right now, there is no versioning as it is very early in development. You will need to manually download artifacts.
 
-1. Look at the latest commit for a green checkmark icon. Click on it to go to the artifacts page.
+1. Look at the latest commit for a green/blue checkmark icon. Click on it to go to the artifacts page.
 2. At the left sidebar, click on "Summary"
 3. Click on the `lje-***.zip` file to download the latest build.
 4. Extract the zip file somewhere safe.
