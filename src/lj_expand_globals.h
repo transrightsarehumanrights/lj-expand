@@ -1,8 +1,10 @@
 #ifndef _LJ_EXPAND_GLOBALS_H
 #define _LJ_EXPAND_GLOBALS_H
+
 #include "lua.h"
 #include "lj_obj.h"
 #include "lj_expand_script.h"
+#include "lj_expand_script_watcher.h"
 
 /* LJE: Fast linked list to hold spoofed functions. Useful for doing a fast lookup of either
  * spoof to target or target to spoof.
@@ -69,6 +71,8 @@ typedef struct LJEGlobalState
     int using_error_reporter;
     GCfunc* hidden_callers[MAX_HIDDEN_CALLERS];
     size_t hidden_caller_count;
+    /* Hot reloading */
+    LJEScriptWatcher* script_watcher;
 } LJEGlobalState;
 
 #define LJEG() (lje_get_global_state())

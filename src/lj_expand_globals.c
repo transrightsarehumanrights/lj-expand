@@ -28,6 +28,12 @@ void lje_clear_global_refs() {
     LJEG()->auth_metatable_count = 0;
     memset(&LJEG()->hidden_callers[0], 0, sizeof(LJEG()->hidden_callers));
     LJEG()->hidden_caller_count = 0;
+
+    if (LJEG()->script_watcher)
+    {
+        lje_watcher_destroy(LJEG()->script_watcher);
+        LJEG()->script_watcher = NULL;
+    }
 }
 
 void lje_insert_spoof_record(GCfunc* spoof, GCfunc* target) {

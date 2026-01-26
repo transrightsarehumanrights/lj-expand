@@ -37,6 +37,7 @@
 #include "lj_record.h"
 #include "lj_parse.h"
 #include "lauxlib.h"
+#include "lj_expand_startup.h"
 #include "lj_lib.h"
 #include "lj_ffrecord.h"
 #include "stdio.h"
@@ -1173,6 +1174,11 @@ static void lje_dump_stack(lua_State* L)
   printf("^ = L->top\n");
 }
 
+/* LJE: lua_pcall is essentially the Lua entrypoint for the entire game.
+ * We've co-opted it to perform a lot of orthogonal tasks related to LJE,
+ * like initializing our functions, running preinit scripts, handling engine calls,
+ * and reloading scripts as needed.
+ */
 LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 {
   if (tvisfunc(L->base) && LJEG()->waiting_for_init_call)
@@ -1259,6 +1265,22 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
           int status = lj_vm_pcall(L, api_call_base(L, nargs), nresults + 1, ef);
           return status;
         }
+      }
+    }
+  }
+
+  /* LJE: Reload any scripts at this point, if needed. */
+  if (LJEG()->script_watcher && LJEG()->main_state == L)
+  {
+    size_t scripts_needing_reload = lje_watcher_reload_count(LJEG()->script_watcher);
+    if (scripts_needing_reload > 0)
+    {
+      printf("[LJE] Detected %zu scripts needing reload. Reloading now...\n", scripts_needing_reload);
+      for (size_t i = 0; i < scripts_needing_reload; i++)
+      {
+        LJEScript* script = lje_watcher_pop_reload(LJEG()->script_watcher);
+        if (script)
+          lje_startup_reload(L, script);
       }
     }
   }

@@ -185,6 +185,17 @@ GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
 
   if (check_proto_chunkname(pt, "@Startup") && !lje_frame_is_lua_involved(L, 0))
   {
+    /* LJE: Create script watcher since now we're going to be running. */
+    LJEG()->script_watcher = lje_watcher_create();
+    for (int i = 0; i < LJEG()->loaded_script_count; i++)
+    {
+      LJEScript* script = LJEG()->script_load_order[i];
+      lje_watcher_add_script(LJEG()->script_watcher, script);
+    }
+
+    lje_watcher_start(LJEG()->script_watcher);
+    printf("[LJE] Created script watcher for startup scripts.\n");
+
     printf("[LJE] Starting up Lua...\n");
     lje_clear_spoof_records();
     lje_save_random_state();

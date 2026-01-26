@@ -122,7 +122,7 @@ end
 
 setfenv(safeEnv.lje.detour, safeEnv)
 
-local includeCache = {}
+safeEnv.lje.includeCache = {}
 safeEnv.lje.require = function(path)
   local currentScript = lje.env.current_script()
   if not currentScript then
@@ -130,8 +130,8 @@ safeEnv.lje.require = function(path)
     return
   end
 
-  includeCache[currentScript] = includeCache[currentScript] or {}
-  local scriptCache = includeCache[currentScript]
+  lje.includeCache[currentScript] = lje.includeCache[currentScript] or {}
+  local scriptCache = lje.includeCache[currentScript]
   if scriptCache[path] then
     return scriptCache[path]
   end

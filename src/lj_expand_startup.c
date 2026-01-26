@@ -251,3 +251,23 @@ int lje_startup_compile(lua_State* L, const char* source) {
 
     return 0;
 }
+
+LJ_FUNC void lje_startup_reload(lua_State* L, LJEScript* script)
+{
+    printf("[LJE] Reloading script '%s'...\n", script->name);
+    /* We need to clear its require cache before reloading. */
+    if (LJEG()->env_ref_id == LUA_NOREF)
+    {
+        printf("[LJE] No custom environment set for script? Probably not intentional. Can't reload.\n");
+        return;
+    }
+
+    lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
+    lua_getfield(L, -1, "lje");
+    lua_getfield(L, -1, "includeCache");
+    lua_pushnil(L);
+    lua_setfield(L, -2, script->name); // includeCache[script->name] = nil
+    lua_pop(L, 3); // Pop includeCache, lje, env
+
+    lje_startup_execute(L, script, NULL);
+}
