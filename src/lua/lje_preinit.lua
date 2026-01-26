@@ -195,7 +195,7 @@ setfenv(safeEnv.lje.get_global, safeEnv)
 local engineCallHooks = {}
 safeEnv.lje.vm.add_engine_call_hook = function(fn)
   lje.func.mark_special(fn)
-  table.insert(engineCallHooks, fn)
+  engineCallHooks[lje.env.current_script()] = fn
 end
 
 setfenv(safeEnv.lje.vm.add_engine_call_hook, safeEnv)
@@ -205,7 +205,7 @@ local function engineCallHookDispatcher(func, nargs, nresults, ...)
     return
   end
 
-  for _, hookFn in ipairs(engineCallHooks) do
+  for _, hookFn in pairs(engineCallHooks) do
     local results = {hookFn(func, nargs, nresults, ...)}
     if not results[1] then
         -- This hook wants to take it, let them handle the call
