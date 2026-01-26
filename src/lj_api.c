@@ -34,9 +34,11 @@
 #include "lj_dispatch.h"
 #include "lj_expand_globals.h"
 #include "lj_expand_script.h"
+#include "lj_expand_script_watcher.h"
 #include "lj_record.h"
 #include "lj_parse.h"
 #include "lauxlib.h"
+#include "lj_expand_startup.h"
 #include "lj_lib.h"
 #include "lj_ffrecord.h"
 #include "stdio.h"
@@ -1173,6 +1175,11 @@ static void lje_dump_stack(lua_State* L)
   printf("^ = L->top\n");
 }
 
+/* LJE: lua_pcall is essentially the Lua entrypoint for the entire game.
+ * We've co-opted it to perform a lot of orthogonal tasks related to LJE,
+ * like initializing our functions, running preinit scripts, handling engine calls,
+ * and reloading scripts as needed.
+ */
 LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 {
   if (tvisfunc(L->base) && LJEG()->waiting_for_init_call)
@@ -1202,6 +1209,35 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     LJEG()->using_error_reporter = 0; /* Allow error reporter again */
     // Reset GC total. Might cause some hiccups. Oh well!
     G(L)->gc.total = LJEG()->original_gc - 1971; // 1971 bytes is about how much we consume during setup and init.
+  }
+
+  /* LJE: Next, check if we're waiting for the startup call. */
+  if (tvisfunc(L->base) && LJEG()->waiting_for_startup_call)
+  {
+    LJEG()->waiting_for_startup_call = 0;
+
+    /* LJE: Create script watcher since now we're going to be running. */
+    LJEG()->script_watcher = lje_watcher_create();
+    for (int i = 0; i < LJEG()->loaded_script_count; i++)
+    {
+      LJEScript* script = LJEG()->script_load_order[i];
+      lje_watcher_add_script(LJEG()->script_watcher, script);
+    }
+
+    lje_watcher_start(LJEG()->script_watcher);
+    printf("[LJE] Created script watcher for startup scripts.\n");
+
+    printf("[LJE] Starting up Lua...\n");
+    lje_clear_spoof_records();
+    lje_save_random_state();
+    LJEG()->using_error_reporter = 1;
+    for (int i = 0; i < LJEG()->loaded_script_count; i++)
+    {
+      LJEScript* script = LJEG()->script_load_order[i];
+      lje_startup_execute(L, script, NULL);
+    }
+    LJEG()->using_error_reporter = 0;
+    lje_restore_random_state();
   }
 
   /* LJE: Determine if this is an engine call. */
@@ -1259,6 +1295,22 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
           int status = lj_vm_pcall(L, api_call_base(L, nargs), nresults + 1, ef);
           return status;
         }
+      }
+    }
+  }
+
+  /* LJE: Reload any scripts at this point, if needed. */
+  if (LJEG()->script_watcher && LJEG()->main_state == L)
+  {
+    size_t scripts_needing_reload = lje_watcher_reload_count(LJEG()->script_watcher);
+    if (scripts_needing_reload > 0)
+    {
+      printf("[LJE] Detected %zu scripts needing reload. Reloading now...\n", scripts_needing_reload);
+      for (size_t i = 0; i < scripts_needing_reload; i++)
+      {
+        LJEScript* script = lje_watcher_pop_reload(LJEG()->script_watcher);
+        if (script)
+          lje_startup_reload(L, script);
       }
     }
   }
