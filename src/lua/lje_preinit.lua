@@ -171,26 +171,59 @@ end
 
 setfenv(safeEnv.lje.con_printf, safeEnv)
 
+local type = type
+local rawget = rawget
+local istable = istable
+local _G = _G
 safeEnv.lje.get_global = function(...)
     -- Basically just a wrapper over rawget to traverse global tables safely
+    -- For a faster version, see lje.get_global_static which does no dynamic allocations and doesn't rely on a vararg
     local paths = {...}
+    local count = #paths
     local current = _G
 
-    for _, key in ipairs(paths) do
-        if type(current) ~= "table" then
+    local i = 1
+    ::iterateGlobals::
+    current = rawget(current, paths[i])
+    if current then
+        if i == count then
+            return current
+        elseif istable(current) then
+            i = i + 1
+            goto iterateGlobals
+        else
             return nil
         end
-
-        current = rawget(current, key)
-        if current == nil then
-            return nil
-        end
+    else
+        return nil
     end
+end
 
-    return current
+safeEnv.lje.get_global_static = function(paths, count)
+    -- Same behaviour as lje.get_global, but instead of using a vararg,
+    -- you give the function the path as a list (avoid dynamic creation of this as that defeats the purpose of the function),
+    -- along with the number of elements in the list to be traversed
+    local current = _G
+
+    local i = 1
+    ::iterateGlobals::
+    current = rawget(current, paths[i])
+    if current then
+        if i == count then
+            return current
+        elseif istable(current) then
+            i = i + 1
+            goto iterateGlobals
+        else
+            return nil
+        end
+    else
+        return nil
+    end
 end
 
 setfenv(safeEnv.lje.get_global, safeEnv)
+setfenv(safeEnv.lje.get_global_static, safeEnv)
 
 local engineCallHooks = {}
 safeEnv.lje.vm.add_engine_call_hook = function(fn)
