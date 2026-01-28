@@ -107,7 +107,6 @@ cTValue *lj_meta_lookup(lua_State *L, cTValue *o, MMS mm)
             }
           } else if (!lje_is_metatable_authorized(mt))
           {
-            lj_err_optype(L, o, LJ_ERR_LJE_UNAUTH);
             return niltv(L);
           }
         }

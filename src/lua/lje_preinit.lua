@@ -77,6 +77,7 @@ safeEnv.cloned_basemts = {}
 -- We'll add more later
 safeEnv.cloned_mts["Entity"] = cloneMetaTable("Entity")
 safeEnv.cloned_mts["Player"] = cloneMetaTable("Player", safeEnv.cloned_mts["Entity"])
+safeEnv.cloned_mts["NPC"] = cloneMetaTable("NPC", safeEnv.cloned_mts["Entity"])
 safeEnv.cloned_mts["Vector"] = cloneMetaTable("Vector")
 safeEnv.cloned_mts["Angle"] = cloneMetaTable("Angle")
 safeEnv.cloned_mts["CUserCmd"] = cloneMetaTable("CUserCmd")
