@@ -1193,6 +1193,16 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     lje_clear_global_refs();
 
     lje_startup_preinit(L);
+
+    if (LJEG()->loaded_binary_module_count > 0)
+    {
+      printf("[LJE] Running preinit for %d binary modules...\n", LJEG()->loaded_binary_module_count);
+      for (int i = 0; i < LJEG()->loaded_binary_module_count; i++)
+      {
+        lje_binary_module_run_preinit(&LJEG()->loaded_binary_modules[i], L);
+      }
+    }
+
     // ENSURE PREINIT DOES NOT AFFECT RANDOM STATE!
     lje_save_random_state();
     // See if there's any more scripts that want to run at preinit.
@@ -1543,6 +1553,21 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
         printf("[LJE] Found AdvancedLuaErrorReporter at %p\n", LJEG()->adv_error_reporter);
       } else {
         printf("[LJE] AdvancedLuaErrorReporter not found!\n");
+      }
+
+      printf("[LJE] Loading binary modules...\n");
+      lje_binary_module_ensure_folder_exists();
+      lje_binary_module_load_all(&LJEG()->loaded_binary_module_count, &LJEG()->loaded_binary_modules);
+      if (LJEG()->loaded_binary_module_count > 0)
+      {
+        printf("[LJE] Loaded %d binary modules:\n", LJEG()->loaded_binary_module_count);
+        for (int i = 0; i < LJEG()->loaded_binary_module_count; i++)
+        {
+          LJEBinaryModule module = LJEG()->loaded_binary_modules[i];
+          printf("[LJE] - %s\n", module.name);
+        }
+      } else {
+        printf("[LJE] No binary modules loaded.\n");
       }
 
       if (!lje_script_folder_exists())

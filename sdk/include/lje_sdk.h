@@ -13,6 +13,20 @@ extern "C" {
 
 #ifndef LJE_NO_OPAQUE_STATE /* LJE includes this file internally where lua_State is already defined */
 typedef void* lua_State;
+/* Also provide ref constants */
+#define LUA_REGISTRYINDEX  (-10000)
+#define LUA_GLOBALSINDEX   (-10002)
+#define LUA_ENVIRONINDEX  (-10001)
+
+#define LUA_OK		0
+#define LUA_YIELD	1
+#define LUA_ERRRUN	2
+#define LUA_ERRSYNTAX	3
+#define LUA_ERRMEM	4
+#define LUA_ERRERR	5
+
+#define LUA_NOREF       (-2)
+#define LUA_REFNIL      (-1)
 #endif
 typedef struct LjeApi LjeApi;
 typedef struct LjeLuaApi LjeLuaApi;
@@ -28,21 +42,38 @@ struct LjeLuaApi
     int64_t (*tointeger)(void* L, int idx);
     void (*pushlightuserdata)(void* L, void* p);
     void* (*tolightuserdata)(void* L, int idx);
+    void (*pushcclosure)(void* L, void* fn, int n);
     int (*gettop)(void* L);
     void (*settop)(void* L, int idx);
     void (*call)(void* L, int nargs, int nresults);
     int (*pcall)(void* L, int nargs, int nresults, int errfunc);
-    void (*getglobal)(void* L, const char* name);
-    void (*setglobal)(void* L, const char* name);
+    void (*getfield)(void* L, int idx, const char* k);
+    void (*setfield)(void* L, int idx, const char* k);
 
+    void (*pushboolean)(void* L, int b);
+    int (*toboolean)(void* L, int idx);
+
+    int (*ref)(void* L, int t);
+    void (*unref)(void* L, int t, int ref);
+    void (*rawgeti)(void* L, int idx, int n);
+    void (*rawseti)(void* L, int idx, int n);
+    void (*pushvalue)(void* L, int idx);
+
+    void (*createtable)(void* L, int narray, int nrec);
+    int (*isnil)(void* L, int idx);
+    int (*type)(void* L, int idx);
+    const char* (*typename_)(void* L, int tp);
+
+    size_t (*objlen)(void* L, int idx);
     /* LJE-specific extensions */
+    void (*pop)(void* L, int n);
     void (*pushljeenv)(void* L);
 };
 
 struct LjeApi
 {
     uint32_t version; /* Version of the LJE SDK */
-    struct LjeLuaApi lua; /* Lua C API functions */
+    LjeLuaApi* lua; /* Lua C API functions */
 
     /* Currently, there are no LJE-specific API functions here. Everything necessary can be done with the Lua C API. */
 };
@@ -56,20 +87,20 @@ typedef enum LjeResult
 
 /* Entrypoints */
 
+typedef LjeResult (*LjeModuleInitFunc)(LjeApi* api);
+typedef LjeResult (*LjeModuleShutdownFunc)();
+typedef LjeResult (*LjeModulePreinitFunc)(lua_State* L);
+
 #ifdef LJE_SDK_IMPLEMENTATION
 __declspec(dllexport)
-#endif
 LjeResult lje_module_init(LjeApi* api); /* Called when the module is loaded into memory at startup. */
 
-#ifdef LJE_SDK_IMPLEMENTATION
 __declspec(dllexport)
-#endif
 LjeResult lje_module_shutdown(); /* Called when the module is unloaded from memory at shutdown. */
 
-#ifdef LJE_SDK_IMPLEMENTATION
 __declspec(dllexport)
-#endif
 LjeResult lje_module_preinit(lua_State* L); /* Called before any user scripts are run, after Lua state is created, and after the built-in preinit script is run. */
+#endif
 
 /* Entrypoint macros for easier declaration */
 

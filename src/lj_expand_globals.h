@@ -5,6 +5,7 @@
 #include "lj_obj.h"
 #include "lj_expand_script.h"
 #include "lj_expand_script_watcher.h"
+#include "lj_expand_binary_module.h"
 
 /* LJE: Fast linked list to hold spoofed functions. Useful for doing a fast lookup of either
  * spoof to target or target to spoof.
@@ -74,6 +75,9 @@ typedef struct LJEGlobalState
     size_t hidden_caller_count;
     /* Hot reloading */
     LJEScriptWatcher* script_watcher;
+    /* Loaded binary modules */
+    LJEBinaryModule* loaded_binary_modules;
+    size_t loaded_binary_module_count;
 } LJEGlobalState;
 
 #define LJEG() (lje_get_global_state())

@@ -1,0 +1,252 @@
+#include "lj_expand_binary_module.h"
+#include <windows.h> /* Let's be honest, Linux support is not coming anytime soon */
+#include <stdio.h>
+#define LJE_NO_OPAQUE_STATE
+#include "lauxlib.h"
+#include "lje_sdk.h"
+#include "lj_expand_globals.h"
+#include "lua.h"
+
+static LjeApi* create_module_api();
+static LjeApi* g_cached_module_api = NULL;
+
+static LJEBinaryModule* load_module(const char* full_path, const char* name)
+{
+    HMODULE handle = LoadLibraryA(full_path);
+    if (!handle) {
+        printf("[LJE] Failed to load binary module: %s\n", full_path);
+        return NULL;
+    }
+
+    LJEBinaryModule* module = (LJEBinaryModule*)malloc(sizeof(LJEBinaryModule));
+    module->handle = handle;
+    module->path = _strdup(full_path);
+    module->name = _strdup(name);
+    /* Remove .dll */
+    module->name[strlen(module->name) - 4] = '\0';
+
+    /* Call init if it exists */
+    LjeModuleInitFunc init_func =
+        (LjeModuleInitFunc)GetProcAddress(
+            handle,
+            "lje_module_init"
+        );
+
+    if (init_func)
+    {
+        LjeApi* api = create_module_api();
+        int init_result = init_func(api);
+        if (init_result != LJE_RESULT_OK)
+        {
+            printf("[LJE] Binary module %s failed to initialize (code %d)\n", full_path, init_result);
+            if (init_result == LJE_RESULT_INCOMPATIBLE_SDK_VERSION)
+            {
+                printf("[LJE] Incompatible module version! Expected %d\n", LJE_SDK_VERSION);
+            }
+
+            FreeLibrary(handle);
+            free((void*)module->path);
+            free(module);
+            return NULL;
+        }
+    }
+
+    printf("[LJE] Loaded binary module: %s\n", full_path);
+    return module;
+}
+
+static void pushljeenv(lua_State* L)
+{
+    if (LJEG()->main_state != L)
+    {
+        printf("[LJE] Warning: pushljeenv called on non-main state!\n");
+        return;
+    }
+
+    if (LJEG()->env_ref_id == LUA_NOREF)
+    {
+        printf("[LJE] Warning: pushljeenv called but no LJE environment set!\n");
+        lua_pushnil(L);
+        return;
+    }
+
+    lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
+}
+
+static void pop(lua_State* L)
+{
+    lua_pop(L, 1);
+}
+
+static int isnil(lua_State* L, int idx)
+{
+    return lua_isnil(L, idx);
+}
+
+static LjeLuaApi* create_lua_api()
+{
+    LjeLuaApi* api = (LjeLuaApi*)malloc(sizeof(LjeLuaApi));
+
+    api->pushstring = lua_pushstring;
+    api->tolstring = lua_tolstring;
+    api->pushnumber = lua_pushnumber;
+    api->tonumber = lua_tonumber;
+    api->pushinteger = lua_pushinteger;
+    api->tointeger = lua_tointeger;
+    api->pushlightuserdata = lua_pushlightuserdata;
+    api->tolightuserdata = lua_touserdata;
+    api->pushcclosure = lua_pushcclosure;
+    api->gettop = lua_gettop;
+    api->settop = lua_settop;
+    api->getfield = lua_getfield;
+    api->setfield = lua_setfield;
+    api->call = lua_call;
+    api->pcall = lua_pcall;
+    api->pushboolean = lua_pushboolean;
+    api->toboolean = lua_toboolean;
+    api->ref = luaL_ref;
+    api->unref = luaL_unref;
+    api->rawgeti = lua_rawgeti;
+    api->rawseti = lua_rawseti;
+    api->pushvalue = lua_pushvalue;
+    api->createtable = lua_createtable;
+    api->isnil = isnil;
+    api->type = lua_type;
+    api->typename_ = lua_typename;
+    api->objlen = lua_objlen;
+    api->pop = pop;
+    api->pushljeenv = pushljeenv;
+
+    return api;
+}
+
+static LjeApi* create_module_api()
+{
+    if (g_cached_module_api)
+        return g_cached_module_api;
+
+    LjeApi* api = (LjeApi*)malloc(sizeof(LjeApi));
+    api->version = LJE_SDK_VERSION;
+    LjeLuaApi* lua_api = create_lua_api();
+    api->lua = lua_api;
+
+    g_cached_module_api = api;
+    return api;
+}
+
+static void resolve_base(char* path, size_t path_size)
+{
+    char temp_path[MAX_PATH] = "%USERPROFILE%\\" LJE_BINARY_MODULE_FOLDER;
+    DWORD result = ExpandEnvironmentStringsA(temp_path, path, (DWORD)path_size);
+    if (result == 0 || result > path_size)
+    {
+        printf("[LJE] Failed to expand environment strings for binary module path!\n");
+        path[0] = '\0';
+    }
+}
+
+void lje_binary_module_ensure_folder_exists()
+{
+    char base_path[MAX_PATH] = { 0 };
+    resolve_base(base_path, MAX_PATH);
+
+    DWORD attrs = GetFileAttributesA(base_path);
+    if (attrs == INVALID_FILE_ATTRIBUTES || !(attrs & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        printf("[LJE] Binary module folder not found, creating it now...\n");
+        if (!CreateDirectoryA(base_path, NULL))
+        {
+            printf("[LJE] Failed to create binary module folder at %s\n", base_path);
+        } else {
+            printf("[LJE] Successfully created binary module folder at %s\n", base_path);
+        }
+    }
+}
+
+void lje_binary_module_load_all(
+    size_t* out_module_count,
+    LJEBinaryModule** out_modules
+)
+{
+    char base_path[MAX_PATH] = { 0 };
+    resolve_base(base_path, MAX_PATH);
+
+    WIN32_FIND_DATAA find_data;
+    char search_path[MAX_PATH];
+    snprintf(search_path, MAX_PATH, "%s\\*.dll", base_path);
+
+    HANDLE find_handle = FindFirstFileA(search_path, &find_data);
+    if (find_handle == INVALID_HANDLE_VALUE)
+    {
+        *out_module_count = 0;
+        *out_modules = NULL;
+        return;
+    }
+
+    size_t capacity = 10;
+    size_t count = 0;
+    LJEBinaryModule* modules = (LJEBinaryModule*)malloc(sizeof(LJEBinaryModule) * capacity);
+
+    do
+    {
+        if (count >= capacity)
+        {
+            capacity *= 2;
+            modules = (LJEBinaryModule*)realloc(modules, sizeof(LJEBinaryModule) * capacity);
+        }
+
+        char full_path[MAX_PATH];
+        snprintf(full_path, MAX_PATH, "%s\\%s", base_path, find_data.cFileName);
+
+        LJEBinaryModule* module = load_module(full_path, find_data.cFileName);
+        if (module)
+        {
+            modules[count++] = *module;
+            free(module);
+        }
+    } while (FindNextFileA(find_handle, &find_data));
+
+    FindClose(find_handle);
+
+    *out_module_count = count;
+    *out_modules = modules;
+}
+
+void lje_binary_module_unload(LJEBinaryModule* module)
+{
+    if (!module) return;
+
+    LjeModuleShutdownFunc shutdown_func =
+        (LjeModuleShutdownFunc)GetProcAddress(
+            (HMODULE)module->handle,
+            "lje_module_shutdown"
+        );
+
+    if (shutdown_func)
+    {
+        shutdown_func();
+    }
+
+    FreeLibrary((HMODULE)module->handle);
+    free((void*)module->path);
+    free(module);
+}
+
+void lje_binary_module_run_preinit(LJEBinaryModule* module, lua_State* L)
+{
+    if (!module || !module->handle) return;
+
+    LjeModulePreinitFunc preinit_func =
+        (LjeModulePreinitFunc)GetProcAddress(
+            (HMODULE)module->handle,
+            "lje_module_preinit"
+        );
+
+    if (!preinit_func)
+    {
+        printf("[LJE] Binary module %s has no preinit function.\n", module->path);
+        return;
+    }
+
+    preinit_func(L);
+}

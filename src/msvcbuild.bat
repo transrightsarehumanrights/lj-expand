@@ -14,7 +14,7 @@
 @if not defined INCLUDE goto :FAIL
 
 @setlocal
-@set LJINCLUDES=/I "libs/tomlc17/src"
+@set LJINCLUDES=/I "libs/tomlc17/src" /I "../sdk/include"
 @set LJCOMPILE=cl /nologo /c /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline /DLUAJIT_DISABLE_VMEVENT /DLUAJIT_DISABLE_FFI %LJINCLUDES%
 @set LJLINK=link /nologo
 @set LJMT=mt /nologo
