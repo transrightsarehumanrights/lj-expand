@@ -1241,60 +1241,61 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
   }
 
   /* LJE: Determine if this is an engine call. */
-  if (tvisfunc(L->base) && L == LJEG()->main_state && !LJEG()->using_error_reporter)
+  /* Note: Not all engine calls start at the base of the stack.
+   *
+   * Some are called during Lua (e.g: in a C function), so we need to pivot around the **top** of the stack instead, using
+   * api_call_base & the errfunc to determine where the function actually is.
+   */
+  if (L == LJEG()->main_state && !LJEG()->using_error_reporter && errfunc)
   {
-    GCfunc* f = funcV(L->base);
+    GCfunc* f = funcV(stkindex2adr(L, errfunc));
     char is_adv_error_reporter = iscfunc(f) ? f->c.f == LJEG()->adv_error_reporter : 0;
 
     if (is_adv_error_reporter)
     {
       /* Means the real function is just above this in the stack. */
-      cTValue* real_func = L->base + 1;
-      if (tvisfunc(real_func))
+      /* LJE: Call our engine hook, if we have one. */
+      if (LJEG()->engine_call_hook_ref_id != LUA_NOREF)
       {
-        /* LJE: Call our engine hook, if we have one. */
-        if (LJEG()->engine_call_hook_ref_id != LUA_NOREF)
+        /* This is how the stack is laid out, and it *must* remain this way for the engine:
+         * [errfunc][func][args...][leftovers]
+         * after call..
+         * [leftovers][results...]
+         *
+         * What we do, is just replace the func with our hook, and push the real func as the first argument:
+         * [errfunc][hook][real_func][args...][leftovers]
+         * after call..
+         * [leftovers][results...]
+         *
+         * This has the benefit of being simpler and handling errors properly, but it does mean the hook needs to
+         * dispatch each call to the real function.
+         */
+
+        int func_index = lua_gettop(L) - nargs; // index of real function
+        lua_pushvalue(L, func_index); // push a copy of it
+        lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->engine_call_hook_ref_id);
+        lua_replace(L, func_index); // replace real func with hook
+        lua_insert(L, func_index + 1); // move real func to be first arg (it remained on the top)
+        nargs += 1; // we added an argument
+        /* now add nargs and nresults */
+        lua_pushinteger(L, nargs - 1); /* -1 because the real func is now an arg */
+        lua_insert(L, func_index + 2); // move nargs to be second arg
+        lua_pushinteger(L, nresults);
+        lua_insert(L, func_index + 3); // move nresults to be third arg
+        nargs += 2; // we added two arguments
+
+        /* Stack is ready at this point. We need to resolve the errfunc now. */
+        ptrdiff_t ef = 0;
+        if (errfunc != 0)
         {
-          /* This is how the stack is laid out, and it *must* remain this way for the engine:
-           * [errfunc][func][args...][leftovers]
-           * after call..
-           * [leftovers][results...]
-           *
-           * What we do, is just replace the func with our hook, and push the real func as the first argument:
-           * [errfunc][hook][real_func][args...][leftovers]
-           * after call..
-           * [leftovers][results...]
-           *
-           * This has the benefit of being simpler and handling errors properly, but it does mean the hook needs to
-           * dispatch each call to the real function.
-           */
-
-          /* Push hook, replace it at index 2 */
-          lua_pushvalue(L, 2); /* save original func (after errfunc, so index 2) */
-          lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->engine_call_hook_ref_id);
-          lua_replace(L, 2); // Replace function with hook
-          /* Insert the real function as first argument, which is still at the top */
-          lua_insert(L, 3); // Move real func to be first argument (after errfunc and hook)
-          /* Now we can also add our nargs and nresults integers as well */
-          lua_pushinteger(L, nargs);
-          lua_insert(L, 4); // Move nargs to be after real func
-          lua_pushinteger(L, nresults);
-          lua_insert(L, 5); // Move nresults to be after nargs
-          nargs += 3; // We added 3 arguments
-
-          /* Stack is ready at this point. We need to resolve the errfunc now. */
-          ptrdiff_t ef = 0;
-          if (errfunc != 0)
-          {
-            cTValue *o = stkindex2adr(L, errfunc);
-            api_checkvalidindex(L, o);
-            ef = savestack(L, o);
-          }
-
-          /* fire it off! */
-          int status = lj_vm_pcall(L, api_call_base(L, nargs), nresults + 1, ef);
-          return status;
+          cTValue *o = stkindex2adr(L, errfunc);
+          api_checkvalidindex(L, o);
+          ef = savestack(L, o);
         }
+
+        /* fire it off! */
+        int status = lj_vm_pcall(L, api_call_base(L, nargs), nresults + 1, ef);
+        return status;
       }
     }
   }
