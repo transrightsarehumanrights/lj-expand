@@ -31,7 +31,7 @@ LJE_MODULE_INIT()
     // You return an enum value of type `LjeModuleInitResult`.
     g_ljeApi = api;
     
-    if (api->version != LJE_SDK_VERSION)
+    if (api->version != LJE_SDK_VERSION) // alternatively, you can use <= if you want to allower newer versions (backwards compatibility)
     {
         // The SDK version does not match the LJE version!
         return LJE_MODULE_INIT_RESULT_VERSION_MISMATCH;
@@ -53,8 +53,8 @@ LJE_MODULE_PREINIT(lua_State* L)
     // Most of the public Lua API is simply re-exposed by LJE, so you can use it as normal.
     // Since it is very much exactly like the public Lua C API, just re-exported, it is contained in the `lua` field.
     LjeLuaApi* lua = g_ljeApi->lua;
-    lua->pushenv(L); /* LJE-specific function to push the global LJE environment */
-    lua->pushcfunction(L, my_c_function);
+    lua->pushljeenv(L); /* LJE-specific function to push the global LJE environment */
+    lua->pushcclosure(L, my_c_function, 0);
     lua->setfield(L, -2, "my_c_function");
     lua->pop(L, 1); /* Pop the global environment */
     
