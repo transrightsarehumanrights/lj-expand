@@ -2,6 +2,8 @@
 #include "tomlc17.h"
 
 #include <stdio.h>
+
+#include "lauxlib.h"
 #ifdef _WIN64
 #include <windows.h>
 #endif
@@ -338,6 +340,10 @@ LJEScript* lje_script_load_all_scripts(size_t* out_script_count) {
                 scripts[script_count].main_path = _strdup(main_lua_path);
                 scripts[script_count].name = _strdup(find_data.cFileName);
                 scripts[script_count].info = info;
+
+                LJEScriptExtraInfo* extra = (LJEScriptExtraInfo*)malloc(sizeof(LJEScriptExtraInfo));
+                extra->engine_call_hook_ref_id = LUA_NOREF;
+                scripts[script_count].extra = extra;
 
                 // Check for preinit.lua
                 char preinit_lua_path[MAX_PATH] = { 0 };

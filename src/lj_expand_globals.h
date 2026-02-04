@@ -71,6 +71,7 @@ typedef struct LJEGlobalState
     size_t auth_metatable_count;
     lua_CFunction adv_error_reporter;
     int using_error_reporter;
+    int is_engine_call_handled;
     GCfunc* hidden_callers[MAX_HIDDEN_CALLERS];
     size_t hidden_caller_count;
     /* Hot reloading */

@@ -443,15 +443,23 @@ int lje_lib_auth_metatable(lua_State* L)
 int lje_set_engine_call_hook(lua_State* L)
 {
   GCfunc* callback = lj_lib_checkfunc(L, 1);
+  LJEScript* current_script = LJEG()->current_script;
+  if (!current_script)
+  {
+    lj_err_msg(L, LJ_ERR_LJE_NOSCRIPT);
+  }
+
   if (!isluafunc(callback))
   {
     lj_err_arg(L, 1, LJ_ERR_NOLFUNC);
   }
 
   funcextend(callback)->is_special = 1;
-  LJEG()->engine_call_hook_ref_id = luaL_ref(L, LUA_REGISTRYINDEX);
+  current_script->extra->engine_call_hook_ref_id = luaL_ref(L, LUA_REGISTRYINDEX);
   return 0;
 }
+
+int lje_handle_engine_call(lua_State* L) { LJEG()->is_engine_call_handled = 1; return 0; }
 
 int lje_compile_string(lua_State* L)
 {
@@ -481,6 +489,13 @@ int lje_lib_hide_caller(lua_State* L)
 {
   GCfunc* func = lj_lib_checkfunc(L, 1);
   lje_hide_caller(func);
+  return 0;
+}
+
+int lje_set_show_special_frames(lua_State* L)
+{
+  int show = lua_toboolean(L, 1);
+  LJEG()->show_special_frames = show;
   return 0;
 }
 
@@ -552,6 +567,7 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("restore_random_state", lje_random_restore);
     LJE_SET_FUNC("remap_metatable", lje_remap_metatable);
     LJE_SET_FUNC("auth_metatable", lje_lib_auth_metatable);
+    LJE_SET_FUNC("show_special_frames", lje_set_show_special_frames); /* useful for making inter-LJE debug introspection work */
   LJE_END_SECTION("env");
 
   /* util: unassorted utility functions */
@@ -574,6 +590,7 @@ void lje_addfuncs(lua_State* L) {
   LJE_NEW_SECTION()
     LJE_SET_FUNC("patch_bytecodes", lje_patch_bytecodes);
     LJE_SET_FUNC("set_engine_call_hook", lje_set_engine_call_hook);
+    LJE_SET_FUNC("handle_engine_call", lje_handle_engine_call);
   LJE_END_SECTION("vm");
 
   /* data: simple data storage API */
