@@ -4,51 +4,53 @@ LJE provides a key instrument, the engine call hook, which allows users to, at a
 intercept and modify any Lua call made by GMod. This is particularly useful for creating undetectable
 systems like using hooks without the `hook` library, or adding concommands without the `concommand` library (highly detectable).
 
+**Each script only gets one engine hook. To make multiple engine hooks for one script, you should just chain them together inside a single hook.**
+
 ## Overview
 
 Engine hooks are called by LJE whenever GMod makes a Lua call. You can register a callback like so:
 
 ```lua
-lje.vm.add_engine_call_hook(function(func, nargs, nresults, ...)
+lje.vm.set_engine_call_hook(function(func, nargs, nresults, ...)
     if nargs > 0 then
         local name = select(1, ...)
         if func == lje.get_global("hook", "Call") and name == "CalcView" then
             -- Let us call it.
+            -- NOTE: **NEVER** pcall or xpcall func, as this will make it detectable!
             local a, b, c, d, e, f = func(...)
 
             if a then
                 a.fov = 144
             end
-            
-            return false, a, b, c, d, e, f
+               
+            lje.vm.handle_engine_call() -- Signals to the VM that we're going to handle this call.
+            return a, b, c, d, e, f
         end
     end
-
-    return true -- Let em go through!
 end)
 ```
 
 This example intercepts calls to `hook.Call` with the first argument being `"CalcView"`, and modifies the FOV of the returned view table to be 144.
-Returning `false` from the hook indicates that you are handling the call, and the subsequent return values are passed back to the original caller.
-Returning `true` indicates that you are not handling the call, and it should be dispatched as normal.
+To tell the VM that you are handling the call, you **MUST** call `lje.vm.handle_engine_call()` before returning. Otherwise, the call will be dispatched as normal.
 
 Here is another example that intercepts console commands:
 
 ```lua
 AddConsoleCommand("gilbhax_fart", "Hi!", 0)
 
-lje.vm.add_engine_call_hook(function(func, nargs, nresults, ...)
+lje.vm.set_engine_call_hook(function(func, nargs, nresults, ...)
     if nargs > 0 then
         if func == lje.get_global("concommand", "Run") then
             local ply, cmd, args, argStr = ...
             if cmd == "gilbhax_fart" then
                 lje.con_printf("Fart completed.")
-                return false, true -- Block the original function call.
+                lje.vm.handle_engine_call() -- Signals to the VM that we're going to handle this call.
+                return true -- This mimics the original concommand.Run return value, which is true if successful.
             end
         end
     end
-
-    return true -- Let em go through!
+    
+    -- You do nothing if you don't want to handle it. It will then be dispatched as normal.
 end)
 ```
 

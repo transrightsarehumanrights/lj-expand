@@ -226,35 +226,6 @@ end
 setfenv(safeEnv.lje.get_global, safeEnv)
 setfenv(safeEnv.lje.get_global_static, safeEnv)
 
-local engineCallHooks = {}
-safeEnv.lje.vm.add_engine_call_hook = function(fn)
-  lje.func.mark_special(fn)
-  engineCallHooks[lje.env.current_script()] = fn
-end
-
-setfenv(safeEnv.lje.vm.add_engine_call_hook, safeEnv)
-
-local function engineCallHookDispatcher(func, nargs, nresults, ...)
-  if func == nil then
-    return
-  end
-
-  for _, hookFn in pairs(engineCallHooks) do
-    local results = {hookFn(func, nargs, nresults, ...)}
-    if not results[1] then
-        -- This hook wants to take it, let them handle the call
-        return unpack(results, 2)
-    end
-  end
-
-  -- Otherwise, there's basically no hook that wants to dispatch this call, so we'll do it.
-  return func(...)
-end
-
-setfenv(engineCallHookDispatcher, safeEnv)
-lje.vm.set_engine_call_hook(engineCallHookDispatcher)
-lje.con_print("Engine call hook set!")
-
 -- Add a circular reference to the safe environment in the safeEnv
 safeEnv._L = safeEnv
 

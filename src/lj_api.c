@@ -1193,6 +1193,16 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     lje_clear_global_refs();
 
     lje_startup_preinit(L);
+
+    if (LJEG()->loaded_binary_module_count > 0)
+    {
+      printf("[LJE] Running preinit for %d binary modules...\n", LJEG()->loaded_binary_module_count);
+      for (int i = 0; i < LJEG()->loaded_binary_module_count; i++)
+      {
+        lje_binary_module_run_preinit(&LJEG()->loaded_binary_modules[i], L);
+      }
+    }
+
     // ENSURE PREINIT DOES NOT AFFECT RANDOM STATE!
     lje_save_random_state();
     // See if there's any more scripts that want to run at preinit.
@@ -1253,49 +1263,71 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 
     if (is_adv_error_reporter)
     {
-      /* Means the real function is just above this in the stack. */
-      /* LJE: Call our engine hook, if we have one. */
-      if (LJEG()->engine_call_hook_ref_id != LUA_NOREF)
-      {
-        /* This is how the stack is laid out, and it *must* remain this way for the engine:
-         * [errfunc][func][args...][leftovers]
-         * after call..
-         * [leftovers][results...]
-         *
-         * What we do, is just replace the func with our hook, and push the real func as the first argument:
-         * [errfunc][hook][real_func][args...][leftovers]
-         * after call..
-         * [leftovers][results...]
-         *
-         * This has the benefit of being simpler and handling errors properly, but it does mean the hook needs to
-         * dispatch each call to the real function.
-         */
-
-        int func_index = lua_gettop(L) - nargs; // index of real function
-        lua_pushvalue(L, func_index); // push a copy of it
-        lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->engine_call_hook_ref_id);
-        lua_replace(L, func_index); // replace real func with hook
-        lua_insert(L, func_index + 1); // move real func to be first arg (it remained on the top)
-        nargs += 1; // we added an argument
-        /* now add nargs and nresults */
-        lua_pushinteger(L, nargs - 1); /* -1 because the real func is now an arg */
-        lua_insert(L, func_index + 2); // move nargs to be second arg
-        lua_pushinteger(L, nresults);
-        lua_insert(L, func_index + 3); // move nresults to be third arg
-        nargs += 2; // we added two arguments
-
-        /* Stack is ready at this point. We need to resolve the errfunc now. */
-        ptrdiff_t ef = 0;
-        if (errfunc != 0)
+      /* LJE: Call our engine hooks, if we have any. */
+      for (size_t i = 0; i < LJEG()->loaded_script_count; i++) {
+        LJEScript* script = LJEG()->script_load_order[i];
+        if (script->extra->engine_call_hook_ref_id != LUA_NOREF) /* Whichever scripts returns false first, we allow them to handle it. */
         {
-          cTValue *o = stkindex2adr(L, errfunc);
-          api_checkvalidindex(L, o);
-          ef = savestack(L, o);
-        }
+          /* Since each script needs a try at handling the engine call, we'll save the stack up to the real function,
+           * to preserve it for each script's hook.
+           */
 
-        /* fire it off! */
-        int status = lj_vm_pcall(L, api_call_base(L, nargs), nresults + 1, ef);
-        return status;
+          TValue saved_stack[32] = {0}; // Arbitrary limit of 32 values for now.
+          cTValue* save_base = L->top-1-nargs;
+          size_t save_base_index = save_base - L->base;
+          size_t stack_size = nargs + 1; // +1 since we need to also save the function being called
+          int original_nargs = nargs;
+
+          memcpy(saved_stack, save_base, sizeof(TValue) * (stack_size < 32 ? stack_size : 32));
+
+          int func_index = lua_gettop(L) - nargs; // index of real function
+          lua_pushvalue(L, func_index); // push a copy of it
+          lua_rawgeti(L, LUA_REGISTRYINDEX, script->extra->engine_call_hook_ref_id); // get the hook
+          lua_replace(L, func_index); // replace real func with hook
+          lua_insert(L, func_index + 1); // move real func to be first arg (it remained on the top)
+          nargs += 1; // we added an argument
+          /* now add nargs and nresults */
+          lua_pushinteger(L, nargs - 1); /* -1 because the real func is now an arg */
+          lua_insert(L, func_index + 2); // move nargs to be second arg
+          lua_pushinteger(L, nresults);
+          lua_insert(L, func_index + 3); // move nresults to be third arg
+          nargs += 2; // we added two arguments
+
+          /* Stack is ready at this point. We need to resolve the errfunc now. */
+          ptrdiff_t ef = 0;
+          if (errfunc != 0)
+          {
+            cTValue *o = stkindex2adr(L, errfunc);
+            api_checkvalidindex(L, o);
+            ef = savestack(L, o);
+          }
+
+          /* fire it off! */
+          LJEG()->is_engine_call_handled = 0; /* hook will set this to 1 if handled, it's just faster and easier than having it return a value */
+          LJEG()->using_error_reporter = 1; /* prevent recursion in error reporter */
+          int status = lj_vm_pcall(L, api_call_base(L, nargs), nresults + 1, ef);
+          LJEG()->using_error_reporter = 0;
+
+          if (status != LUA_OK)
+          {
+            return status; /* propagate to caller */
+          }
+
+          if (LJEG()->is_engine_call_handled)
+          {
+            /* Script handled engine call, return now. */
+            return LUA_OK;
+          }
+
+          /* Restore stack for next script to try. If no script handles it, it'll pass through to the
+           * original lua_pcall below and get called properly.
+           */
+          save_base = L->base + save_base_index; /* recompute pointer in case of stack resize */
+          memcpy(save_base, saved_stack, sizeof(TValue) * (stack_size < 32 ? stack_size : 32));
+          L->top = save_base + stack_size;
+          // Since we're going back down to the original function, restore nargs.
+          nargs = original_nargs;
+        }
       }
     }
   }
@@ -1544,6 +1576,21 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
         printf("[LJE] Found AdvancedLuaErrorReporter at %p\n", LJEG()->adv_error_reporter);
       } else {
         printf("[LJE] AdvancedLuaErrorReporter not found!\n");
+      }
+
+      printf("[LJE] Loading binary modules...\n");
+      lje_binary_module_ensure_folder_exists();
+      lje_binary_module_load_all(&LJEG()->loaded_binary_module_count, &LJEG()->loaded_binary_modules);
+      if (LJEG()->loaded_binary_module_count > 0)
+      {
+        printf("[LJE] Loaded %d binary modules:\n", LJEG()->loaded_binary_module_count);
+        for (int i = 0; i < LJEG()->loaded_binary_module_count; i++)
+        {
+          LJEBinaryModule module = LJEG()->loaded_binary_modules[i];
+          printf("[LJE] - %s\n", module.name);
+        }
+      } else {
+        printf("[LJE] No binary modules loaded.\n");
       }
 
       if (!lje_script_folder_exists())

@@ -23,6 +23,10 @@ typedef struct LJEScriptInfo
     size_t dependency_count;
 } LJEScriptInfo;
 
+typedef struct LJEScriptExtraInfo
+{
+    int engine_call_hook_ref_id;
+} LJEScriptExtraInfo;
 /* LJEScripts represent a folder containing Lua scripts to be loaded by LJE.
  * Each script has atleast one file, 'main.lua', which is the entrypoint. Additional files can be
  * included as needed relative to the script's path.
@@ -34,6 +38,7 @@ typedef struct LJEScript
     const char* preinit_path;
     const char* name;
     LJEScriptInfo* info;
+    LJEScriptExtraInfo* extra;
 } LJEScript;
 
 void lje_script_resolve_base(char* out_buffer, size_t buffer_size);

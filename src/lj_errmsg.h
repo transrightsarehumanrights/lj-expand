@@ -184,6 +184,7 @@ ERRDEF(FFI_NYICALL,	"NYI: cannot call this C function (yet)")
 #endif
 
 ERRDEF(LJE_UNAUTH, "access untrusted metatable by")
+ERRDEF(LJE_NOSCRIPT, "no script context found")
 #undef ERRDEF
 
 /* Detecting unused error messages:

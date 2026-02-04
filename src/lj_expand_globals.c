@@ -23,6 +23,12 @@ void lje_clear_global_refs() {
     LJEG()->push_string_ref_id = LUA_NOREF;
     LJEG()->script_hook_ref_id = LUA_NOREF;
     LJEG()->engine_call_hook_ref_id = LUA_NOREF;
+    for (size_t i = 0; i < LJEG()->loaded_script_count; i++)
+    {
+        LJEScript* script = LJEG()->script_load_order[i];
+        script->extra->engine_call_hook_ref_id = LUA_NOREF;
+    }
+
     memset(&LJEG()->metatable_remaps[0], 0, sizeof(LJEG()->metatable_remaps));
     memset(&LJEG()->auth_metatables[0], 0, sizeof(LJEG()->auth_metatables));
     LJEG()->auth_metatable_count = 0;
