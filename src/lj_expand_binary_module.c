@@ -1,5 +1,7 @@
 #include "lj_expand_binary_module.h"
 #include <windows.h> /* Let's be honest, Linux support is not coming anytime soon */
+#include <wincrypt.h>
+
 #include <stdio.h>
 #define LJE_NO_OPAQUE_STATE
 #include "lauxlib.h"
@@ -7,11 +9,20 @@
 #include "lj_expand_globals.h"
 #include "lua.h"
 
+#define VIRUS_TOTAL_FILE_URL "https://www.virustotal.com/gui/file/%s"
 static LjeApi* create_module_api();
 static LjeApi* g_cached_module_api = NULL;
 
+static char* hash_module(const char* full_path);
 static LJEBinaryModule* load_module(const char* full_path, const char* name)
 {
+    char* module_hash = hash_module(full_path);
+    if (!module_hash)
+    {
+        printf("[LJE] Failed to hash binary module: %s\n", full_path);
+        return NULL;
+    }
+
     HMODULE handle = LoadLibraryA(full_path);
     if (!handle) {
         printf("[LJE] Failed to load binary module: %s\n", full_path);
@@ -22,6 +33,7 @@ static LJEBinaryModule* load_module(const char* full_path, const char* name)
     module->handle = handle;
     module->path = _strdup(full_path);
     module->name = _strdup(name);
+    module->hash = module_hash;
     /* Remove .dll */
     module->name[strlen(module->name) - 4] = '\0';
 
@@ -52,6 +64,8 @@ static LJEBinaryModule* load_module(const char* full_path, const char* name)
     }
 
     printf("[LJE] Loaded binary module: %s\n", full_path);
+    printf("[LJE]    - Hash: %s\n", module->hash);
+    printf("[LJE]    - VirusTotal (may not exist): " VIRUS_TOTAL_FILE_URL "\n", module->hash);
     return module;
 }
 
@@ -134,6 +148,90 @@ static LjeApi* create_module_api()
     return api;
 }
 
+static char* hash_module(const char* full_path)
+{
+    HCRYPTPROV prov = 0;
+    HCRYPTHASH hash = 0;
+    HANDLE file = INVALID_HANDLE_VALUE;
+    BYTE buffer[4096];
+    DWORD bytes_read;
+    DWORD hash_len = 32;
+    BYTE hash_out[32];
+
+    file = CreateFileA(full_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    if (file == INVALID_HANDLE_VALUE)
+        goto cleanup;
+
+    if (!CryptAcquireContextW(&prov, NULL, NULL, PROV_RSA_AES, CRYPT_VERIFYCONTEXT))
+        goto cleanup;
+
+    if (!CryptCreateHash(prov, CALG_SHA_256, 0, 0, &hash))
+        goto cleanup;
+
+    while (ReadFile(file, buffer, sizeof(buffer), &bytes_read, NULL) && bytes_read > 0) {
+        if (!CryptHashData(hash, buffer, bytes_read, 0))
+            goto cleanup;
+    }
+
+    if (CryptGetHashParam(hash, HP_HASHVAL, hash_out, &hash_len, 0))
+    {
+        char* hash_str = (char*)malloc(hash_len * 2 + 1);
+        for (DWORD i = 0; i < hash_len; i++) {
+            sprintf_s(&hash_str[i * 2], 3, "%02x", hash_out[i]);
+        }
+        hash_str[hash_len * 2] = '\0';
+        return hash_str;
+    }
+
+    cleanup:
+    if (hash) CryptDestroyHash(hash);
+    if (prov) CryptReleaseContext(prov, 0);
+    if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+    return NULL;
+}
+
+static int has_user_been_warned()
+{
+    /* Check if the warning flag file is there */
+    char warning_flag_path[MAX_PATH] = { 0 };
+    char temp_path[MAX_PATH] = "%USERPROFILE%\\" LJE_BINARY_MODULE_FOLDER "\\" LJE_WARNED_FLAG;
+    DWORD result = ExpandEnvironmentStringsA(temp_path, warning_flag_path, (DWORD)MAX_PATH);
+    if (result == 0 || result > MAX_PATH)
+    {
+        return 0; /* Failed to expand, assume not warned */
+    }
+
+    DWORD attrs = GetFileAttributesA(warning_flag_path);
+    return (attrs != INVALID_FILE_ATTRIBUTES);
+}
+
+static void write_warning()
+{
+    /* Create the warning flag file */
+    char warning_flag_path[MAX_PATH] = { 0 };
+    char temp_path[MAX_PATH] = "%USERPROFILE%\\" LJE_BINARY_MODULE_FOLDER "\\" LJE_WARNED_FLAG;
+    DWORD result = ExpandEnvironmentStringsA(temp_path, warning_flag_path, (DWORD)MAX_PATH);
+    if (result == 0 || result > MAX_PATH)
+    {
+        return; /* Failed to expand, cannot write */
+    }
+
+    HANDLE file = CreateFileA(
+        warning_flag_path,
+        GENERIC_WRITE,
+        0,
+        NULL,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL
+    );
+
+    if (file != INVALID_HANDLE_VALUE)
+    {
+        CloseHandle(file);
+    }
+}
+
 static void resolve_base(char* path, size_t path_size)
 {
     char temp_path[MAX_PATH] = "%USERPROFILE%\\" LJE_BINARY_MODULE_FOLDER;
@@ -168,6 +266,21 @@ void lje_binary_module_load_all(
     LJEBinaryModule** out_modules
 )
 {
+    if (!has_user_been_warned())
+    {
+        printf("[LJE] ************* WARNING *************\n");
+        printf("[LJE] Loading binary modules from '%s'!\n", LJE_BINARY_MODULE_FOLDER);
+        printf("[LJE] Make sure you **ALWAYS** verify the integrity of any binary modules you download from third-party sources!\n");
+        printf("[LJE] Malicious modules can compromise your system security and personal data!\n");
+        printf("[LJE] Ideally, only use modules from trusted sources or those that are open-source and publicly auditable.\n");
+        printf("[LJE] You have been warned.\n");
+        printf("[LJE] ***********************************\n");
+        write_warning();
+
+        printf("\a"); /* Beep to get attention */
+        Sleep(5000); /* Give user time to read the warning */
+    }
+
     char base_path[MAX_PATH] = { 0 };
     resolve_base(base_path, MAX_PATH);
 
