@@ -109,6 +109,7 @@ static LjeLuaApi* create_lua_api()
     api->tointeger = lua_tointeger;
     api->pushlightuserdata = lua_pushlightuserdata;
     api->tolightuserdata = lua_touserdata;
+    api->pushnil = lua_pushnil;
     api->pushcclosure = lua_pushcclosure;
     api->gettop = lua_gettop;
     api->settop = lua_settop;
