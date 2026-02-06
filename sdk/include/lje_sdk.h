@@ -88,7 +88,7 @@ struct LjeLuaApi
     /* NOTE: luaL_newmetatable is not included because its internal logic
      * is detectable. If you want to create a metatable, just createtable and set it in the registry yourself,
      * without a string key since those are detectable. */
-    void (*newuserdata)(void* L, size_t sz);
+    void* (*newuserdata)(void* L, size_t sz);
     void* (*touserdata)(void* L, int idx);
     void (*setmetatable)(void* L, int idx);
 };
