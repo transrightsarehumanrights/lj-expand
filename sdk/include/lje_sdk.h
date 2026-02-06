@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-#define LJE_SDK_VERSION 110 /* SemVer: 1.1.0 */
+#define LJE_SDK_VERSION 120 /* SemVer: 1.2.0 */
 
 #ifndef LJE_NO_OPAQUE_STATE /* LJE includes this file internally where lua_State is already defined */
 typedef void* lua_State;
@@ -84,6 +84,13 @@ struct LjeLuaApi
     /* LJE-specific extensions */
     void (*pop)(void* L, int n);
     void (*pushljeenv)(void* L);
+
+    /* NOTE: luaL_newmetatable is not included because its internal logic
+     * is detectable. If you want to create a metatable, just createtable and set it in the registry yourself,
+     * without a string key since those are detectable. */
+    void (*newuserdata)(void* L, size_t sz);
+    void* (*touserdata)(void* L, int idx);
+    void (*setmetatable)(void* L, int idx);
 };
 
 struct LjeApi

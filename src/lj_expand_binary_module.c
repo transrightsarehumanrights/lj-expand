@@ -131,6 +131,9 @@ static LjeLuaApi* create_lua_api()
     api->objlen = lua_objlen;
     api->pop = pop;
     api->pushljeenv = pushljeenv;
+    api->newuserdata = lua_newuserdata;
+    api->touserdata = lua_touserdata;
+    api->setmetatable = lua_setmetatable;
 
     return api;
 }
