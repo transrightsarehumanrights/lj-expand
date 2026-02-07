@@ -1304,9 +1304,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 
           /* fire it off! */
           LJEG()->is_engine_call_handled = 0; /* hook will set this to 1 if handled, it's just faster and easier than having it return a value */
-          LJEG()->using_error_reporter = 1; /* prevent recursion in error reporter */
           int status = lj_vm_pcall(L, api_call_base(L, nargs), nresults + 1, ef);
-          LJEG()->using_error_reporter = 0;
 
           if (status != LUA_OK)
           {
