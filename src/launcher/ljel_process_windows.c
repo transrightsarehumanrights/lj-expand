@@ -88,7 +88,7 @@ void inject_into_process(HANDLE hProcess, const char* dll_path)
     ljel_log("DLL injected successfully into process.");
 }
 
-void launch_and_inject(const char* gmod_path, const char* lje_path)
+void launch_and_inject(const char* gmod_path, const char* lje_path, int argc, char** argv)
 {
     STARTUPINFOA si = { 0 };
     PROCESS_INFORMATION pi = { 0 };
@@ -96,9 +96,43 @@ void launch_and_inject(const char* gmod_path, const char* lje_path)
 
     DEBUG_EVENT debug_event = { 0 };
 
+    // Build command line from argc/argv
+    char* cmdline = NULL;
+    size_t cmdline_len = strlen(gmod_path) + 1; // +1 for space or null terminator
+
+    // Calculate total length needed
+    for (int i = 0; i < argc; i++)
+    {
+        cmdline_len += strlen(argv[i]) + 3; // +3 for quotes and space
+    }
+
+    cmdline = (char*)malloc(cmdline_len);
+    if (!cmdline)
+    {
+        ljel_panic("Failed to allocate memory for command line");
+    }
+
+    // Build the command line string
+    strcpy(cmdline, gmod_path);
+    for (int i = 0; i < argc; i++)
+    {
+        strcat(cmdline, " ");
+        // Add quotes if argument contains spaces
+        if (strchr(argv[i], ' '))
+        {
+            strcat(cmdline, "\"");
+            strcat(cmdline, argv[i]);
+            strcat(cmdline, "\"");
+        }
+        else
+        {
+            strcat(cmdline, argv[i]);
+        }
+    }
+
     if (!CreateProcessA(
             gmod_path,
-            NULL,
+            cmdline,
             NULL,
             NULL,
             FALSE,
@@ -108,6 +142,7 @@ void launch_and_inject(const char* gmod_path, const char* lje_path)
             &si,
             &pi))
     {
+        free(cmdline);
         print_error_info();
         if (GetLastError() == ERROR_FILE_NOT_FOUND)
         {
@@ -118,6 +153,7 @@ void launch_and_inject(const char* gmod_path, const char* lje_path)
         }
     }
 
+    free(cmdline);
     ljel_log("Process created, PID: %d", pi.dwProcessId);
     ResumeThread(pi.hThread);
 

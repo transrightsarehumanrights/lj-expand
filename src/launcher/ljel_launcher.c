@@ -37,7 +37,7 @@ char* resolve_gmod_path()
     return _strdup(gmod_path);
 }
 
-int main()
+int main(int argc, char* argv[])
 {
     char* dll_path = resolve_lje_path();
     if (dll_path == NULL)
@@ -53,6 +53,6 @@ int main()
     }
 
     ljel_log("Launching GMod from path: %s", gmod_path);
-    launch_and_inject(gmod_path, dll_path);
+    launch_and_inject(gmod_path, dll_path, argc, argv); /* forward command line args to gmod for convenience */
     return 0;
 }
