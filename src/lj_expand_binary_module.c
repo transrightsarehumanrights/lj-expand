@@ -6,6 +6,7 @@
 #define LJE_NO_OPAQUE_STATE
 #include "lauxlib.h"
 #include "lje_sdk.h"
+#include "lj_expand_frame.h"
 #include "lj_expand_globals.h"
 #include "lua.h"
 
@@ -135,6 +136,7 @@ static LjeLuaApi* create_lua_api()
     api->touserdata = lua_touserdata;
     api->setmetatable = lua_setmetatable;
     api->getupvalue = lua_getupvalue;
+    api->is_lje_involved = lje_frame_is_lua_involved;
 
     return api;
 }
