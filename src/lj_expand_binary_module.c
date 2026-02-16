@@ -136,7 +136,7 @@ static LjeLuaApi* create_lua_api()
     api->touserdata = lua_touserdata;
     api->setmetatable = lua_setmetatable;
     api->getupvalue = lua_getupvalue;
-    api->is_lje_involved = lje_frame_is_lua_involved;
+    api->is_lje_involved = lje_frame_is_lje_involved;
 
     return api;
 }
