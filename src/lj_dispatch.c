@@ -385,6 +385,12 @@ void callhook(lua_State *L, int event, BCLine line)
     {
       return;
     }
+
+    // Also don't run if this is a LJE-created C-closure
+    if (funcextendc(fn)->is_special)
+    {
+      return;
+    }
   }
 
   // Next, check if this is a function that *should* be ignored once if it was hooked

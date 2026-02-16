@@ -84,5 +84,13 @@ int lje_frame_is_lje(lua_State* L, int frame_offset)
             return 1;
     }
 
+    if (iscfunc(fn))
+    {
+        if (funcextendc(fn)->is_special)
+        {
+            return 1;
+        }
+    }
+
     return 0;
 }
