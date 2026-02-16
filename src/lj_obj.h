@@ -480,6 +480,9 @@ typedef struct LJEproto
 #define funcextend(fn) \
   check_exp(isluafunc(fn), \
       (LJEfunc *)((char *)(fn) + sizeLfunc((MSize)(fn)->l.nupvalues)))
+#define funcextendc(fn) \
+  check_exp(iscfunc(fn), \
+      (LJEfunc *)((char *)(fn) + sizeCfunc((MSize)(fn)->c.nupvalues)))
 #define funcspoof(fn) \
   check_exp(isluafunc(fn), gcrefp(funcextend(fn)->spoof, GCfunc))
 #define use_spoofed_func(fn) \

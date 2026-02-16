@@ -114,13 +114,20 @@ void LJ_FASTCALL lj_func_freeuv(global_State *g, GCupval *uv)
 
 GCfunc *lj_func_newC(lua_State *L, MSize nelems, GCtab *env)
 {
-  GCfunc *fn = (GCfunc *)lj_mem_newgco(L, sizeCfunc(nelems));
+  GCfunc *fn = (GCfunc *)lj_mem_newgco(L, sizeCfunc(nelems) + sizeof(LJEfunc));
+  /* LJE: Reduce reported memory usage for functions to avoid detection */
+  G(L)->gc.total -= sizeof(LJEfunc);
+
   fn->c.gct = ~LJ_TFUNC;
   fn->c.ffid = FF_C;
   fn->c.nupvalues = (uint8_t)nelems;
   /* NOBARRIER: The GCfunc is new (marked white). */
   setmref(fn->c.pc, &G(L)->bc_cfunc_ext);
   setgcref(fn->c.env, obj2gco(env));
+
+  LJEfunc* ljeFn = (LJEfunc*)((char*)fn + sizeCfunc(nelems));
+  memset(ljeFn, 0, sizeof(LJEfunc));
+
   return fn;
 }
 

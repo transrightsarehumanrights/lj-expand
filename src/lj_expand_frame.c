@@ -48,6 +48,18 @@ int lje_frame_is_lje_involved(lua_State* L, int frame_offset, int max_level)
             if (pt->is_from_lje)
                 return 1;
         }
+
+        // Previously, this was not a concern, but with the FFI module,
+        // a LJE-created C closure can end up as the root of the call stack (ffi hooks and callbacks).
+        // In this case, we can repurpose that spare byte we append as metadata and check if is_special == 1,
+        // which indicates this is a special C-closure made by LJE and not anything else.
+        if (iscfunc(fn))
+        {
+            if (funcextendc(fn)->is_special)
+            {
+                return 1;
+            }
+        }
     }
 
     return 0;

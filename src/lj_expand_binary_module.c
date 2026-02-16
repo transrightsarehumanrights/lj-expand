@@ -70,6 +70,17 @@ static LJEBinaryModule* load_module(const char* full_path, const char* name)
     return module;
 }
 
+static TValue *stkindex2adr(lua_State *L, int idx)
+{
+    if (idx > 0) {
+        TValue *o = L->base + (idx - 1);
+        return o < L->top ? o : niltv(L);
+    } else {
+        api_check(L, idx != 0 && -idx <= L->top - L->base);
+        return L->top + idx;
+    }
+}
+
 static void pushljeenv(lua_State* L)
 {
     if (LJEG()->main_state != L)
@@ -96,6 +107,21 @@ static void pop(lua_State* L)
 static int isnil(lua_State* L, int idx)
 {
     return lua_isnil(L, idx);
+}
+
+static void mark_special(lua_State* L, int idx)
+{
+    cTValue* obj = stkindex2adr(L, idx);
+    if (tvisfunc(obj))
+    {
+        GCfunc* func = funcV(obj);
+        if (isluafunc(func))
+            funcextend(func)->is_special = 1;
+        else if (iscfunc(func))
+            funcextendc(func)->is_special = 1;
+        else
+            printf("[LJE] Warning: Tried to mark non-function as special!\n");
+    }
 }
 
 static LjeLuaApi* create_lua_api()
@@ -137,6 +163,7 @@ static LjeLuaApi* create_lua_api()
     api->setmetatable = lua_setmetatable;
     api->getupvalue = lua_getupvalue;
     api->is_lje_involved = lje_frame_is_lje_involved;
+    api->mark_special = mark_special;
 
     return api;
 }
