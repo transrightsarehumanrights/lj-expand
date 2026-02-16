@@ -134,6 +134,7 @@ static LjeLuaApi* create_lua_api()
     api->newuserdata = lua_newuserdata;
     api->touserdata = lua_touserdata;
     api->setmetatable = lua_setmetatable;
+    api->getupvalue = lua_getupvalue;
 
     return api;
 }

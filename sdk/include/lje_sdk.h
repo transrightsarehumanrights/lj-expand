@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-#define LJE_SDK_VERSION 120 /* SemVer: 1.2.0 */
+#define LJE_SDK_VERSION 130 /* SemVer: 1.2.0 */
 
 #ifndef LJE_NO_OPAQUE_STATE /* LJE includes this file internally where lua_State is already defined */
 typedef void* lua_State;
@@ -91,6 +91,8 @@ struct LjeLuaApi
     void* (*newuserdata)(void* L, size_t sz);
     void* (*touserdata)(void* L, int idx);
     void (*setmetatable)(void* L, int idx);
+
+    const char* (*getupvalue)(void* L, int idx, int n);
 };
 
 struct LjeApi
