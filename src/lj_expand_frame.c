@@ -27,7 +27,7 @@ int lje_frame_is_lje_involved(lua_State* L, int frame_offset, int max_level)
 {
     if (max_level < 0)
     {
-        max_level = INT32_MAX;
+        max_level = INT32_MAX - frame_offset; /* so we don't overflow! */
     }
 
     for (int i = frame_offset; i < frame_offset + max_level; i++)

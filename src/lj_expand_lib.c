@@ -317,7 +317,8 @@ int lje_is_lua_involved(lua_State* L)
 int lje_is_lje_involved(lua_State* L)
 {
   int frame_offset = luaL_optinteger(L, 1, 1);
-  if (lje_frame_is_lje_involved(L, frame_offset, -1))
+  int max_depth = luaL_optinteger(L, 2, -1);
+  if (lje_frame_is_lje_involved(L, frame_offset, max_depth))
   {
     lua_pushboolean(L, 1);
   } else
