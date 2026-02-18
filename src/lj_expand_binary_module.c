@@ -164,6 +164,7 @@ static LjeLuaApi* create_lua_api()
     api->getupvalue = lua_getupvalue;
     api->is_lje_involved = lje_frame_is_lje_involved;
     api->mark_special = mark_special;
+    api->pushlstring = lua_pushlstring;
 
     return api;
 }

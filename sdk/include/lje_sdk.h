@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-#define LJE_SDK_VERSION 150 /* SemVer: 1.5.0 */
+#define LJE_SDK_VERSION 160 /* SemVer: 1.5.0 */
 
 #ifndef LJE_NO_OPAQUE_STATE /* LJE includes this file internally where lua_State is already defined */
 typedef void* lua_State;
@@ -95,6 +95,7 @@ struct LjeLuaApi
     const char* (*getupvalue)(void* L, int idx, int n);
     int (*is_lje_involved)(void* L, int offset, int max_level); // Returns 1 if any of the call frames up to max_level above the current frame + offset are LJE frames.
     void (*mark_special)(void* L, int idx); // Marks a function, C-closures supported, as special.
+    void (*pushlstring)(void* L, const char* str, size_t len); // Like pushstring but for strings with embedded nulls.
 };
 
 struct LjeApi
