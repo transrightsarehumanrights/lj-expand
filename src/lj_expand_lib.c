@@ -532,6 +532,8 @@ static int lje_gc_end_track(lua_State *L)
 
   tracker->active = 0;
 
+  GCSize hidden = g->gc.total - tracker->saved_total;
+
   // Tag root list objects, we've co-opted FIXED as essentially a 'LJE' tag.
   {
     GCobj *o = gcref(g->gc.root);
@@ -552,6 +554,15 @@ static int lje_gc_end_track(lua_State *L)
 
   g->gc.total = tracker->saved_total;
   g->gc.threshold = tracker->saved_threshold;
+
+  // Apply pressure to the GC to make up for the fact we hid it.
+  // This isn't directly visible to Lua (prying anticheat scripts),
+  // and makes it appear normal.
+  if (g->gc.threshold > hidden)
+    g->gc.threshold = tracker->saved_threshold - hidden;
+  else
+    g->gc.threshold = 0;  // Force immediate GC
+
   return 0;
 }
 
