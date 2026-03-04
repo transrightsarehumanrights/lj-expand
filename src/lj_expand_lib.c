@@ -1,6 +1,7 @@
 #include "lj_expand_lib.h"
 
 #include "lauxlib.h"
+#include "lj_buf.h"
 #include "lj_debug.h"
 #include "lj_dispatch.h"
 #include "lj_lib.h"
@@ -500,6 +501,60 @@ int lje_set_show_special_frames(lua_State* L)
   return 0;
 }
 
+int lje_gc_begin_track(lua_State* L)
+{
+  global_State *g = G(L);
+  LJEGCTracker *tracker = &LJEG()->gc_tracker;
+
+  if (tracker->active) {
+    luaL_error(L, "gc tracking already active");
+    return 0;
+  }
+
+  tracker->root_sentinel = gcref(g->gc.root);
+  tracker->ud_sentinel = gcref(mainthread(g)->nextgc);
+  tracker->saved_total = g->gc.total;
+  tracker->saved_threshold = g->gc.threshold;
+  g->gc.threshold = LJ_MAX_MEM;
+  tracker->active = 1;
+  return 0;
+}
+
+static int lje_gc_end_track(lua_State *L)
+{
+  global_State *g = G(L);
+  LJEGCTracker *tracker = &LJEG()->gc_tracker;
+
+  if (!tracker->active) {
+    luaL_error(L, "gc tracking not active");
+    return 0;
+  }
+
+  tracker->active = 0;
+
+  // Tag root list objects, we've co-opted FIXED as essentially a 'LJE' tag.
+  {
+    GCobj *o = gcref(g->gc.root);
+    while (o != NULL && o != tracker->root_sentinel) {
+      o->gch.marked |= LJ_GC_FIXED;
+      o = gcref(o->gch.nextgc);
+    }
+  }
+
+  // Tag userdata list objects
+  {
+    GCobj *o = gcref(mainthread(g)->nextgc);
+    while (o != NULL && o != tracker->ud_sentinel) {
+      o->gch.marked |= LJ_GC_FIXED;
+      o = gcref(o->gch.nextgc);
+    }
+  }
+
+  g->gc.total = tracker->saved_total;
+  g->gc.threshold = tracker->saved_threshold;
+  return 0;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -585,6 +640,8 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("get_total", lje_get_gc_total);
     LJE_SET_FUNC("set_total", lje_set_gc_total);
     LJE_SET_FUNC("run_full_gc", lje_run_full_gc);
+    LJE_SET_FUNC("begin_track", lje_gc_begin_track);
+    LJE_SET_FUNC("end_track", lje_gc_end_track);
   LJE_END_SECTION("gc");
 
   /* vm: virtual machine manipulation */

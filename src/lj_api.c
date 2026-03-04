@@ -42,6 +42,7 @@
 #include "lj_lib.h"
 #include "lj_ffrecord.h"
 #include "stdio.h"
+#include "lj_buf.h"
 
 /* -- Common helper functions --------------------------------------------- */
 
@@ -1175,6 +1176,87 @@ static void lje_dump_stack(lua_State* L)
   printf("^ = L->top\n");
 }
 
+static void lje_fix_object_strings(global_State *g, GCobj *o)
+{
+  int gct = o->gch.gct;
+
+  if (o->gch.marked & LJ_GC_BLACK)
+    return;
+  o->gch.marked |= LJ_GC_BLACK;
+
+  if (gct == ~LJ_TTAB) {
+    GCtab *t = gco2tab(o);
+    MSize i;
+    for (i = 0; i < t->asize; i++) {
+      TValue *tv = arrayslot(t, i);
+      if (tvisstr(tv))
+        strV(tv)->marked |= LJ_GC_FIXED | LJ_GC_SFIXED;
+      else if (tvisgcv(tv))
+        lje_fix_object_strings(g, gcV(tv));
+    }
+    if (t->hmask > 0) {
+      Node *node = noderef(t->node);
+      for (i = 0; i <= t->hmask; i++) {
+        Node *n = &node[i];
+        if (!tvisnil(&n->val)) {
+          if (tvisstr(&n->key))
+            strV(&n->key)->marked |= LJ_GC_FIXED | LJ_GC_SFIXED;
+          else if (tvisgcv(&n->key))
+            lje_fix_object_strings(g, gcV(&n->key));
+          if (tvisstr(&n->val))
+            strV(&n->val)->marked |= LJ_GC_FIXED | LJ_GC_SFIXED;
+          else if (tvisgcv(&n->val))
+            lje_fix_object_strings(g, gcV(&n->val));
+        }
+      }
+    }
+  } else if (gct == ~LJ_TPROTO) {
+    GCproto *pt = gco2pt(o);
+    proto_chunkname(pt)->marked |= LJ_GC_FIXED | LJ_GC_SFIXED;
+    ptrdiff_t i;
+    for (i = -(ptrdiff_t)pt->sizekgc; i < 0; i++) {
+      GCobj *kgc = proto_kgc(pt, i);
+      if (kgc->gch.gct == ~LJ_TSTR)
+        kgc->gch.marked |= LJ_GC_FIXED | LJ_GC_SFIXED;
+      else
+        lje_fix_object_strings(g, kgc);
+    }
+  } else if (gct == ~LJ_TFUNC) {
+    GCfunc *fn = gco2func(o);
+    if (isluafunc(fn)) {
+      uint32_t i;
+      for (i = 0; i < fn->l.nupvalues; i++) {
+        GCupval *uv = &gcref(fn->l.uvptr[i])->uv;
+        if (uv->closed) {
+          TValue *tv = uvval(uv);
+          if (tvisstr(tv))
+            strV(tv)->marked |= LJ_GC_FIXED | LJ_GC_SFIXED;
+          else if (tvisgcv(tv))
+            lje_fix_object_strings(g, gcV(tv));
+        }
+      }
+    } else {
+      uint32_t i;
+      for (i = 0; i < fn->c.nupvalues; i++) {
+        TValue *tv = &fn->c.upvalue[i];
+        if (tvisstr(tv))
+          strV(tv)->marked |= LJ_GC_FIXED | LJ_GC_SFIXED;
+        else if (tvisgcv(tv))
+          lje_fix_object_strings(g, gcV(tv));
+      }
+    }
+  } else if (gct == ~LJ_TUPVAL) {
+    GCupval *uv = gco2uv(o);
+    if (uv->closed) {
+      TValue *tv = uvval(uv);
+      if (tvisstr(tv))
+        strV(tv)->marked |= LJ_GC_FIXED | LJ_GC_SFIXED;
+      else if (tvisgcv(tv))
+        lje_fix_object_strings(g, gcV(tv));
+    }
+  }
+}
+
 /* LJE: lua_pcall is essentially the Lua entrypoint for the entire game.
  * We've co-opted it to perform a lot of orthogonal tasks related to LJE,
  * like initializing our functions, running preinit scripts, handling engine calls,
@@ -1185,9 +1267,16 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
   if (tvisfunc(L->base) && LJEG()->waiting_for_init_call)
   {
     LJEG()->waiting_for_init_call = 0;
-    LJEG()->using_error_reporter = 1; /* Prevent recursion in error reporter */
+    LJEG()->using_error_reporter = 1;
 
     printf("[LJE] Detected running of client Lua function for init.lua\n");
+    LJEG()->original_gc = G(L)->gc.total;
+    GCobj *root_sentinel = gcref(G(L)->gc.root);
+    GCobj *ud_sentinel = gcref(mainthread(G(L))->nextgc);
+    GCSize saved_threshold = G(L)->gc.threshold;
+    GCSize saved_total = G(L)->gc.total;
+    G(L)->gc.threshold = LJ_MAX_MEM;
+
     lje_addfuncs(L);
     printf("[LJE] Added LJE functions to Lua state\n");
     lje_clear_global_refs();
@@ -1203,9 +1292,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
       }
     }
 
-    // ENSURE PREINIT DOES NOT AFFECT RANDOM STATE!
     lje_save_random_state();
-    // See if there's any more scripts that want to run at preinit.
     for (int i = 0; i < LJEG()->loaded_script_count; i++)
     {
       LJEScript* script = LJEG()->script_load_order[i];
@@ -1216,9 +1303,52 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     }
     lje_restore_random_state();
 
-    LJEG()->using_error_reporter = 0; /* Allow error reporter again */
-    // Reset GC total. Might cause some hiccups. Oh well!
-    G(L)->gc.total = LJEG()->original_gc - 1971; // 1971 bytes is about how much we consume during setup and init.
+    LJEG()->using_error_reporter = 0;
+
+    // Fix root list objects
+    {
+        GCobj *o = gcref(G(L)->gc.root);
+        while (o != NULL && o != root_sentinel) {
+          o->gch.marked = (o->gch.marked & (uint8_t)~LJ_GC_WHITES) | LJ_GC_FIXED | LJ_GC_SFIXED;
+          o = gcref(o->gch.nextgc);
+        }
+    }
+
+    // Fix userdata list
+    {
+        GCobj *o = gcref(mainthread(G(L))->nextgc);
+        while (o != NULL && o != ud_sentinel) {
+          o->gch.marked = (o->gch.marked & (uint8_t)~LJ_GC_WHITES) | LJ_GC_FIXED | LJ_GC_SFIXED;
+          o = gcref(o->gch.nextgc);
+        }
+    }
+
+    // Fix ALL unfixed strings (blanket)
+    {
+        MSize i;
+        for (i = 0; i <= G(L)->strmask; i++) {
+          GCobj *o = gcref(G(L)->strhash[i]);
+          while (o != NULL) {
+            if (!(o->gch.marked & LJ_GC_FIXED))
+              o->gch.marked = (o->gch.marked & (uint8_t)~LJ_GC_WHITES) | LJ_GC_FIXED | LJ_GC_SFIXED;
+            o = gcref(o->gch.nextgc);
+          }
+        }
+    }
+
+    // Shrink tmpbuf to baseline, used if LJE scripts use any string buffers.
+    lj_buf_shrink(L, &G(L)->tmpbuf);
+    lj_buf_shrink(L, &G(L)->tmpbuf);
+
+    // Set compensation for over-fixed strings, will be totally honest,
+    // I don't know how these happen, but I just have to assume it's some quirk at preinit
+    // that I haven't fully wrapped my head around. Point is, 34 bytes remain overcompensated no matter what,
+    // so it seems like it's some kind of GCO being made by GMod's C code?
+    LJEG()->gc_compensation = 34;
+
+    G(L)->gc.total = saved_total;
+    G(L)->gc.threshold = saved_threshold;
+    printf("[LJE] Completed init.lua preinit, fixed GC objects, and neutralized GC pressure.\n");
   }
 
   /* LJE: Next, check if we're waiting for the startup call. */
