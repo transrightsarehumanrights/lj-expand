@@ -1228,7 +1228,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     {
         GCobj *o = gcref(G(L)->gc.root);
         while (o != NULL && o != root_sentinel) {
-          o->gch.marked = (o->gch.marked & (uint8_t)~LJ_GC_WHITES) | LJ_GC_FIXED | LJ_GC_SFIXED;
+          o->gch.marked |= LJ_GC_FIXED | LJ_GC_SFIXED;
           o = gcref(o->gch.nextgc);
         }
     }
@@ -1237,7 +1237,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     {
         GCobj *o = gcref(mainthread(G(L))->nextgc);
         while (o != NULL && o != ud_sentinel) {
-          o->gch.marked = (o->gch.marked & (uint8_t)~LJ_GC_WHITES) | LJ_GC_FIXED | LJ_GC_SFIXED;
+          o->gch.marked |= LJ_GC_FIXED | LJ_GC_SFIXED;
           o = gcref(o->gch.nextgc);
         }
     }
@@ -1249,7 +1249,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
           GCobj *o = gcref(G(L)->strhash[i]);
           while (o != NULL) {
             if (!(o->gch.marked & LJ_GC_FIXED))
-              o->gch.marked = (o->gch.marked & (uint8_t)~LJ_GC_WHITES) | LJ_GC_FIXED | LJ_GC_SFIXED;
+              o->gch.marked |= LJ_GC_FIXED | LJ_GC_SFIXED;
             o = gcref(o->gch.nextgc);
           }
         }
