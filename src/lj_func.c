@@ -243,6 +243,8 @@ void LJ_FASTCALL lj_func_free(global_State *g, GCfunc *fn)
 {
   MSize size = isluafunc(fn) ? sizeLfunc((MSize)fn->l.nupvalues) :
 			       sizeCfunc((MSize)fn->c.nupvalues);
+  size += sizeof(LJEfunc);
+
   /* LJE: Remove spoof record. */
   if (isluafunc(fn) && funcspoof(fn))
   {
@@ -250,5 +252,7 @@ void LJ_FASTCALL lj_func_free(global_State *g, GCfunc *fn)
   }
 
   lj_mem_free(g, fn, size);
+  // Add back LJEfunc size since we subtracted it earlier, we just want to make sure it frees the whole alloc.
+  g->gc.total += sizeof(LJEfunc);
 }
 

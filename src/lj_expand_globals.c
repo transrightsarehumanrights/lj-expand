@@ -6,6 +6,10 @@
 #include "lauxlib.h"
 #include "lua.h"
 
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#include <Psapi.h>
+
 static LJEGlobalState* lje_global_state = NULL;
 
 LJEGlobalState* lje_get_global_state() {
@@ -170,4 +174,27 @@ int lje_is_caller_hidden(GCfunc* fn)
         }
     }
     return 0;
+}
+
+static uintptr_t lje_base_addr = 0;
+static size_t lje_addr_range = 0;
+static const char* lje_module_name = "lje-w64.dll";
+
+int lje_is_addr_in_lje(uintptr_t addr)
+{
+    if (lje_base_addr == 0)
+    {
+        HMODULE hModule = GetModuleHandleA(lje_module_name);
+        if (hModule)
+        {
+            MODULEINFO modInfo;
+            if (GetModuleInformation(GetCurrentProcess(), hModule, &modInfo, sizeof(modInfo)))
+            {
+                lje_base_addr = (uintptr_t)modInfo.lpBaseOfDll;
+                lje_addr_range = (size_t)modInfo.SizeOfImage;
+            }
+        }
+    }
+
+    return (addr >= lje_base_addr) && (addr < (lje_base_addr + lje_addr_range));
 }

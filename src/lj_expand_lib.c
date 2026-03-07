@@ -1,6 +1,7 @@
 #include "lj_expand_lib.h"
 
 #include "lauxlib.h"
+#include "lj_buf.h"
 #include "lj_debug.h"
 #include "lj_dispatch.h"
 #include "lj_lib.h"
@@ -61,6 +62,13 @@ int lje_mark_special(lua_State* L)
 
   funcextend(func)->is_special = 1;
   return 0;
+}
+
+int lje_get_func_type(lua_State* L)
+{
+  GCfunc* func = lj_lib_checkfunc(L, 1);
+  lua_pushnumber(L, func->c.ffid);
+  return 1;
 }
 
 int lje_con_print(lua_State* L)
@@ -258,8 +266,9 @@ int lje_patch_bytecodes(lua_State* L)
    * patch this to our own version that blocks metatable
    * lookups when LJE is involved and/or remaps are set.
    */
-
   lje_patch_bytecode(gg, BC_TGETS);
+  lje_patch_bytecode(gg, BC_CALLT);
+  lje_patch_bytecode(gg, BC_CALLMT);
 
   return 0;
 }
@@ -500,6 +509,71 @@ int lje_set_show_special_frames(lua_State* L)
   return 0;
 }
 
+int lje_gc_begin_track(lua_State* L)
+{
+  global_State *g = G(L);
+  LJEGCTracker *tracker = &LJEG()->gc_tracker;
+
+  if (tracker->active) {
+    luaL_error(L, "gc tracking already active");
+    return 0;
+  }
+
+  tracker->root_sentinel = gcref(g->gc.root);
+  tracker->ud_sentinel = gcref(mainthread(g)->nextgc);
+  tracker->saved_total = g->gc.total;
+  tracker->saved_threshold = g->gc.threshold;
+  g->gc.threshold = LJ_MAX_MEM;
+  tracker->active = 1;
+  return 0;
+}
+
+static int lje_gc_end_track(lua_State *L)
+{
+  global_State *g = G(L);
+  LJEGCTracker *tracker = &LJEG()->gc_tracker;
+
+  if (!tracker->active) {
+    luaL_error(L, "gc tracking not active");
+    return 0;
+  }
+
+  tracker->active = 0;
+
+  GCSize hidden = g->gc.total - tracker->saved_total;
+
+  // Tag root list objects, we've co-opted FIXED as essentially a 'LJE' tag.
+  {
+    GCobj *o = gcref(g->gc.root);
+    while (o != NULL && o != tracker->root_sentinel) {
+      o->gch.marked |= LJ_GC_FIXED;
+      o = gcref(o->gch.nextgc);
+    }
+  }
+
+  // Tag userdata list objects
+  {
+    GCobj *o = gcref(mainthread(g)->nextgc);
+    while (o != NULL && o != tracker->ud_sentinel) {
+      o->gch.marked |= LJ_GC_FIXED;
+      o = gcref(o->gch.nextgc);
+    }
+  }
+
+  g->gc.total = tracker->saved_total;
+  g->gc.threshold = tracker->saved_threshold;
+
+  // Apply pressure to the GC to make up for the fact we hid it.
+  // This isn't directly visible to Lua (prying anticheat scripts),
+  // and makes it appear normal.
+  if (g->gc.threshold > hidden)
+    g->gc.threshold = tracker->saved_threshold - hidden;
+  else
+    g->gc.threshold = 0;  // Force immediate GC
+
+  return 0;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -531,6 +605,7 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("mark_special", lje_mark_special);
     LJE_SET_FUNC("compile", lje_compile_string);
     LJE_SET_FUNC("hide_caller", lje_lib_hide_caller);
+    LJE_SET_FUNC("type", lje_get_func_type);
   LJE_END_SECTION("func");
 
   /* hooks: anything to do particularly with LuaJIT's debug hook functionality */
@@ -585,6 +660,8 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("get_total", lje_get_gc_total);
     LJE_SET_FUNC("set_total", lje_set_gc_total);
     LJE_SET_FUNC("run_full_gc", lje_run_full_gc);
+    LJE_SET_FUNC("begin_track", lje_gc_begin_track);
+    LJE_SET_FUNC("end_track", lje_gc_end_track);
   LJE_END_SECTION("gc");
 
   /* vm: virtual machine manipulation */

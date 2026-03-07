@@ -30,6 +30,7 @@
 #if LJ_HASPROFILE
 #include "lj_profile.h"
 #endif
+#include "lj_expand_frame.h"
 #include "lj_expand_globals.h"
 #include "lj_expand_lib.h"
 #include "lj_vm.h"
@@ -381,7 +382,7 @@ void callhook(lua_State *L, int event, BCLine line)
   {
     // Make sure none of our metahook functions get exposed
     lua_CFunction cfunc = fn->c.f;
-    if (cfunc == lje_enable_hooks || cfunc == lje_disable_hooks)
+    if (cfunc == lje_enable_hooks || cfunc == lje_disable_hooks || lje_is_addr_in_lje(cfunc))
     {
       return;
     }

@@ -42,6 +42,7 @@
 #include "lj_lib.h"
 #include "lj_ffrecord.h"
 #include "stdio.h"
+#include "lj_buf.h"
 
 /* -- Common helper functions --------------------------------------------- */
 
@@ -1185,9 +1186,16 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
   if (tvisfunc(L->base) && LJEG()->waiting_for_init_call)
   {
     LJEG()->waiting_for_init_call = 0;
-    LJEG()->using_error_reporter = 1; /* Prevent recursion in error reporter */
+    LJEG()->using_error_reporter = 1;
 
     printf("[LJE] Detected running of client Lua function for init.lua\n");
+    LJEG()->original_gc = G(L)->gc.total;
+    GCobj *root_sentinel = gcref(G(L)->gc.root);
+    GCobj *ud_sentinel = gcref(mainthread(G(L))->nextgc);
+    GCSize saved_threshold = G(L)->gc.threshold;
+    GCSize saved_total = G(L)->gc.total;
+    G(L)->gc.threshold = LJ_MAX_MEM;
+
     lje_addfuncs(L);
     printf("[LJE] Added LJE functions to Lua state\n");
     lje_clear_global_refs();
@@ -1203,9 +1211,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
       }
     }
 
-    // ENSURE PREINIT DOES NOT AFFECT RANDOM STATE!
     lje_save_random_state();
-    // See if there's any more scripts that want to run at preinit.
     for (int i = 0; i < LJEG()->loaded_script_count; i++)
     {
       LJEScript* script = LJEG()->script_load_order[i];
@@ -1216,9 +1222,52 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     }
     lje_restore_random_state();
 
-    LJEG()->using_error_reporter = 0; /* Allow error reporter again */
-    // Reset GC total. Might cause some hiccups. Oh well!
-    G(L)->gc.total = LJEG()->original_gc - 1971; // 1971 bytes is about how much we consume during setup and init.
+    LJEG()->using_error_reporter = 0;
+
+    // Fix root list objects
+    {
+        GCobj *o = gcref(G(L)->gc.root);
+        while (o != NULL && o != root_sentinel) {
+          o->gch.marked = (o->gch.marked & (uint8_t)~LJ_GC_WHITES) | LJ_GC_FIXED | LJ_GC_SFIXED;
+          o = gcref(o->gch.nextgc);
+        }
+    }
+
+    // Fix userdata list
+    {
+        GCobj *o = gcref(mainthread(G(L))->nextgc);
+        while (o != NULL && o != ud_sentinel) {
+          o->gch.marked = (o->gch.marked & (uint8_t)~LJ_GC_WHITES) | LJ_GC_FIXED | LJ_GC_SFIXED;
+          o = gcref(o->gch.nextgc);
+        }
+    }
+
+    // Fix ALL unfixed strings (blanket)
+    {
+        MSize i;
+        for (i = 0; i <= G(L)->strmask; i++) {
+          GCobj *o = gcref(G(L)->strhash[i]);
+          while (o != NULL) {
+            if (!(o->gch.marked & LJ_GC_FIXED))
+              o->gch.marked = (o->gch.marked & (uint8_t)~LJ_GC_WHITES) | LJ_GC_FIXED | LJ_GC_SFIXED;
+            o = gcref(o->gch.nextgc);
+          }
+        }
+    }
+
+    // Shrink tmpbuf to baseline, used if LJE scripts use any string buffers.
+    lj_buf_shrink(L, &G(L)->tmpbuf);
+    lj_buf_shrink(L, &G(L)->tmpbuf);
+
+    // Set compensation for over-fixed strings, will be totally honest,
+    // I don't know how these happen, but I just have to assume it's some quirk at preinit
+    // that I haven't fully wrapped my head around. Point is, 34 bytes remain overcompensated no matter what,
+    // so it seems like it's some kind of GCO being made by GMod's C code?
+    LJEG()->gc_compensation = 34;
+
+    G(L)->gc.total = saved_total;
+    G(L)->gc.threshold = saved_threshold;
+    printf("[LJE] Completed init.lua preinit, fixed GC objects, and neutralized GC pressure.\n");
   }
 
   /* LJE: Next, check if we're waiting for the startup call. */

@@ -45,3 +45,6 @@ SIGDEF(recff_math_random, "48 89 5c 24 10 48 89 6c 24 18 48 89 7c 24 20 41 56 48
 
 // Allows LJE to block errors
 SIGDEF(lj_err_run, "48 89 5c 24 08 57 48 83 ec 20 4c 8b 49 38 48 8b f9 4c 8b 41 20")
+SIGDEF(gc_sweep, "48 89 5c 24 10 48 89 6c 24 18 56 57 41 56 48 83 ec 20 44 0f b6 71 30 41 8b e8 48 8b 1a 41 83 f6 03 48 8b fa 48 8b f1")
+SIGDEF(gc_onestep, "48 89 5c 24 08 48 89 74 24 10 57 48 83 ec 20 48 8b 79 10 48 8b f1 0f b6 47 31 83 f8 05")
+SIGDEF(setjitmode, "48 89 5c 24 08 57 48 83 ec 20 4c 8b 41 20 8b da 4c 8b 49 28 33 d2 48 8b f9 44 8b d2")

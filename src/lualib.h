@@ -44,6 +44,7 @@ LUALIB_API int luaopen_debug(lua_State *L);
 LUALIB_API int luaopen_bit(lua_State *L);
 int lj_cf_jit_util_funcinfo(lua_State *L);
 int lj_cf_jit_util_funcbc(lua_State *L);
+int setjitmode(lua_State *L, int mode);
 LUALIB_API int luaopen_jit(lua_State *L);
 LUALIB_API int luaopen_ffi(lua_State *L);
 

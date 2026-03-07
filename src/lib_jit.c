@@ -40,13 +40,22 @@
 
 #define LJLIB_MODULE_jit
 
-static int setjitmode(lua_State *L, int mode)
+int setjitmode(lua_State *L, int mode)
 {
   int idx = 0;
   if (L->base == L->top || tvisnil(L->base)) {  /* jit.on/off/flush([nil]) */
     mode |= LUAJIT_MODE_ENGINE;
   } else {
     /* jit.on/off/flush(func|proto, nil|true|false) */
+    if (tvisfunc(L->base)) /* LJE: Use spoof if it exists */
+    {
+      GCfunc* fn = funcV(L->base);
+      if (isluafunc(fn) && funcspoof(fn))
+      {
+        setfuncV(L, L->base, funcspoof(fn));
+      }
+    }
+
     if (tvisfunc(L->base) || tvisproto(L->base))
       idx = 1;
     else if (!tvistrue(L->base))  /* jit.on/off/flush(true, nil|true|false) */
