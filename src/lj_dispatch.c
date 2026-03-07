@@ -402,6 +402,26 @@ void callhook(lua_State *L, int event, BCLine line)
     return;
   }
 
+  // Sometimes, call debug hooks might trigger in a LJE function.
+  // It won't be seen here since for some reason they are called within the new context
+  // of the called function. So we go back up one frame.
+  cTValue* current = L->base-1;
+  cTValue* caller = frame_prev(current);
+  cTValue* bot = tvref(L->stack)+LJ_FR2;
+  if (caller && caller >= bot)
+  {
+    GCfunc* caller_fn = frame_func(caller);
+    if (isluafunc(caller_fn))
+    {
+      LJEfunc* ljeFn = funcextend(caller_fn);
+      LJEproto* ljePt = protoextend(funcproto(caller_fn));
+      if (ljeFn->is_special || ljePt->is_from_lje)
+      {
+        return; // Don't let anyone hook into transitive calls from special functions, or anything from LJE for that matter.
+      }
+    }
+  }
+
   global_State *g = G(L);
   lua_Hook hookf = g->hookf;
   if (hookf && !hook_active(g)) {
