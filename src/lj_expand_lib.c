@@ -574,6 +574,14 @@ static int lje_gc_end_track(lua_State *L)
   return 0;
 }
 
+static int lje_create_table(lua_State* L)
+{
+  int narr = luaL_optinteger(L, 1, 0);
+  int nrec = luaL_optinteger(L, 2, 0);
+  lua_createtable(L, narr, nrec);
+  return 1;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -653,6 +661,7 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("get_registry", lje_get_registry);
     LJE_SET_FUNC("set_push_string_callback", lje_set_push_string_callback);
     LJE_SET_FUNC("set_script_hook_callback", lje_set_script_hook_callback);
+    LJE_SET_FUNC("create_table", lje_create_table);
   LJE_END_SECTION("util");
 
   /* gc: garbage collector manipulation */

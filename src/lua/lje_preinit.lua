@@ -68,6 +68,7 @@ local function cloneMetaTable(name, base)
         end
     end
 
+    newMt.__oldIndex = mt.__index
     newMt.__index = newMt
     return newMt
 end
