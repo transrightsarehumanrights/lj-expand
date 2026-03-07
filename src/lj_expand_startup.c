@@ -97,7 +97,7 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
 
             // Disable hooks during execution
             LJEG()->skip_hooks = 1;
-            if (lua_pcall(L, 0, LUA_MULTRET, 0) != 0) /* mental note: figure out why this seems to randomly not work? */
+            if (lua_pcall(L, 0, 0, 0) != 0) /* mental note: figure out why this seems to randomly not work? */
             {
                 LJEG()->skip_hooks = 0;
 
