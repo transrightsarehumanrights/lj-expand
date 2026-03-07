@@ -123,4 +123,6 @@ int lje_is_metatable_authorized(GCtab* mt);
 void lje_hide_caller(GCfunc* func);
 int lje_is_caller_hidden(GCfunc* func);
 
+int lje_is_addr_in_lje(uintptr_t addr);
+
 #endif

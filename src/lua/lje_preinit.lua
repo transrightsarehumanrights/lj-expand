@@ -116,6 +116,11 @@ setfenv(safeEnv.lje.use_safe_basemts, safeEnv)
 setfenv(safeEnv.lje.restore_basemts, safeEnv)
 
 safeEnv.lje.detour = function(origFn, detourFn)
+    if lje.func.type(origFn) ~= 0 then
+        -- C function or fast function. Means we need to prohibit any JIT compilation.
+        jit.off(detourFn)
+    end
+
     lje.func.mark_special(detourFn)
     lje.func.spoof(detourFn, origFn)
     return detourFn

@@ -64,6 +64,13 @@ int lje_mark_special(lua_State* L)
   return 0;
 }
 
+int lje_get_func_type(lua_State* L)
+{
+  GCfunc* func = lj_lib_checkfunc(L, 1);
+  lua_pushnumber(L, func->c.ffid);
+  return 1;
+}
+
 int lje_con_print(lua_State* L)
 {
     const char* msg = luaL_checkstring(L, 1);
@@ -261,6 +268,7 @@ int lje_patch_bytecodes(lua_State* L)
    */
   lje_patch_bytecode(gg, BC_TGETS);
   lje_patch_bytecode(gg, BC_CALLT);
+  lje_patch_bytecode(gg, BC_CALLMT);
 
   return 0;
 }
@@ -597,6 +605,7 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("mark_special", lje_mark_special);
     LJE_SET_FUNC("compile", lje_compile_string);
     LJE_SET_FUNC("hide_caller", lje_lib_hide_caller);
+    LJE_SET_FUNC("type", lje_get_func_type);
   LJE_END_SECTION("func");
 
   /* hooks: anything to do particularly with LuaJIT's debug hook functionality */
