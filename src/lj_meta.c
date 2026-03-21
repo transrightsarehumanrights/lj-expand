@@ -212,8 +212,7 @@ cTValue *lj_meta_tget(lua_State *L, cTValue *o, cTValue *k)
         if (!lje_is_metatable_authorized(mt))
         {
           /* LJE: Block metamethod lookup if not authorized. */
-          lj_err_optype(L, o, LJ_ERR_LJE_UNAUTH);
-          return NULL;  /* unreachable */
+          return NULL;
         }
       }
       if (!tvisnil(tv) ||
