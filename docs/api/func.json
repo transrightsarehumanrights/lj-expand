@@ -1,0 +1,109 @@
+{
+  "namespace": "func",
+  "description": "Function inspection, spoofing, and stealth utilities.",
+  "functions": [
+    {
+      "name": "spoof",
+      "description": "Makes `target_fn` appear as `spoof_fn` in debug introspection (e.g. `debug.getinfo`). The spoof is recorded globally. Any pre-existing spoof records for either function are cleared first to avoid memory corruption — each function can only participate in one spoof relationship at a time.",
+      "params": [
+        {
+          "name": "spoof_fn",
+          "type": "function",
+          "description": "The Lua function whose debug info will be reported. Must be a Lua function, not a C function."
+        },
+        {
+          "name": "target_fn",
+          "type": "function",
+          "description": "The function that will appear as `spoof_fn` when inspected."
+        }
+      ],
+      "returns": [],
+      "errors": [
+        "Argument 1 must be a Lua function (not a C function)."
+      ]
+    },
+    {
+      "name": "is_spoofed",
+      "description": "Checks whether `fn` is currently being used as a spoof target.",
+      "params": [
+        {
+          "name": "fn",
+          "type": "function",
+          "description": "The function to check."
+        }
+      ],
+      "returns": [
+        {
+          "type": "boolean",
+          "description": "`true` if the function is a spoof target, `false` otherwise."
+        },
+        {
+          "type": "function",
+          "optional": true,
+          "description": "If spoofed, the original function is also returned as a second value."
+        }
+      ]
+    },
+    {
+      "name": "mark_special",
+      "description": "Marks a Lua function as a special (internal) frame. Special frames are hidden from stack introspection unless `lje.env.show_special_frames` is enabled. Automatically applied to callbacks registered with LJE (e.g. `lje.util.set_push_string_callback`).",
+      "params": [
+        {
+          "name": "fn",
+          "type": "function",
+          "description": "Must be a Lua function, not a C function."
+        }
+      ],
+      "returns": [],
+      "errors": [
+        "Argument 1 must be a Lua function (not a C function)."
+      ]
+    },
+    {
+      "name": "compile",
+      "description": "Compiles a Lua string into a function without executing it. If a global environment is set via `lje.env.set`, it is applied to the compiled function automatically. Returns `nil` on compilation failure.",
+      "params": [
+        {
+          "name": "source",
+          "type": "string",
+          "description": "Lua source code to compile."
+        }
+      ],
+      "returns": [
+        {
+          "type": "function | nil",
+          "description": "The compiled function, or `nil` if compilation failed."
+        }
+      ]
+    },
+    {
+      "name": "hide_caller",
+      "description": "Hides `fn` from appearing as a caller in stack traces.",
+      "params": [
+        {
+          "name": "fn",
+          "type": "function",
+          "description": "The function to hide from stack traces."
+        }
+      ],
+      "returns": []
+    },
+    {
+      "name": "type",
+      "description": "Returns the internal LuaJIT fast function ID (`ffid`) of a function. For regular Lua functions this is `0`. Useful for identifying built-in fast functions.",
+      "params": [
+        {
+          "name": "fn",
+          "type": "function",
+          "description": "The function to inspect."
+        }
+      ],
+      "returns": [
+        {
+          "type": "number",
+          "description": "The `ffid` value. `0` for regular Lua functions."
+        }
+      ]
+    }
+  ]
+}

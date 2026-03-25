@@ -1,0 +1,36 @@
+{
+  "namespace": "base",
+  "description": "Global functions exposed directly on the `lje` table.",
+  "functions": [
+    {
+      "name": "include",
+      "description": "Loads a script file relative to the current script's directory. Optionally controls whether the script is executed immediately after loading. Defaults to executing if the second argument is omitted.",
+      "params": [
+        {
+          "name": "path",
+          "type": "string",
+          "description": "Path to the script file, relative to the current script."
+        },
+        {
+          "name": "execute",
+          "type": "boolean",
+          "optional": true,
+          "description": "Whether to execute the script after loading. Defaults to `true`."
+        }
+      ],
+      "returns": []
+    },
+    {
+      "name": "con_print",
+      "description": "Prints a message to the console, prefixed with `[LJE CONSOLE]`.",
+      "params": [
+        {
+          "name": "msg",
+          "type": "string",
+          "description": "The message to print."
+        }
+      ],
+      "returns": []
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "namespace": "gc",
+  "description": "Low-level garbage collector inspection and manipulation.",
+  "functions": [
+    {
+      "name": "get_total",
+      "description": "Returns the GC's current tracked memory total in bytes.",
+      "params": [],
+      "returns": [
+        {
+          "type": "integer",
+          "description": "The number of bytes currently tracked by the GC."
+        }
+      ]
+    },
+    {
+      "name": "set_total",
+      "description": "Directly overrides the GC's tracked memory total. Useful for hiding allocations from GC pressure calculations. Use with care — setting this too low can cause the GC to trigger too aggressively; too high and it may never trigger.",
+      "params": [
+        {
+          "name": "bytes",
+          "type": "integer",
+          "description": "The value to set as the GC total."
+        }
+      ],
+      "returns": []
+    },
+    {
+      "name": "run_full_gc",
+      "description": "Immediately triggers a full GC collection cycle.",
+      "params": [],
+      "returns": []
+    },
+    {
+      "name": "begin_track",
+      "description": "Begins a GC tracking window. Records sentinels for the current GC root list and userdata list, saves the current GC total and threshold, then freezes the GC threshold to prevent any collection during the window. Must be paired with `lje.gc.end_track`. Nesting is not supported — calling this while a window is already active is an error.",
+      "params": [],
+      "returns": [],
+      "errors": [
+        "gc tracking already active"
+      ]
+    },
+    {
+      "name": "end_track",
+      "description": "Ends a tracking window started by `lje.gc.begin_track`. Tags all objects allocated during the window with an internal LJE marker, then restores the original GC totals and threshold. Applies compensating GC pressure proportional to the hidden allocation size so that external observers see normal GC behavior. Calling this without an active tracking window is an error.",
+      "params": [],
+      "returns": [],
+      "errors": [
+        "gc tracking not active"
+      ]
+    }
+  ]
+}
