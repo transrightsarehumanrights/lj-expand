@@ -6,6 +6,8 @@ on:
       - expansion
     paths:
       - 'docs/**'
+      - 'src/lj_expand_lib.c'
+      - 'src/lua/lje_preinit.lua'
 
   workflow_dispatch:
 
@@ -37,6 +39,10 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        working-directory: docs
+
+      - name: Validate API documentation
+        run: npm run validate
         working-directory: docs
 
       - name: Build

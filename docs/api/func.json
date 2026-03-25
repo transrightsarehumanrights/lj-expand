@@ -4,7 +4,11 @@
   "functions": [
     {
       "name": "spoof",
-      "description": "Makes `target_fn` appear as `spoof_fn` in debug introspection (e.g. `debug.getinfo`). The spoof is recorded globally. Any pre-existing spoof records for either function are cleared first to avoid memory corruption — each function can only participate in one spoof relationship at a time.",
+      "description": [
+        "Makes `target_fn` appear as `spoof_fn` in debug introspection (e.g. `debug.getinfo`).",
+        "",
+        "The spoof is recorded globally. Each function can only participate in one spoof relationship at a time."
+      ],
       "params": [
         {
           "name": "spoof_fn",
@@ -46,7 +50,12 @@
     },
     {
       "name": "mark_special",
-      "description": "Marks a Lua function as a special (internal) frame. Special frames are hidden from stack introspection unless `lje.env.show_special_frames` is enabled. Automatically applied to callbacks registered with LJE (e.g. `lje.util.set_push_string_callback`).",
+      "description": [
+        "Marks a Lua function as a special (internal) frame.",
+        "",
+        "Special frames are hidden from stack introspection unless `lje.env.show_special_frames` is enabled. Automatically applied to callbacks registered with LJE (e.g. `lje.util.set_push_string_callback`)."
+      ],
+      "note": "You shouldn't need to use this unless you know what you are doing!",
       "params": [
         {
           "name": "fn",
@@ -90,7 +99,13 @@
     },
     {
       "name": "type",
-      "description": "Returns the internal LuaJIT fast function ID (`ffid`) of a function. For regular Lua functions this is `0`. Useful for identifying built-in fast functions.",
+      "description": [
+        "Returns the internal LuaJIT fast function ID (`ffid`) of a function.",
+        "",
+        "- `0` means a Lua function",
+        "- `1` means a C function",
+        "- Anything else is the unique ID of a fast function."
+      ],
       "params": [
         {
           "name": "fn",

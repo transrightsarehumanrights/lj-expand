@@ -1,6 +1,6 @@
 {
   "namespace": "hooks",
-  "description": "Control over LuaJIT's debug hook functionality.",
+  "description": "Control over LuaJIT's debug hook functionality. This library is deprecated and mostly useless now.",
   "functions": [
     {
       "name": "enable",

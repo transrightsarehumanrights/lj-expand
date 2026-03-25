@@ -43,7 +43,8 @@ function FunctionDoc({ func, namespace }) {
 
       <DeprecatedBanner deprecated={func.deprecated} />
       <NoteBanner note={func.note} />
-      <Markdown>{func.description}</Markdown>
+
+      {Array.isArray(func.description) ? (<Markdown>{func.description.join("\n")}</Markdown>) : (<Markdown>{func.description}</Markdown>)}
 
       {func.params.length > 0 && (
         <>
