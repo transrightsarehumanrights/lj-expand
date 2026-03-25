@@ -1,0 +1,148 @@
+{
+  "namespace": "base",
+  "description": "Lua-defined extensions added to `lje` and the safe environment during preinit.",
+  "constants": [
+    {
+      "name": "_G",
+      "type": "table",
+      "description": "A reference to the original, unmodified global environment. Exposed in the safe environment so scripts can access globals that may have been shadowed or overwritten."
+    },
+    {
+      "name": "_L",
+      "type": "table",
+      "description": "A circular reference to the safe environment itself. Useful for passing the safe environment to functions that need an explicit reference to it."
+    },
+    {
+      "name": "cloned_mts",
+      "type": "table",
+      "description": "A map of cloned metatables, keyed by type name (e.g. `\"Entity\"`, `\"Player\"`, `\"Vector\"`). These are deep copies of the original metatables, remapped globally so LJE scripts use them instead of the originals."
+    },
+    {
+      "name": "cloned_basemts",
+      "type": "table",
+      "description": "A map of cloned base metatables for primitive types, keyed by type name. Currently contains `\"string\"`. Used by `lje.use_safe_basemts` and `lje.restore_basemts`."
+    },
+    {
+      "name": "insecure_mts",
+      "type": "table",
+      "description": "Stores the original (uncloned) base metatables when `lje.use_safe_basemts` is active, so they can be restored by `lje.restore_basemts`."
+    },
+    {
+      "name": "lje.includeCache",
+      "type": "table",
+      "description": "A per-script cache used by `lje.require`. Keyed by script name, then by path. Populated automatically — you generally do not need to interact with this directly."
+    }
+  ],
+  "functions": [
+    {
+      "name": "detour",
+      "description": "Creates a detour by marking `detourFn` as special and spoofing it to appear as `origFn` in debug introspection. If `origFn` is a C or fast function, JIT compilation is disabled on `detourFn` to prevent crashes.",
+      "params": [
+        {
+          "name": "origFn",
+          "type": "function",
+          "description": "The original function being detoured. Determines whether JIT must be disabled."
+        },
+        {
+          "name": "detourFn",
+          "type": "function",
+          "description": "Your replacement function. Will be marked special and spoofed to look like `origFn`."
+        }
+      ],
+      "returns": [
+        {
+          "type": "function",
+          "description": "`detourFn`, returned for convenience."
+        }
+      ]
+    },
+    {
+      "name": "require",
+      "description": "A cached version of `lje.include`. The first call for a given `path` within a script context executes the file and caches the result. Subsequent calls return the cached value immediately. Must be called within an active script context.",
+      "params": [
+        {
+          "name": "path",
+          "type": "string",
+          "description": "Path to the file to include, relative to the current script."
+        }
+      ],
+      "returns": [
+        {
+          "type": "any",
+          "description": "The return value of the included file, or the cached result from a prior call."
+        }
+      ]
+    },
+    {
+      "name": "con_printf",
+      "description": "A `string.format`-style console print with inline ANSI color support. Wrap text in `$colorName{...}` to colorize it.\n\nSupported colors: `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, `default`.\n\nExample:\n```lua\nlje.con_printf(\"$red{Error}: %s\", message)\n```",
+      "params": [
+        {
+          "name": "fmt",
+          "type": "string",
+          "description": "A `string.format` format string. Color codes use the syntax `$colorName{text}`."
+        },
+        {
+          "name": "...",
+          "type": "any",
+          "optional": true,
+          "description": "Format arguments, passed to `string.format`."
+        }
+      ],
+      "returns": []
+    },
+    {
+      "name": "get_global",
+      "description": "Safely traverses the original global environment (`_G`) using `rawget` at each step, following a variadic path of keys. Returns `nil` at the first missing or non-table intermediate value.\n\nExample:\n```lua\nlocal fn = lje.get_global(\"hook\", \"Add\")\n```",
+      "params": [
+        {
+          "name": "...",
+          "type": "string",
+          "description": "A sequence of keys forming the path to traverse in `_G`."
+        }
+      ],
+      "returns": [
+        {
+          "type": "any | nil",
+          "description": "The value at the end of the path, or `nil` if any step is missing or not a table."
+        }
+      ]
+    },
+    {
+      "name": "get_global_static",
+      "description": "Same behavior as `lje.get_global` but avoids the vararg allocation. Pass a pre-built table of keys and its length. Prefer this in hot paths where allocation matters.\n\nExample:\n```lua\nlocal path = {\"hook\", \"Add\"}\nlocal fn = lje.get_global_static(path, 2)\n```",
+      "params": [
+        {
+          "name": "paths",
+          "type": "table",
+          "description": "An array of string keys forming the traversal path. Avoid creating this table dynamically, as that defeats the purpose of this function."
+        },
+        {
+          "name": "count",
+          "type": "integer",
+          "description": "The number of keys in `paths` to traverse."
+        }
+      ],
+      "returns": [
+        {
+          "type": "any | nil",
+          "description": "The value at the end of the path, or `nil` if any step is missing or not a table."
+        }
+      ]
+    },
+    {
+      "name": "use_safe_basemts",
+      "description": "Swaps in the cloned base metatables for primitive types (currently `string`). The original metatables are saved in `insecure_mts` so they can be restored. Call `lje.restore_basemts` when done.",
+      "deprecated": "Old system before metatable remapping - no longer necessary or recommended.",
+      "params": [],
+      "returns": []
+    },
+    {
+      "name": "restore_basemts",
+      "description": "Restores the original base metatables saved by `lje.use_safe_basemts`. Has no effect if `use_safe_basemts` was not previously called.",
+      "deprecated": "Old system before metatable remapping - no longer necessary or recommended.",
+      "params": [],
+      "returns": []
+    }
+  ]
+}

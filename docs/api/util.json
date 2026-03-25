@@ -1,0 +1,102 @@
+{
+  "namespace": "util",
+  "description": "Miscellaneous utility functions for bytecode inspection, stack introspection, and table creation.",
+  "functions": [
+    {
+      "name": "get_bytecode_hash",
+      "description": "Returns a FNV-1a hash of the bytecode of a Lua function. Useful as a stable identity for a function's compiled bytecode — two functions with identical source compiled identically will produce the same hash.",
+      "params": [
+        {
+          "name": "fn",
+          "type": "function",
+          "description": "Must be a Lua function, not a C function."
+        }
+      ],
+      "returns": [
+        {
+          "type": "integer",
+          "description": "A 32-bit hash of the function's bytecode."
+        }
+      ],
+      "errors": [
+        "Argument 1 must be a Lua function (not a C function)."
+      ]
+    },
+    {
+      "name": "get_call_stack",
+      "description": "Returns the current call stack as an array of frame descriptor tables. Each entry contains a `level` (1-based integer), a `type` (`\"lua\"` or `\"c\"`), and a `func` (the function at that level). Lua frames additionally include a `chunkname` field.",
+      "params": [],
+      "returns": [
+        {
+          "type": "table",
+          "description": "An array of frame descriptor tables, ordered from innermost to outermost. Each entry has: `level` (integer), `type` (\"lua\" or \"c\"), `func` (function), and optionally `chunkname` (string, Lua frames only)."
+        }
+      ]
+    },
+    {
+      "name": "get_registry",
+      "description": "Returns the Lua registry table (`LUA_REGISTRYINDEX`). Useful for inspecting or manipulating registry-stored references.",
+      "params": [],
+      "returns": [
+        {
+          "type": "table",
+          "description": "The Lua registry table."
+        }
+      ]
+    },
+    {
+      "name": "set_push_string_callback",
+      "description": "Registers a Lua function to be called whenever LJE pushes a string value. The function is automatically marked as special. Only one callback can be active at a time.",
+      "params": [
+        {
+          "name": "fn",
+          "type": "function",
+          "description": "Must be a Lua function, not a C function."
+        }
+      ],
+      "returns": [],
+      "errors": [
+        "Argument 1 must be a Lua function (not a C function)."
+      ]
+    },
+    {
+      "name": "set_script_hook_callback",
+      "description": "Registers a Lua function to be called on script hook events. The function is automatically marked as special. Only one callback can be active at a time.",
+      "params": [
+        {
+          "name": "fn",
+          "type": "function",
+          "description": "Must be a Lua function, not a C function."
+        }
+      ],
+      "returns": [],
+      "errors": [
+        "Argument 1 must be a Lua function (not a C function)."
+      ]
+    },
+    {
+      "name": "create_table",
+      "description": "Creates a new table with pre-allocated space. Equivalent to `lua_createtable`. Useful for avoiding rehashing overhead when the approximate size of the table is known in advance.",
+      "params": [
+        {
+          "name": "narr",
+          "type": "integer",
+          "optional": true,
+          "description": "Expected number of array-part entries. Defaults to `0`."
+        },
+        {
+          "name": "nrec",
+          "type": "integer",
+          "optional": true,
+          "description": "Expected number of hash-part entries. Defaults to `0`."
+        }
+      ],
+      "returns": [
+        {
+          "type": "table",
+          "description": "A new empty table with the requested pre-allocated capacity."
+        }
+      ]
+    }
+  ]
+}

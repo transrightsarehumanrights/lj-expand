@@ -1,0 +1,16 @@
+---
+id: lua
+title: lje (Lua extensions)
+---
+
+import NamespaceDocs from '@site/src/components/NamespaceDocs';
+import data from '@site/api/lua.json';
+
+export const toc = [
+  { id: 'constants', value: 'Constants', level: 2 },
+  ...data.constants.map(c => ({ id: c.name, value: c.name, level: 3 })),
+  { id: 'functions', value: 'Functions', level: 2 },
+  ...data.functions.map(f => ({ id: f.name, value: f.name, level: 3 })),
+];
+
+<NamespaceDocs data={data} />
