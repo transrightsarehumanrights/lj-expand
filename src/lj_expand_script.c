@@ -528,3 +528,9 @@ char** lje_script_find(LJEScript* script, const char* relative_path, size_t* out
 #error "lje_script_find not implemented for this platform"
 #endif
 }
+
+void lje_script_get_path(LJEScript* script, char* out_buffer, size_t buffer_size)
+{
+    // Simply return the main.lua path for now, we can expand this later if needed
+    strncpy_s(out_buffer, buffer_size, script->main_path, _TRUNCATE);
+}

@@ -285,6 +285,18 @@ int lje_get_current_script(lua_State* L)
   return 0;
 }
 
+int lje_get_current_script_path(lua_State* L)
+{
+  LJEScript* script = LJEG()->current_script;
+  if (script)
+  {
+    lua_pushstring(L, script->folder);
+    return 1;
+  }
+
+  return 0;
+}
+
 int lje_find_script_files(lua_State* L)
 {
   if (!LJEG()->current_script)
@@ -628,6 +640,7 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("get", lje_get_env);
     LJE_SET_FUNC("set", lje_set_env);
     LJE_SET_FUNC("current_script", lje_get_current_script);
+    LJE_SET_FUNC("current_script_path", lje_get_current_script_path);
     LJE_SET_FUNC("find_script_files", lje_find_script_files);
     LJE_SET_FUNC("is_lua_involved", lje_is_lua_involved);
     LJE_SET_FUNC("is_lje_involved", lje_is_lje_involved);
