@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 #include "lauxlib.h"
+#include "lj_expand_globals.h"
 #ifdef _WIN64
 #include <windows.h>
 #endif
@@ -250,6 +251,7 @@ LJEScriptInfo* lje_script_parse_info(const char* info_path)
     toml_datum_t version = toml_seek(res.toptab, "script.version");
     toml_datum_t author = toml_seek(res.toptab, "script.author");
     toml_datum_t dependencies = toml_seek(res.toptab, "script.dependencies");
+    toml_datum_t binary_dependencies = toml_seek(res.toptab, "script.binaries");
 
     TYPE_CHECK_PROPERTY(name, TOML_STRING);
     TYPE_CHECK_PROPERTY(version, TOML_STRING);
@@ -278,6 +280,24 @@ LJEScriptInfo* lje_script_parse_info(const char* info_path)
 
         info->dependencies[i] = *dep;
         free(dep);
+    }
+
+    // Binary dependencies are optional
+    if (binary_dependencies.type == TOML_ARRAY)
+    {
+        info->binary_dependency_count = binary_dependencies.u.arr.size;
+        info->binary_dependencies = (LJEBinaryModuleDependency*)malloc(sizeof(LJEBinaryModuleDependency) * info->binary_dependency_count);
+        for (size_t i = 0; i < info->binary_dependency_count; i++)
+        {
+            toml_datum_t dep_item = binary_dependencies.u.arr.elem[i];
+            TYPE_CHECK_PROPERTY(dep_item, TOML_STRING);
+            LJEBinaryModuleDependency* dep = info->binary_dependencies + i;
+            dep->name = _strdup(dep_item.u.s);
+        }
+    } else
+    {
+        info->binary_dependency_count = 0;
+        info->binary_dependencies = NULL;
     }
 
     toml_free(res);
@@ -333,6 +353,30 @@ LJEScript* lje_script_load_all_scripts(size_t* out_script_count) {
                 {
                     printf("[LJE] Warning: Script '%s' is missing a valid info.toml file. Skipping.\n", find_data.cFileName);
                     continue;
+                }
+
+                // Before continuing, check if it has binaries. Scripts likely wont function at all without their required binaries, so we skip them entirely if they are missing.
+                if (info->binary_dependency_count > 0)
+                {
+                    int found_binaries = 0;
+                    for (size_t i = 0; i < info->binary_dependency_count; i++)
+                    {
+                        const char* binary_name = info->binary_dependencies[i].name;
+                        for (size_t j = 0; j < LJEG()->loaded_binary_module_count; j++)
+                        {
+                            if (strcmp(LJEG()->loaded_binary_modules[j].name, binary_name) == 0)
+                            {
+                                found_binaries++;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (found_binaries != info->binary_dependency_count)
+                    {
+                        printf("[LJE] Warning: Script '%s' is missing required binary dependencies. Skipping.\n", find_data.cFileName);
+                        continue;
+                    }
                 }
 
                 scripts = (LJEScript*)realloc(scripts, sizeof(LJEScript) * (script_count + 1));

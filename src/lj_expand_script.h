@@ -14,6 +14,11 @@ typedef struct LJEScriptDependency
     // We can add version requirements later if needed
 } LJEScriptDependency;
 
+typedef struct LJEBinaryModuleDependency
+{
+    char* name;
+} LJEBinaryModuleDependency;
+
 typedef struct LJEScriptInfo
 {
     const char* name;
@@ -21,6 +26,8 @@ typedef struct LJEScriptInfo
     const char* author;
     LJEScriptDependency* dependencies;
     size_t dependency_count;
+    LJEBinaryModuleDependency* binary_dependencies;
+    size_t binary_dependency_count;
 } LJEScriptInfo;
 
 typedef struct LJEScriptExtraInfo

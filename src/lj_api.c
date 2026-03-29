@@ -1667,6 +1667,14 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
         {
           printf("[LJE]   Dependency: %s\n", LJEG()->loaded_scripts[i].info->dependencies[j].name);
         }
+
+        if (LJEG()->loaded_scripts[i].info->binary_dependencies)
+        {
+          for (size_t j = 0; j < LJEG()->loaded_scripts[i].info->binary_dependency_count; j++)
+          {
+            printf("[LJE]   Binary Dependency: %s\n", LJEG()->loaded_scripts[i].info->binary_dependencies[j].name);
+          }
+        }
       }
 
       printf("[LJE] Performing dependency resolution...\n");
