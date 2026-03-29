@@ -319,9 +319,13 @@ void lje_binary_module_load_all(
     char base_path[MAX_PATH] = { 0 };
     resolve_base(base_path, MAX_PATH);
 
+    // Add a base directory in case the binary module has additional dependencies. We want them to
+    // be able to load them from the same folder as the main module, so we don't add anything to GMod's
+    // directory which is detectable.
+    SetDllDirectoryA(base_path);
     WIN32_FIND_DATAA find_data;
     char search_path[MAX_PATH];
-    snprintf(search_path, MAX_PATH, "%s\\*.dll", base_path);
+    snprintf(search_path, MAX_PATH, "%s\\lje-*.dll", base_path);
 
     HANDLE find_handle = FindFirstFileA(search_path, &find_data);
     if (find_handle == INVALID_HANDLE_VALUE)
@@ -353,6 +357,8 @@ void lje_binary_module_load_all(
             free(module);
         }
     } while (FindNextFileA(find_handle, &find_data));
+
+    SetDllDirectoryA(NULL); /* Reset DLL directory to avoid affecting other loads */
 
     FindClose(find_handle);
 
