@@ -9,6 +9,7 @@ const sidebars = {
       label: 'Guides',
       collapsed: false,
       items: [
+        'guides/info-toml',
         'guides/scripts',
         'guides/detours',
         'guides/hooks'

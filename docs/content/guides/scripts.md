@@ -37,16 +37,4 @@ local foo = lje.require("utils/foo.lua")
 
 ## `info.toml`
 
-This is a file which contains script metadata for LJE when it is loaded. Here is an example `info.toml` file:
-```toml
-# luadump - exactly what it sounds like
-[script]
-name = "luadump"
-version = "1.0.0"
-author = "yogwoggf"
-dependencies = ["Eyoko1.ljeutil"]
-```
-
-The `dependencies` key is likely the most important one you'll need. Dependencies are formatted as `<author>.<name>`. This script in particular requires Eyoko's `ljeutil` script.
-
-LJE sees this and constructs a load order so that `ljeutil` is **guaranteed** to have ran before this script does. This is how dependencies are established in LJE, allowing for familiar GMod-esque global libraries.
+Every script folder requires an `info.toml` file declaring its name, version, author, and dependencies. See the [`info.toml` reference](/guides/info-toml) for the full format.
