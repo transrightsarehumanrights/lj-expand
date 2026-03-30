@@ -91,7 +91,7 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 @if "%1"=="static" goto :STATIC
 %LJCOMPILE% /MD /DLUA_BUILD_AS_DLL lj_*.c lib_*.c libs/tomlc17/src/tomlc17.c
 @if errorlevel 1 goto :BAD
-%LJLINK% /DLL /out:%LJDLLNAME% lj_*.obj lib_*.obj kernel32.lib user32.lib tomlc17.obj crypt32.lib advapi32.lib
+%LJLINK% /DLL /out:%LJDLLNAME% lj_*.obj lib_*.obj kernel32.lib user32.lib tomlc17.obj crypt32.lib advapi32.lib dbghelp.lib
 @if errorlevel 1 goto :BAD
 @goto :MTDLL
 :STATIC

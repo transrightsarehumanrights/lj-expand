@@ -44,6 +44,7 @@
 #include "stdio.h"
 #include "lj_buf.h"
 #include "lj_expand_cmd.h"
+#include "lj_expand_crash_handler.h"
 
 /* -- Common helper functions --------------------------------------------- */
 
@@ -1606,6 +1607,10 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
     if (mod) {
       printf("[LJE] LJE loaded successfully!\n");
       printf("[LJE] lua_shared.dll found at %p\n", mod->base);
+
+      printf("[LJE] Initializing crash handler...\n");
+      lje_crash_handler_init();
+      printf("[LJE] Crash handler initialized!\n");
 
       // Remap all the necessary functions to our own.
 #define SIGDEF(name, _) lje_remap(mod, name)
