@@ -6,6 +6,7 @@
 #include "lj_dispatch.h"
 #include "lj_lib.h"
 #include "lj_err.h"
+#include "lj_expand_cmd.h"
 #include "lj_expand_frame.h"
 #include "lj_expand_globals.h"
 #include "lj_expand_startup.h"
@@ -523,6 +524,11 @@ int lje_set_show_special_frames(lua_State* L)
 
 int lje_gc_begin_track(lua_State* L)
 {
+  if (lje_get_command_line_options()->disable_gc_stealth)
+  {
+    return 0;
+  }
+
   global_State *g = G(L);
   LJEGCTracker *tracker = &LJEG()->gc_tracker;
 
@@ -542,6 +548,11 @@ int lje_gc_begin_track(lua_State* L)
 
 static int lje_gc_end_track(lua_State *L)
 {
+  if (lje_get_command_line_options()->disable_gc_stealth)
+  {
+    return 0;
+  }
+
   global_State *g = G(L);
   LJEGCTracker *tracker = &LJEG()->gc_tracker;
 

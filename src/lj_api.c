@@ -1195,7 +1195,9 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     GCobj *ud_sentinel = gcref(mainthread(G(L))->nextgc);
     GCSize saved_threshold = G(L)->gc.threshold;
     GCSize saved_total = G(L)->gc.total;
-    G(L)->gc.threshold = LJ_MAX_MEM;
+    char disable_gc_stealth = lje_get_command_line_options()->disable_gc_stealth;
+    if (!disable_gc_stealth)
+      G(L)->gc.threshold = LJ_MAX_MEM;
 
     lje_addfuncs(L);
     printf("[LJE] Added LJE functions to Lua state\n");
@@ -1225,26 +1227,28 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 
     LJEG()->using_error_reporter = 0;
 
-    // Fix root list objects
+    if (!disable_gc_stealth)
     {
+      // Fix root list objects
+      {
         GCobj *o = gcref(G(L)->gc.root);
         while (o != NULL && o != root_sentinel) {
           o->gch.marked |= LJ_GC_FIXED | LJ_GC_SFIXED;
           o = gcref(o->gch.nextgc);
         }
-    }
+      }
 
-    // Fix userdata list
-    {
+      // Fix userdata list
+      {
         GCobj *o = gcref(mainthread(G(L))->nextgc);
         while (o != NULL && o != ud_sentinel) {
           o->gch.marked |= LJ_GC_FIXED | LJ_GC_SFIXED;
           o = gcref(o->gch.nextgc);
         }
-    }
+      }
 
-    // Fix ALL unfixed strings (blanket)
-    {
+      // Fix ALL unfixed strings (blanket)
+      {
         MSize i;
         for (i = 0; i <= G(L)->strmask; i++) {
           GCobj *o = gcref(G(L)->strhash[i]);
@@ -1254,21 +1258,24 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
             o = gcref(o->gch.nextgc);
           }
         }
+      }
+
+      // Shrink tmpbuf to baseline, used if LJE scripts use any string buffers.
+      lj_buf_shrink(L, &G(L)->tmpbuf);
+      lj_buf_shrink(L, &G(L)->tmpbuf);
+
+      // Set compensation for over-fixed strings, will be totally honest,
+      // I don't know how these happen, but I just have to assume it's some quirk at preinit
+      // that I haven't fully wrapped my head around. Point is, 34 bytes remain overcompensated no matter what,
+      // so it seems like it's some kind of GCO being made by GMod's C code?
+      LJEG()->gc_compensation = 34;
+
+      G(L)->gc.total = saved_total;
+      G(L)->gc.threshold = saved_threshold;
+      printf("[LJE] Completed init.lua preinit, fixed GC objects, and neutralized GC pressure.\n");
+    } else {
+      printf("[LJE] Completed init.lua preinit without GC stealth (GC compensation is disabled, expect GC spikes during init).\n");
     }
-
-    // Shrink tmpbuf to baseline, used if LJE scripts use any string buffers.
-    lj_buf_shrink(L, &G(L)->tmpbuf);
-    lj_buf_shrink(L, &G(L)->tmpbuf);
-
-    // Set compensation for over-fixed strings, will be totally honest,
-    // I don't know how these happen, but I just have to assume it's some quirk at preinit
-    // that I haven't fully wrapped my head around. Point is, 34 bytes remain overcompensated no matter what,
-    // so it seems like it's some kind of GCO being made by GMod's C code?
-    LJEG()->gc_compensation = 34;
-
-    G(L)->gc.total = saved_total;
-    G(L)->gc.threshold = saved_threshold;
-    printf("[LJE] Completed init.lua preinit, fixed GC objects, and neutralized GC pressure.\n");
   }
 
   /* LJE: Next, check if we're waiting for the startup call. */
