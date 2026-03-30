@@ -3,6 +3,7 @@ const sidebars = {
   apiSidebar: [
     { type: 'doc', id: 'intro', label: 'Introduction' },
     { type: 'doc', id: 'installation', label: 'Installation' },
+    { type: 'doc', id: 'cli-options', label: 'Command Line Options' },
     {
       type: 'category',
       label: 'Guides',

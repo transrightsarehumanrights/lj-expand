@@ -1,0 +1,15 @@
+---
+id: cli-options
+title: Command Line Options
+---
+
+import CliOptionsDocs from '@site/src/components/CliOptionsDocs';
+import data from '@site/api/cli-options.json';
+
+export const toc = [
+  ...data.options.map(o => ({ id: o.name, value: o.name, level: 2 })),
+];
+
+# Command Line Options
+
+<CliOptionsDocs data={data} />

@@ -1,0 +1,13 @@
+{
+  "description": "Command line switches that can be passed to the GMod process to control LJE behavior.\n\nExample: `lje-launcher.exe --lje-disable-scripts`",
+  "options": [
+    {
+      "name": "--lje-disable-scripts",
+      "description": "Disables loading of all LJE scripts. LJE will not load any scripts from the scripts directory, including their `preinit.lua` and `main.lua` entrypoints. Useful for troubleshooting when you want to run without any script interference."
+    },
+    {
+      "name": "--lje-disable-binary-modules",
+      "description": "Disables loading of binary modules (`.lje_modules`). LJE will not load any native DLL modules, even if scripts request them. Useful for isolating issues caused by binary modules, or for running in environments where loading native modules is undesirable."
+    }
+  ]
+}

@@ -43,6 +43,7 @@
 #include "lj_ffrecord.h"
 #include "stdio.h"
 #include "lj_buf.h"
+#include "lj_expand_cmd.h"
 
 /* -- Common helper functions --------------------------------------------- */
 
@@ -1625,19 +1626,29 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
         printf("[LJE] AdvancedLuaErrorReporter not found!\n");
       }
 
-      printf("[LJE] Loading binary modules...\n");
-      lje_binary_module_ensure_folder_exists();
-      lje_binary_module_load_all(&LJEG()->loaded_binary_module_count, &LJEG()->loaded_binary_modules);
-      if (LJEG()->loaded_binary_module_count > 0)
+      LJECommandLineOptions* options = lje_get_command_line_options();
+
+      if (options->disable_binary_modules)
       {
-        printf("[LJE] Loaded %d binary modules:\n", LJEG()->loaded_binary_module_count);
-        for (int i = 0; i < LJEG()->loaded_binary_module_count; i++)
+        printf("[LJE] Binary module loading is disabled via command line option, skipping...\n");
+        LJEG()->loaded_binary_module_count = 0;
+        LJEG()->loaded_binary_modules = NULL;
+      } else
+      {
+        printf("[LJE] Loading binary modules...\n");
+        lje_binary_module_ensure_folder_exists();
+        lje_binary_module_load_all(&LJEG()->loaded_binary_module_count, &LJEG()->loaded_binary_modules);
+        if (LJEG()->loaded_binary_module_count > 0)
         {
-          LJEBinaryModule module = LJEG()->loaded_binary_modules[i];
-          printf("[LJE] - %s\n", module.name);
+          printf("[LJE] Loaded %d binary modules:\n", LJEG()->loaded_binary_module_count);
+          for (int i = 0; i < LJEG()->loaded_binary_module_count; i++)
+          {
+            LJEBinaryModule module = LJEG()->loaded_binary_modules[i];
+            printf("[LJE] - %s\n", module.name);
+          }
+        } else {
+          printf("[LJE] No binary modules loaded.\n");
         }
-      } else {
-        printf("[LJE] No binary modules loaded.\n");
       }
 
       if (!lje_script_folder_exists())
@@ -1653,6 +1664,14 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
         } else {
           printf("[LJE] Successfully created %s folder!\n", LJE_SCRIPT_FOLDER);
         }
+      }
+
+      if (options->disable_scripts)
+      {
+        printf("[LJE] Script loading is disabled via command line option, skipping...\n");
+        LJEG()->loaded_script_count = 0;
+        LJEG()->loaded_scripts = NULL;
+        return TRUE;
       }
 
       LJEG()->loaded_scripts = lje_script_load_all_scripts(&LJEG()->loaded_script_count);
