@@ -4,6 +4,9 @@ on:
       - expansion
       - 'experiment/*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
