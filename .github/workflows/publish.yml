@@ -14,6 +14,13 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Get version info
+        id: version
+        run: |
+          echo "short=$(git rev-parse --short HEAD)" >> $env:GITHUB_OUTPUT
+          $branch = "${{ github.ref_name }}" -replace '[/\\]', '-'
+          echo "branch=$branch" >> $env:GITHUB_OUTPUT
+
       - name: Build
         shell: cmd
         run: |
@@ -21,10 +28,27 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           ./msvcbuild.bat gc64
 
+      - name: Download rcedit
+        run: curl -L -o rcedit.exe https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe
+
+      - name: Stamp DLL version
+        run: |
+          ./rcedit.exe src/lje-w64.dll --set-version-string "ProductVersion" "${{ steps.version.outputs.short }}" --set-version-string "FileDescription" "LJE Core" --set-version-string "ProductName" "LJE" --set-version-string "Branch" "${{ steps.version.outputs.branch }}"
+
       - name: Publish Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: lje-${{github.sha}}
+          name: lje-${{ steps.version.outputs.branch }}-${{ github.sha }}
           path: |
             src/lje-w64.dll
             src/lje-launcher.exe
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.branch }}-latest
+          prerelease: ${{ github.ref_name != 'expansion' }}
+          name: "Latest ${{ steps.version.outputs.branch }} (${{ steps.version.outputs.short }})"
+          files: src/lje-w64.dll
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
