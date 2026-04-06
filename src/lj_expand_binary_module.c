@@ -230,12 +230,14 @@ static int has_user_been_warned()
 {
     /* Check if the warning flag file is there */
     char warning_flag_path[MAX_PATH] = { 0 };
-    char temp_path[MAX_PATH] = "%USERPROFILE%\\" LJE_BINARY_MODULE_FOLDER "\\" LJE_WARNED_FLAG;
-    DWORD result = ExpandEnvironmentStringsA(temp_path, warning_flag_path, (DWORD)MAX_PATH);
-    if (result == 0 || result > MAX_PATH)
+    char base[MAX_PATH] = { 0 };
+    if (!lje_directory_get(LJE_DIR_BINARIES, base, MAX_PATH))
     {
-        return 0; /* Failed to expand, assume not warned */
+        return 0; /* Failed to resolve, assume not warned to be safe */
     }
+
+    strncpy_s(warning_flag_path, MAX_PATH, base, _TRUNCATE);
+    strncat_s(warning_flag_path, MAX_PATH, "\\" LJE_WARNED_FLAG, _TRUNCATE);
 
     DWORD attrs = GetFileAttributesA(warning_flag_path);
     return (attrs != INVALID_FILE_ATTRIBUTES);
@@ -245,12 +247,14 @@ static void write_warning()
 {
     /* Create the warning flag file */
     char warning_flag_path[MAX_PATH] = { 0 };
-    char temp_path[MAX_PATH] = "%USERPROFILE%\\" LJE_BINARY_MODULE_FOLDER "\\" LJE_WARNED_FLAG;
-    DWORD result = ExpandEnvironmentStringsA(temp_path, warning_flag_path, (DWORD)MAX_PATH);
-    if (result == 0 || result > MAX_PATH)
+    char base[MAX_PATH] = { 0 };
+    if (!lje_directory_get(LJE_DIR_BINARIES, base, MAX_PATH))
     {
-        return; /* Failed to expand, cannot write */
+        return; /* Failed to resolve, can't write warning but at least we tried */
     }
+
+    strncpy_s(warning_flag_path, MAX_PATH, base, _TRUNCATE);
+    strncat_s(warning_flag_path, MAX_PATH, "\\" LJE_WARNED_FLAG, _TRUNCATE);
 
     HANDLE file = CreateFileA(
         warning_flag_path,
