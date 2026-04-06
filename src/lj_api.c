@@ -45,6 +45,7 @@
 #include "lj_buf.h"
 #include "lj_expand_cmd.h"
 #include "lj_expand_crash_handler.h"
+#include "lj_expand_dirs.h"
 
 /* -- Common helper functions --------------------------------------------- */
 
@@ -1611,6 +1612,12 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
       printf("[LJE] Initializing crash handler...\n");
       lje_crash_handler_init();
       printf("[LJE] Crash handler initialized!\n");
+
+      // Try migrating
+      if (!lje_migrate_legacy_dirs())
+      {
+        printf("[LJE] Failed to migrate legacy directories! If you had scripts or binary modules in the old folders, please move them to the new ones manually.\n");
+      }
 
       // Remap all the necessary functions to our own.
 #define SIGDEF(name, _) lje_remap(mod, name)

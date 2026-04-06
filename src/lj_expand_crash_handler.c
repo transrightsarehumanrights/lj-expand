@@ -7,6 +7,7 @@
 #include <Psapi.h>
 
 #include "lj_debug.h"
+#include "lj_expand_dirs.h"
 #include "lj_expand_globals.h"
 #include "lj_frame.h"
 #include "lj_obj.h"
@@ -83,14 +84,7 @@ static int lje_is_relevant_crash(const struct _EXCEPTION_POINTERS* ep)
 
 static char expand_crash_dump_path(char* out, size_t out_size)
 {
-    DWORD result = ExpandEnvironmentStringsA("%USERPROFILE%\\" LJE_CRASH_DUMPS_PATH, out, (DWORD)out_size);
-    if (result == 0 || result > out_size)
-    {
-        out[0] = '\0';
-        return 0;
-    }
-
-    return 1;
+    return lje_directory_get(LJE_DIR_CRASH_DUMPS, out, out_size);
 }
 
 static char ensure_crash_dump_directory_exists()

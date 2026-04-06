@@ -6,6 +6,7 @@
 #define LJE_NO_OPAQUE_STATE
 #include "lauxlib.h"
 #include "lje_sdk.h"
+#include "lj_expand_dirs.h"
 #include "lj_expand_frame.h"
 #include "lj_expand_globals.h"
 #include "lua.h"
@@ -269,12 +270,9 @@ static void write_warning()
 
 static void resolve_base(char* path, size_t path_size)
 {
-    char temp_path[MAX_PATH] = "%USERPROFILE%\\" LJE_BINARY_MODULE_FOLDER;
-    DWORD result = ExpandEnvironmentStringsA(temp_path, path, (DWORD)path_size);
-    if (result == 0 || result > path_size)
+    if (!lje_directory_get(LJE_DIR_BINARIES, path, path_size))
     {
-        printf("[LJE] Failed to expand environment strings for binary module path!\n");
-        path[0] = '\0';
+        printf("[LJE] Failed to resolve binary module folder path!\n");
     }
 }
 
