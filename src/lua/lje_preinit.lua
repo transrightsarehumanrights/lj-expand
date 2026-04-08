@@ -89,6 +89,7 @@ safeEnv.cloned_mts["VMatrix"] = cloneMetaTable("VMatrix")
 safeEnv.cloned_mts["Weapon"] = cloneMetaTable("Weapon", safeEnv.cloned_mts["Entity"])
 safeEnv.cloned_mts["IMaterial"] = cloneMetaTable("IMaterial")
 safeEnv.cloned_mts["ITexture"] = cloneMetaTable("ITexture")
+safeEnv.cloned_mts["PhysObj"] = cloneMetaTable("PhysObj")
 -- You shouldn't ever really use panels, since they are *incredibly* detectable, but just in case
 safeEnv.cloned_mts["Panel"] = cloneMetaTable("Panel")
 
