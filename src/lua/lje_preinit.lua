@@ -249,4 +249,13 @@ for _, func in ipairs({pcall, xpcall, ProtectedCall}) do
 end
 lje.con_print("Callers hidden!")
 
+-- Detour SysTime to subtract the clock deficit from it.
+local origSysTime = SysTime
+local clock_deficit = lje.env.clock_deficit
+local function sysTimeHk()
+  return origSysTime() - clock_deficit()
+end
+
+safeEnv._G.SysTime = safeEnv.lje.detour(origSysTime, sysTimeHk)
+
 lje.con_print("Preinit script finished!")

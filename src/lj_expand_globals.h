@@ -92,6 +92,9 @@ typedef struct LJEGlobalState
     /* GC */
     GCSize gc_compensation;
     LJEGCTracker gc_tracker;
+    /* Timing attacks */
+    double clock_deficit;
+
 } LJEGlobalState;
 
 #define LJEG() (lje_get_global_state())

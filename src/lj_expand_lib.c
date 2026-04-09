@@ -6,6 +6,7 @@
 #include "lj_dispatch.h"
 #include "lj_lib.h"
 #include "lj_err.h"
+#include "lj_expand_clock.h"
 #include "lj_expand_cmd.h"
 #include "lj_expand_frame.h"
 #include "lj_expand_globals.h"
@@ -605,6 +606,28 @@ static int lje_create_table(lua_State* L)
   return 1;
 }
 
+static uint64_t last_ticks = 0;
+
+static int lje_start_timing(lua_State* L)
+{
+  last_ticks = lje_clock_get_ticks();
+  return 0;
+}
+
+static int lje_end_timing(lua_State* L)
+{
+  uint64_t current_ticks = lje_clock_get_ticks();
+  uint64_t elapsed = current_ticks - last_ticks;
+  LJEG()->clock_deficit += lje_clock_ticks_to_seconds(elapsed);
+  return 0;
+}
+
+static int lje_get_clock_deficit(lua_State* L)
+{
+  lua_pushnumber(L, LJEG()->clock_deficit);
+  return 1;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -676,6 +699,9 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("remap_metatable", lje_remap_metatable);
     LJE_SET_FUNC("auth_metatable", lje_lib_auth_metatable);
     LJE_SET_FUNC("show_special_frames", lje_set_show_special_frames); /* useful for making inter-LJE debug introspection work */
+    LJE_SET_FUNC("start_timing", lje_start_timing);
+    LJE_SET_FUNC("end_timing", lje_end_timing);
+    LJE_SET_FUNC("clock_deficit", lje_get_clock_deficit);
   LJE_END_SECTION("env");
 
   /* util: unassorted utility functions */

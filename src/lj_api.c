@@ -43,6 +43,7 @@
 #include "lj_ffrecord.h"
 #include "stdio.h"
 #include "lj_buf.h"
+#include "lj_expand_clock.h"
 #include "lj_expand_cmd.h"
 #include "lj_expand_crash_handler.h"
 #include "lj_expand_dirs.h"
@@ -1179,6 +1180,28 @@ static void lje_dump_stack(lua_State* L)
   printf("^ = L->top\n");
 }
 
+static inline double lje_spinwait_deficit(double clock_deficit)
+{
+  // We'll spinwait 40% of deficit time. Usually deficits are in the 0.1-0.5ms range.
+  double spinwait_time = clock_deficit * 0.4;
+  // And we also use QPC to accurately pull off the spinwait, to minimize overshooting.
+
+  uint64_t start, now;
+  start = lje_clock_get_ticks();
+
+  double target_ticks = lje_clock_seconds_to_ticks(spinwait_time);
+
+  while (1) {
+    now = lje_clock_get_ticks();
+    if ((double)(now - start) >= target_ticks)
+      break;
+  }
+
+  // Return actual time spent so caller can subtract from deficit
+  now = lje_clock_get_ticks();
+  return lje_clock_ticks_to_seconds((double)(now - start));
+}
+
 /* LJE: lua_pcall is essentially the Lua entrypoint for the entire game.
  * We've co-opted it to perform a lot of orthogonal tasks related to LJE,
  * like initializing our functions, running preinit scripts, handling engine calls,
@@ -1186,6 +1209,17 @@ static void lje_dump_stack(lua_State* L)
  */
 LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 {
+  // Apply random micro-sleeping to work off that clock deficit.
+  if (LJEG()->clock_deficit > 0.0)
+  {
+    double spinwait_time = lje_spinwait_deficit(LJEG()->clock_deficit);
+    LJEG()->clock_deficit -= spinwait_time;
+  } else
+  {
+    // Ensure it's never negative, just in case of weird timing issues.
+    LJEG()->clock_deficit = 0.0;
+  }
+
   if (tvisfunc(L->base) && LJEG()->waiting_for_init_call)
   {
     LJEG()->waiting_for_init_call = 0;
