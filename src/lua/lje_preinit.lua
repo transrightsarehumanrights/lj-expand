@@ -250,4 +250,25 @@ for _, func in ipairs({pcall, xpcall, ProtectedCall}) do
 end
 lje.con_print("Callers hidden!")
 
+-- Detour SysTime and util.TimerCycle to subtract the clock deficit from it.
+-- TODO: See if we can reimplement these in C or something later. Maybe if user has
+-- FFI installed, we can change these to use a low-overhead replacement function
+local origSysTime = SysTime
+local clock_deficit = lje.env.clock_deficit
+local function sysTimeHk()
+  return origSysTime() - clock_deficit()
+end
+
+local origTimerCycle = util.TimerCycle
+local last_deficit = 0
+local function timerCycleHk()
+  local current_deficit = clock_deficit()
+  local delta_deficit = current_deficit - last_deficit
+  last_deficit = current_deficit
+  return origTimerCycle() - (delta_deficit * 1000)
+end
+
+safeEnv._G.util.TimerCycle = safeEnv.lje.detour(origTimerCycle, timerCycleHk)
+safeEnv._G.SysTime = safeEnv.lje.detour(origSysTime, sysTimeHk)
+
 lje.con_print("Preinit script finished!")

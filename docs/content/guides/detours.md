@@ -40,91 +40,168 @@ Really need to hook something implemented in Lua? Consider using [engine call ho
 
 ## Good: C functions
 
-This is where most detours will be useful anyway. Detouring C functions is safe and stealthy, and does not suffer from any of the previous pain points mentioned. You can also generally spend more time in the detour function itself without worrying about performance, as C functions are generally not called as frequently as fast functions or Lua-defined functions.
+This is what you will be detouring 99% of the time. C functions are implemented by the engine and have a single source of truth. They cannot be redefined or reinstantiated, so once you detour them, they will stay detoured until you restore them. This makes them much safer to detour, as you don't have to worry about your detour being bypassed by a redefinition or reinstantiation.
 
-Taking too long though will open you up to timing detections, so be mindful of that.
+However, just like anything involving the client environment, **they can lead to detections**. The next section will cover detour stealth which is an entire topic in itself.
 
-## Examples
+# Detour stealth
 
-### Detouring `system.GetCountry`
+Any deviation from the original function will cause a difference in execution time. **This can lead to detections**.
 
-```lua
--- Changes our country to international waters.
+## Early Returns
 
-_G.system.GetCountry = lje.detour(_G.system.GetCountry, function()
-    return "XZ" -- Country code for international waters, because why not?
-end)
-```
-
-### Detouring `render.Capture`
-
-This is taken from `gilbhax`, but shows you how to use detours for a realistic purpose.
-```lua
--- Hooks render.Capture to determine if anyone is trying to take a screenshot
-
-local screengrab = {}
-local origCapture = render.Capture
-
-screengrab.last_screengrab_time = 0
-screengrab.threshold = 10 -- seconds
-
-function screengrab.is_screengrab_recent()
-    return (SysTime() - screengrab.last_screengrab_time) <= screengrab.threshold
-end
-
-function screengrab.get_time_since_last_screengrab()
-    return SysTime() - screengrab.last_screengrab_time
-end
-
-local function captureHk(tbl)
-    screengrab.last_screengrab_time = os.clock()
-    return origCapture(tbl)
-end
-
-_G.render.Capture = lje.detour(origCapture, captureHk)
-
-return screengrab
-```
-
-### Detouring `HTTP`
+For example, say you detour `HTTP` to block certain requests. Naively, you might do something like this:
 
 ```lua
-local urls = lje.require("config/urls.lua")
-local origHttp = HTTP
+local originalHTTP = HTTP
+
 local function httpHk(params)
-    lje.gc.begin_track() -- Only necessary if it generates noticeable GC pressure.
-    if not params then
-        lje.gc.end_track()
-        return origHttp(params) -- if it's not a table, just call the original function
-    end
-    
-    local url = rawget(params, "url") or "" -- ALWAYS write defensive code, errors are noticeable.
-    if type(url) ~= "string" then
-        url = tostring(url)
-    end
-
-    -- Logs and blocks HTTP requests.
-    lje.con_printf("[HTTP] HTTP request to URL: $yellow{%s}", url)
-    if not urls.is_url_allowed(url) then
-        lje.con_printf("[HTTP] Blocked HTTP request to URL: $red{%s}", url)
-        lje.gc.end_track()
-        return true -- make them think it was sent
-    end
-
-    lje.gc.end_track()
-    return origHttp(params)
+  -- do checks to ensure
+  -- params isnt invalid
+  if isBad(params) then
+    return originalHTTP(params)
+  end
+  
+  if isBlocked(params) then
+    return -- block the request
+  end
+  
+  return originalHTTP(params)
 end
 
-_G.HTTP = lje.detour(origHttp, httpHk)
+_G.HTTP = lje.detour(originalHTTP, httpHk)
 ```
 
-## Technical Details
+This will work, but there will be a significant time difference between any blocked request and a normal request.
+Early returning completely skips the original function, which is what some anti-cheats look for.
 
-LJE creates a side structure for each `GCfunc` in the VM, `LJEfunc`, which allows the VM to spoof function objects.
-That's right, there *is* no actual detouring performed. We replace the function with your hook, and everything calls that hook.
+This is still unsolved, but generally you *need* to call the original function no matter what, even if it is just to do some dummy work. For example, you could do something like this:
 
-It's fairly high-performance since we don't detour anything. However, JIT is enabled/disabled for the hook depending if the original function supports it or not.
-To evade detection, every possible means of detection is simply just replaced with the original function at runtime, so `debug.getinfo` will return the hook, likewise calling `getinfo` on the hook itself returns the info of the hook's original function.
-Many functions are modified specifically to simply just replace the target function with the original one, with the rest of the functionality untouched. This makes it virtually impossible for anyone to operate on the hook itself or introspect the hook.
+```lua
+local originalHTTP = HTTP
+local FAKE_HTTP_INPUT = {
+  failed = function(reason) end,
+  success = function(code, body, headers) end,
+  method = "GET",
+  url = "https://example.com",
+}
 
-Also, all the debug functions forcibly have had their perception of the call stack modified to ignore any spoofs, so the hook will never appear in the stack no matter what the function or case may be.
+local function httpHk(params)
+  -- do checks to ensure
+  -- params isnt invalid
+  if isBad(params) then
+    return originalHTTP(params)
+  end
+  
+  if isBlocked(params) then
+    return originalHTTP(FAKE_HTTP_INPUT)
+  end
+  
+  return originalHTTP(params)
+end
+
+_G.HTTP = lje.detour(originalHTTP, httpHk)
+```
+
+Now every path of execution calls the original function, and there is no significant time difference between a blocked request and a normal request. This is much stealthier and less likely to be detected by anti-cheat.
+
+This is fine, but once you add anything which adds considerable overhead, like logging or complex checks, you start to get into detection territory again.
+Overhead is unavoidable, so LJE equips you with the timing functions in `lje.env` to hide this overhead. Instead, you pay it back later over multiple frames to avoid detections.
+
+## Paying back overhead
+
+Here is an example of how you might do this with HTTP again:
+
+```lua
+local originalHTTP = HTTP
+local FAKE_HTTP_INPUT = {
+  failed = function(reason) end,
+  success = function(code, body, headers) end,
+  method = "GET",
+  url = "https://example.com",
+}
+
+-- These should be localized to avoid any initial global lookups.
+local start_timing, end_timing = lje.env.start_timing, lje.env.end_timing
+local function httpHk(params)
+  -- do checks to ensure
+  -- params isnt invalid
+  start_timing() -- Begin counting our detour overhead.
+  if isBad(params) then
+    end_timing() -- End timing and pay back the overhead we just added.
+    return originalHTTP(params)
+  end
+  
+  if isBlockedViaComplicatedCheck(params) then
+    end_timing()
+    return originalHTTP(FAKE_HTTP_INPUT)
+  end
+  
+  end_timing()
+  return originalHTTP(params)
+end
+
+_G.HTTP = lje.detour(originalHTTP, httpHk)
+```
+
+Now, the overhead of our if checks and any other code we add to the detour is hidden from anti-cheat, as it is paid back later and not in a vacuum of detection code.
+This is far stealthier and less likely to be detected, and you **should do this for all detours that have considerable overhead**.
+
+## GC stealth
+
+Ok, so lets say you need to push a copy of the parameters to a queue for logging/processing later.
+This would lead to a *noticeable* GC memory usage spike that an anti-cheat could easily detect.
+
+To avoid this, you can use LJE's GC stealth functions with [lje.gc.begin_track()](/api/gc#begin_track) and [lje.gc.end_track()](/api/gc#end_track) to track all GC allocations in the detour.
+They're not "paid back", but just hidden from the GC total and thus anti-cheat. Ideally, you want to minimize the amount of GC allocations in your detours, but if you need to do it, this is how you can do it stealthily.
+
+```lua
+local originalHTTP = HTTP
+local FAKE_HTTP_INPUT = {
+  failed = function(reason) end,
+  success = function(code, body, headers) end,
+  method = "GET",
+  url = "https://example.com",
+}
+
+local QUEUE = {}
+local function pushForProcessing(params)
+  local copy = {}
+  for k, v in pairs(params) do
+    copy[k] = v
+  end
+  table.insert(QUEUE, copy)
+end
+
+-- These should be localized to avoid any initial global lookups.
+local start_timing, end_timing = lje.env.start_timing, lje.env.end_timing
+local begin_track, end_track = lje.gc.begin_track, lje.gc.end_track
+local function httpHk(params)
+  -- do checks to ensure
+  -- params isnt invalid
+  start_timing() -- Begin counting our detour overhead.
+  start_track() -- Start tracking GC allocations for this detour.
+  if isBad(params) then
+    end_track() -- End GC tracking and hide any GC allocations we just did.
+    end_timing() -- End timing and pay back the overhead we just added.
+    return originalHTTP(params)
+  end
+  pushForProcessing(params) -- This function does GC allocations, but they're hidden from anti-cheat because of the GC tracking.
+  if isBlockedViaComplicatedCheck(params) then
+    end_track()
+    end_timing()
+    return originalHTTP(FAKE_HTTP_INPUT)
+  end
+  
+  end_track()
+  end_timing()
+  return originalHTTP(params)
+end
+
+_G.HTTP = lje.detour(originalHTTP, httpHk)
+```
+
+Now, this detour is resilient to timing, GC and early return detections, and is much stealthier than a naive detour. You should strive to make all of your detours as stealthy as possible to avoid detections, and LJE provides you with the tools to do so.
+Of course, there are still ways to detect some detours (behavioral detections, etc), but following these practices will make your detours much more resilient to detection.
+
+The best detour is no detour at all, so always consider if an engine call hook or some other instrument could achieve your goal before resorting to detours.
