@@ -1183,7 +1183,12 @@ static void lje_dump_stack(lua_State* L)
 static inline double lje_spinwait_deficit(double clock_deficit)
 {
   // We'll spinwait 40% of deficit time. Usually deficits are in the 0.1-0.5ms range.
-  double spinwait_time = clock_deficit * 0.4;
+  double spinwait_time = clock_deficit * 0.5;
+  if (clock_deficit < 0.0005)
+  {
+    // Try and do all of it if it's less than half a millisecond.
+    spinwait_time = clock_deficit;
+  }
   // And we also use QPC to accurately pull off the spinwait, to minimize overshooting.
 
   uint64_t start, now;
@@ -1209,9 +1214,11 @@ static inline double lje_spinwait_deficit(double clock_deficit)
  */
 LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 {
-  // Apply random micro-sleeping to work off that clock deficit.
+  // Apply micro-sleeping to work off that clock deficit.
   if (LJEG()->clock_deficit > 0.0)
   {
+    // Of course, it's always possible to just get rid of it all at once.
+    // This is not ideal because it creates a *noticeable* hitch and jump in clock time.
     double spinwait_time = lje_spinwait_deficit(LJEG()->clock_deficit);
     LJEG()->clock_deficit -= spinwait_time;
   } else
