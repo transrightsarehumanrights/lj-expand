@@ -523,6 +523,7 @@ int lje_set_show_special_frames(lua_State* L)
   return 0;
 }
 
+static int lje_gc_end_track(lua_State* L);
 int lje_gc_begin_track(lua_State* L)
 {
   if (lje_get_command_line_options()->disable_gc_stealth)
@@ -534,8 +535,10 @@ int lje_gc_begin_track(lua_State* L)
   LJEGCTracker *tracker = &LJEG()->gc_tracker;
 
   if (tracker->active) {
-    luaL_error(L, "gc tracking already active");
-    return 0;
+    //luaL_error(L, "gc tracking already active");
+    // Just automatically end it for them, sometimes this can happen if a script errors.
+    // Note we still continue with starting tracking.
+    lje_gc_end_track(L);
   }
 
   tracker->root_sentinel = gcref(g->gc.root);
