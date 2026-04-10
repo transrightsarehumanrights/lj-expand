@@ -34,6 +34,7 @@ typedef struct LJEScriptExtraInfo
 {
     int engine_call_hook_ref_id;
 } LJEScriptExtraInfo;
+
 /* LJEScripts represent a folder containing Lua scripts to be loaded by LJE.
  * Each script has atleast one file, 'main.lua', which is the entrypoint. Additional files can be
  * included as needed relative to the script's path.

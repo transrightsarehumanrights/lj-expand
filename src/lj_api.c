@@ -1431,7 +1431,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
   }
 
   /* LJE: Reload any scripts at this point, if needed. */
-  if (LJEG()->script_watcher && LJEG()->main_state == L)
+  if (LJEG()->script_watcher && LJEG()->main_state == L && errfunc == 1) /* only reload on new engine calls */
   {
     size_t scripts_needing_reload = lje_watcher_reload_count(LJEG()->script_watcher);
     if (scripts_needing_reload > 0)
