@@ -166,6 +166,7 @@ static LjeLuaApi* create_lua_api()
     api->is_lje_involved = lje_frame_is_lje_involved;
     api->mark_special = mark_special;
     api->pushlstring = lua_pushlstring;
+    api->tocfunction = lua_tocfunction;
 
     return api;
 }
