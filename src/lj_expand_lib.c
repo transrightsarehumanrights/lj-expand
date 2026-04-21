@@ -631,6 +631,78 @@ static int lje_get_clock_deficit(lua_State* L)
   return 1;
 }
 
+// Wraps every C function we pull so we can securely call it.
+static int lje_secure_gmod_api(lua_State* L)
+{
+  void* func_ptr = lua_touserdata(L, lua_upvalueindex(1));
+  if (!func_ptr)
+  {
+    lua_pushnil(L);
+    return 1;
+  }
+
+  // zero-copy function call! state redirection handles this,
+  // we just need to dispatch the c function raw.
+  lua_CFunction func = (lua_CFunction)func_ptr;
+  printf("[LJE] Securely calling function at %p\n", func_ptr);
+  LJEG()->redirect_to_isolation = 1;
+  int results = func(LJEG()->main_state); /* make it think it's running in the main state, it won't know any better! */
+  LJEG()->redirect_to_isolation = 0;
+  printf("[LJE] Function call complete, got %d results\n", results);
+  return results;
+}
+
+static int lje_secure_pull(lua_State* L)
+{
+  // Pulls a global out of the client state and returns it to the secure state.
+  // This is necessary for secure scripts to be able to interact with the client state in a limited way, without exposing the full global environment.
+  if (!LJEG()->main_state)
+  {
+    luaL_error(L, "main state not set for secure pull");
+    return 0;
+  }
+
+  const char* name = luaL_checkstring(L, 1); // e.g: Msg or player.GetAll
+  lua_State* L2 = LJEG()->main_state;
+  // We cannot interact with the main state directly. Since there is no active function call,
+  // we must directly interface with the global environment. No stack at all.
+
+  GCtab* global = tabref(L2->env);
+  // We need to split the name by dots to traverse the table hierarchy.
+  // TODO: Add split by dots
+  global_State* g = G(L2);
+  size_t total_before = g->gc.total;
+  GCstr* str = lj_str_new(L2, name, strlen(name));
+  g->gc.total = total_before; // Neutralize GC pressure from string creation
+
+  cTValue* value = lj_tab_getstr(global, str);
+  printf("[LJE] Secure pull for '%s': %p\n", name, (void*)value);
+  if (!value || tvisnil(value))
+  {
+    lua_pushnil(L);
+    return 1;
+  }
+
+  if (tvisfunc(value))
+  {
+    GCfunc* func = funcV(value);
+    if (!iscfunc(func))
+    {
+      // Only allow C functions to be pulled for now.
+      printf("[LJE] Secure pull for '%s' is not a C function, rejecting.\n", name);
+      lua_pushnil(L);
+      return 1;
+    }
+
+    lua_pushlightuserdata(L, func->c.f);
+    lua_pushcclosure(L, lje_secure_gmod_api, 1);
+    return 1;
+  }
+
+  lua_pushnil(L);
+  return 1;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -738,6 +810,14 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("write", lje_data_write);
     LJE_SET_FUNC("read", lje_data_read);
   LJE_END_SECTION("data");
+
+  if (L == LJEG()->isolated_state)
+  {
+    /* secure: API for secure state only tasks */
+    LJE_NEW_SECTION()
+      LJE_SET_FUNC("pull", lje_secure_pull);
+    LJE_END_SECTION("secure");
+  }
 
   /* LJE API END */
 

@@ -94,7 +94,9 @@ typedef struct LJEGlobalState
     LJEGCTracker gc_tracker;
     /* Timing attacks */
     double clock_deficit;
-
+    /* Isolated state */
+    lua_State* isolated_state;
+    char redirect_to_isolation;
 } LJEGlobalState;
 
 #define LJEG() (lje_get_global_state())

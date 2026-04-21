@@ -47,11 +47,15 @@
 #include "lj_expand_cmd.h"
 #include "lj_expand_crash_handler.h"
 #include "lj_expand_dirs.h"
+#include "lj_expand_isolation.h"
 
 /* -- Common helper functions --------------------------------------------- */
 
 #define api_checknelems(L, n)		api_check(L, (n) <= (L->top - L->base))
 #define api_checkvalidindex(L, i)	api_check(L, (i) != niltv(L))
+#define lje_redirect_state(L) \
+  if (LJEG()->redirect_to_isolation) \
+    L = LJEG()->isolated_state;
 
 static TValue *index2adr(lua_State *L, int idx)
 {
@@ -107,6 +111,7 @@ LUA_API int lua_status(lua_State *L)
 
 LUA_API int lua_checkstack(lua_State *L, int size)
 {
+  lje_redirect_state(L);
   if (size > LUAI_MAXCSTACK || (L->top - L->base + size) > LUAI_MAXCSTACK) {
     return 0;  /* Stack overflow. */
   } else if (size > 0) {
@@ -145,11 +150,13 @@ LUA_API const lua_Number *lua_version(lua_State *L)
 
 LUA_API int lua_gettop(lua_State *L)
 {
+  lje_redirect_state(L);
   return (int)(L->top - L->base);
 }
 
 LUA_API void lua_settop(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   if (idx >= 0) {
     api_check(L, idx <= tvref(L->maxstack) - L->base);
     if (L->base + idx > L->top) {
@@ -167,6 +174,7 @@ LUA_API void lua_settop(lua_State *L, int idx)
 
 LUA_API void lua_remove(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   TValue *p = stkindex2adr(L, idx);
   api_checkvalidindex(L, p);
   while (++p < L->top) copyTV(L, p-1, p);
@@ -175,6 +183,7 @@ LUA_API void lua_remove(lua_State *L, int idx)
 
 LUA_API void lua_insert(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   TValue *q, *p = stkindex2adr(L, idx);
   api_checkvalidindex(L, p);
   for (q = L->top; q > p; q--) copyTV(L, q, q-1);
@@ -205,6 +214,7 @@ static void copy_slot(lua_State *L, TValue *f, int idx)
 
 LUA_API void lua_replace(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   api_checknelems(L, 1);
   copy_slot(L, L->top - 1, idx);
   L->top--;
@@ -217,6 +227,7 @@ LUA_API void lua_copy(lua_State *L, int fromidx, int toidx)
 
 LUA_API void lua_pushvalue(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   copyTV(L, L->top, index2adr(L, idx));
   incr_top(L);
 }
@@ -225,6 +236,7 @@ LUA_API void lua_pushvalue(lua_State *L, int idx)
 
 LUA_API int lua_type(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   cTValue *o = index2adr(L, idx);
   if (tvisnumber(o)) {
     return LUA_TNUMBER;
@@ -266,12 +278,14 @@ LUA_API const char *lua_typename(lua_State *L, int t)
 
 LUA_API int lua_iscfunction(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   cTValue *o = index2adr(L, idx);
   return tvisfunc(o) && !isluafunc(funcV(o));
 }
 
 LUA_API int lua_isnumber(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   cTValue *o = index2adr(L, idx);
   TValue tmp;
   return (tvisnumber(o) || (tvisstr(o) && lj_strscan_number(strV(o), &tmp)));
@@ -279,18 +293,21 @@ LUA_API int lua_isnumber(lua_State *L, int idx)
 
 LUA_API int lua_isstring(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   cTValue *o = index2adr(L, idx);
   return (tvisstr(o) || tvisnumber(o));
 }
 
 LUA_API int lua_isuserdata(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   cTValue *o = index2adr(L, idx);
   return (tvisudata(o) || tvislightud(o));
 }
 
 LUA_API int lua_rawequal(lua_State *L, int idx1, int idx2)
 {
+  lje_redirect_state(L);
   cTValue *o1 = index2adr(L, idx1);
   cTValue *o2 = index2adr(L, idx2);
   return (o1 == niltv(L) || o2 == niltv(L)) ? 0 : lj_obj_equal(o1, o2);
@@ -298,6 +315,7 @@ LUA_API int lua_rawequal(lua_State *L, int idx1, int idx2)
 
 LUA_API int lua_equal(lua_State *L, int idx1, int idx2)
 {
+  lje_redirect_state(L);
   cTValue *o1 = index2adr(L, idx1);
   cTValue *o2 = index2adr(L, idx2);
   if (tvisint(o1) && tvisint(o2)) {
@@ -331,6 +349,7 @@ LUA_API int lua_equal(lua_State *L, int idx1, int idx2)
 
 LUA_API int lua_lessthan(lua_State *L, int idx1, int idx2)
 {
+  lje_redirect_state(L);
   cTValue *o1 = index2adr(L, idx1);
   cTValue *o2 = index2adr(L, idx2);
   if (o1 == niltv(L) || o2 == niltv(L)) {
@@ -354,6 +373,7 @@ LUA_API int lua_lessthan(lua_State *L, int idx1, int idx2)
 
 LUA_API lua_Number lua_tonumber(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   cTValue *o = index2adr(L, idx);
   TValue tmp;
   if (LJ_LIKELY(tvisnumber(o)))
@@ -506,12 +526,14 @@ LUALIB_API lua_Integer luaL_optinteger(lua_State *L, int idx, lua_Integer def)
 
 LUA_API int lua_toboolean(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   cTValue *o = index2adr(L, idx);
   return tvistruecond(o);
 }
 
 LUA_API const char *lua_tolstring(lua_State *L, int idx, size_t *len)
 {
+  lje_redirect_state(L);
   TValue *o = index2adr(L, idx);
   GCstr *s;
   if (LJ_LIKELY(tvisstr(o))) {
@@ -584,6 +606,7 @@ LUALIB_API int luaL_checkoption(lua_State *L, int idx, const char *def,
 
 LUA_API size_t lua_objlen(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   TValue *o = index2adr(L, idx);
   if (tvisstr(o)) {
     return strV(o)->len;
@@ -602,6 +625,7 @@ LUA_API size_t lua_objlen(lua_State *L, int idx)
 
 LUA_API lua_CFunction lua_tocfunction(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   cTValue *o = index2adr(L, idx);
   if (tvisfunc(o)) {
     BCOp op = bc_op(*mref(funcV(o)->c.pc, BCIns));
@@ -613,6 +637,7 @@ LUA_API lua_CFunction lua_tocfunction(lua_State *L, int idx)
 
 LUA_API void *lua_touserdata(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   cTValue *o = index2adr(L, idx);
   if (tvisudata(o))
     return uddata(udataV(o));
@@ -637,12 +662,14 @@ LUA_API const void *lua_topointer(lua_State *L, int idx)
 
 LUA_API void lua_pushnil(lua_State *L)
 {
+  lje_redirect_state(L);
   setnilV(L->top);
   incr_top(L);
 }
 
 LUA_API void lua_pushnumber(lua_State *L, lua_Number n)
 {
+  lje_redirect_state(L);
   setnumV(L->top, n);
   if (LJ_UNLIKELY(tvisnan(L->top)))
     setnanV(L->top);  /* Canonicalize injected NaNs. */
@@ -651,12 +678,14 @@ LUA_API void lua_pushnumber(lua_State *L, lua_Number n)
 
 LUA_API void lua_pushinteger(lua_State *L, lua_Integer n)
 {
+  lje_redirect_state(L);
   setintptrV(L->top, n);
   incr_top(L);
 }
 
 LUA_API void lua_pushlstring(lua_State *L, const char *str, size_t len)
 {
+  lje_redirect_state(L);
   GCstr *s;
   lj_gc_check(L);
   s = lj_str_new(L, str, len);
@@ -666,6 +695,8 @@ LUA_API void lua_pushlstring(lua_State *L, const char *str, size_t len)
 
 LUA_API void lua_pushstring(lua_State *L, const char *str)
 {
+  lje_redirect_state(L);
+
   if (str == NULL) {
     setnilV(L->top);
   } else {
@@ -693,12 +724,14 @@ LUA_API void lua_pushstring(lua_State *L, const char *str)
 LUA_API const char *lua_pushvfstring(lua_State *L, const char *fmt,
 				     va_list argp)
 {
+  lje_redirect_state(L);
   lj_gc_check(L);
   return lj_strfmt_pushvf(L, fmt, argp);
 }
 
 LUA_API const char *lua_pushfstring(lua_State *L, const char *fmt, ...)
 {
+  lje_redirect_state(L);
   const char *ret;
   va_list argp;
   lj_gc_check(L);
@@ -710,6 +743,7 @@ LUA_API const char *lua_pushfstring(lua_State *L, const char *fmt, ...)
 
 LUA_API void lua_pushcclosure(lua_State *L, lua_CFunction f, int n)
 {
+  lje_redirect_state(L);
   GCfunc *fn;
   lj_gc_check(L);
   api_checknelems(L, n);
@@ -725,18 +759,21 @@ LUA_API void lua_pushcclosure(lua_State *L, lua_CFunction f, int n)
 
 LUA_API void lua_pushboolean(lua_State *L, int b)
 {
+  lje_redirect_state(L);
   setboolV(L->top, (b != 0));
   incr_top(L);
 }
 
 LUA_API void lua_pushlightuserdata(lua_State *L, void *p)
 {
+  lje_redirect_state(L);
   setlightudV(L->top, checklightudptr(L, p));
   incr_top(L);
 }
 
 LUA_API void lua_createtable(lua_State *L, int narray, int nrec)
 {
+  lje_redirect_state(L);
   lj_gc_check(L);
   settabV(L, L->top, lj_tab_new_ah(L, narray, nrec));
   incr_top(L);
@@ -777,6 +814,7 @@ LUA_API lua_State *lua_newthread(lua_State *L)
 
 LUA_API void *lua_newuserdata(lua_State *L, size_t size)
 {
+  lje_redirect_state(L);
   GCudata *ud;
   lj_gc_check(L);
   if (size > LJ_MAX_UDATA)
@@ -789,6 +827,7 @@ LUA_API void *lua_newuserdata(lua_State *L, size_t size)
 
 LUA_API void lua_concat(lua_State *L, int n)
 {
+  lje_redirect_state(L);
   api_checknelems(L, n);
   if (n >= 2) {
     n--;
@@ -815,6 +854,7 @@ LUA_API void lua_concat(lua_State *L, int n)
 
 LUA_API void lua_gettable(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   cTValue *v, *t = index2adr(L, idx);
   api_checkvalidindex(L, t);
   v = lj_meta_tget(L, t, L->top-1);
@@ -829,6 +869,7 @@ LUA_API void lua_gettable(lua_State *L, int idx)
 
 LUA_API void lua_getfield(lua_State *L, int idx, const char *k)
 {
+  lje_redirect_state(L);
   cTValue *v, *t = index2adr(L, idx);
   TValue key;
   api_checkvalidindex(L, t);
@@ -846,6 +887,7 @@ LUA_API void lua_getfield(lua_State *L, int idx, const char *k)
 
 LUA_API void lua_rawget(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   cTValue *t = index2adr(L, idx);
   api_check(L, tvistab(t));
   copyTV(L, L->top-1, lj_tab_get(L, tabV(t), L->top-1));
@@ -853,6 +895,7 @@ LUA_API void lua_rawget(lua_State *L, int idx)
 
 LUA_API void lua_rawgeti(lua_State *L, int idx, int n)
 {
+  lje_redirect_state(L);
   cTValue *v, *t = index2adr(L, idx);
   api_check(L, tvistab(t));
   v = lj_tab_getint(tabV(t), n);
@@ -866,6 +909,7 @@ LUA_API void lua_rawgeti(lua_State *L, int idx, int n)
 
 LUA_API int lua_getmetatable(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   cTValue *o = index2adr(L, idx);
   GCtab *mt = NULL;
   if (tvistab(o))
@@ -912,6 +956,7 @@ LUA_API void lua_getfenv(lua_State *L, int idx)
 
 LUA_API int lua_next(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   cTValue *t = index2adr(L, idx);
   int more;
   api_check(L, tvistab(t));
@@ -978,6 +1023,7 @@ LUALIB_API void *luaL_checkudata(lua_State *L, int idx, const char *tname)
 
 LUA_API void lua_settable(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   TValue *o;
   cTValue *t = index2adr(L, idx);
   api_checknelems(L, 2);
@@ -998,6 +1044,7 @@ LUA_API void lua_settable(lua_State *L, int idx)
 
 LUA_API void lua_setfield(lua_State *L, int idx, const char *k)
 {
+  lje_redirect_state(L);
   TValue *o;
   TValue key;
   cTValue *t = index2adr(L, idx);
@@ -1019,6 +1066,7 @@ LUA_API void lua_setfield(lua_State *L, int idx, const char *k)
 
 LUA_API void lua_rawset(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   GCtab *t = tabV(index2adr(L, idx));
   TValue *dst, *key;
   api_checknelems(L, 2);
@@ -1031,6 +1079,8 @@ LUA_API void lua_rawset(lua_State *L, int idx)
 
 LUA_API void lua_rawseti(lua_State *L, int idx, int n)
 {
+  lje_redirect_state(L);
+
   GCtab *t = tabV(index2adr(L, idx));
   TValue *dst, *src;
   api_checknelems(L, 1);
@@ -1043,6 +1093,7 @@ LUA_API void lua_rawseti(lua_State *L, int idx, int n)
 
 LUA_API int lua_setmetatable(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   global_State *g;
   GCtab *mt;
   cTValue *o = index2adr(L, idx);
@@ -1261,7 +1312,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     for (int i = 0; i < LJEG()->loaded_script_count; i++)
     {
       LJEScript* script = LJEG()->script_load_order[i];
-      if (script->preinit_path)
+      if (script->preinit_path && !script->info->secure)
       {
         lje_startup_execute(L, script, script->preinit_path);
       }
@@ -1319,6 +1370,19 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     } else {
       printf("[LJE] Completed init.lua preinit without GC stealth (GC compensation is disabled, expect GC spikes during init).\n");
     }
+
+    // Determine if any secure scripts need to run.
+    // They only support `main.lua`, which is at preinit, the most secure stage of the clientstate.
+
+    for (int i = 0; i < LJEG()->loaded_script_count; i++)
+    {
+      LJEScript* script = LJEG()->script_load_order[i];
+      if (script->info->secure)
+      {
+        printf("[LJE] Running secure script %s...\n", script->info->name);
+        lje_startup_execute(LJEG()->isolated_state, script, NULL);
+      }
+    }
   }
 
   /* LJE: Next, check if we're waiting for the startup call. */
@@ -1344,6 +1408,8 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     for (int i = 0; i < LJEG()->loaded_script_count; i++)
     {
       LJEScript* script = LJEG()->script_load_order[i];
+      if (script->info->secure) continue;
+
       lje_startup_execute(L, script, NULL);
     }
     LJEG()->using_error_reporter = 0;
@@ -1359,7 +1425,15 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
   if (L == LJEG()->main_state && !LJEG()->using_error_reporter && errfunc)
   {
     GCfunc* f = funcV(stkindex2adr(L, errfunc));
-    char is_adv_error_reporter = iscfunc(f) ? f->c.f == LJEG()->adv_error_reporter : 0;
+    char is_function_null = f == LJ_GCVMASK;
+    if (is_function_null)
+    {
+      printf("[LJE] Warning: errfunc is set but function is null. This is unexpected, but we'll try to continue anyway.\n");
+    }
+
+    char is_adv_error_reporter = 0;
+    if (!is_function_null)
+      is_adv_error_reporter = iscfunc(f) ? f->c.f == LJEG()->adv_error_reporter : 0;
 
     if (is_adv_error_reporter)
     {
@@ -1440,8 +1514,9 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
       for (size_t i = 0; i < scripts_needing_reload; i++)
       {
         LJEScript* script = lje_watcher_pop_reload(LJEG()->script_watcher);
+        lua_State* state = script->info->secure ? LJEG()->isolated_state : L;
         if (script)
-          lje_startup_reload(L, script);
+          lje_startup_reload(state, script);
       }
     }
   }
@@ -1665,14 +1740,102 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
 #include "lje_signatures.h"
 #undef SIGDEF
 
-      // This is *very* annoying, but GMod's luaL_traceback seems to have inlined lj_debug_frame,
-      // so we have to detour that as well to ensure our debug_frame is used.
-      lje_detour_export(mod, luaL_traceback, luaL_traceback);
-      // Necessary because debug.getupvalue simply just calls into this
-      lje_detour_export(mod, lua_getupvalue, lua_getupvalue);
-      lje_detour_export(mod, lua_pushstring, lua_pushstring);
-      lje_detour_export(mod, lua_pcall, lua_pcall);
-      lje_detour_export(mod, luaL_loadbufferx, luaL_loadbufferx);
+// This is *very* annoying, but GMod's luaL_traceback seems to have inlined lj_debug_frame,
+// so we have to detour that as well to ensure our debug_frame is used.
+lje_detour_export(mod, luaL_traceback, luaL_traceback);
+// Necessary because debug.getupvalue simply just calls into this
+lje_detour_export(mod, lua_getupvalue, lua_getupvalue);
+lje_detour_export(mod, lua_pushstring, lua_pushstring);
+lje_detour_export(mod, lua_pcall, lua_pcall);
+lje_detour_export(mod, luaL_loadbufferx, luaL_loadbufferx);
+
+// Stack top / manipulation
+lje_detour_export(mod, lua_gettop, lua_gettop);
+lje_detour_export(mod, lua_settop, lua_settop);
+lje_detour_export(mod, lua_pushvalue, lua_pushvalue);
+lje_detour_export(mod, lua_checkstack, lua_checkstack);
+
+// Push (C -> stack)
+lje_detour_export(mod, lua_pushnil, lua_pushnil);
+lje_detour_export(mod, lua_pushnumber, lua_pushnumber);
+lje_detour_export(mod, lua_pushinteger, lua_pushinteger);
+lje_detour_export(mod, lua_pushboolean, lua_pushboolean);
+lje_detour_export(mod, lua_pushlstring, lua_pushlstring);
+lje_detour_export(mod, lua_pushcclosure, lua_pushcclosure);
+lje_detour_export(mod, lua_pushlightuserdata, lua_pushlightuserdata);
+
+// To (stack -> C)
+lje_detour_export(mod, lua_tonumber, lua_tonumber);
+lje_detour_export(mod, lua_tointeger, lua_tointeger);
+lje_detour_export(mod, lua_toboolean, lua_toboolean);
+lje_detour_export(mod, lua_tolstring, lua_tolstring);
+lje_detour_export(mod, lua_touserdata, lua_touserdata);
+lje_detour_export(mod, lua_tocfunction, lua_tocfunction);
+
+// Type checks
+lje_detour_export(mod, lua_type, lua_type);
+lje_detour_export(mod, lua_isnumber, lua_isnumber);
+lje_detour_export(mod, lua_isstring, lua_isstring);
+lje_detour_export(mod, lua_iscfunction, lua_iscfunction);
+lje_detour_export(mod, lua_isuserdata, lua_isuserdata);
+
+// Table get
+lje_detour_export(mod, lua_gettable, lua_gettable);
+lje_detour_export(mod, lua_getfield, lua_getfield);
+lje_detour_export(mod, lua_rawget, lua_rawget);
+lje_detour_export(mod, lua_rawgeti, lua_rawgeti);
+
+// Table set
+lje_detour_export(mod, lua_settable, lua_settable);
+lje_detour_export(mod, lua_setfield, lua_setfield);
+lje_detour_export(mod, lua_rawset, lua_rawset);
+lje_detour_export(mod, lua_rawseti, lua_rawseti);
+
+// Construction
+lje_detour_export(mod, lua_createtable, lua_createtable);
+lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
+
+// Call
+lje_detour_export(mod, lua_call, lua_call);
+
+      // Stack reordering
+      lje_detour_export(mod, lua_remove, lua_remove);
+      lje_detour_export(mod, lua_insert, lua_insert);
+      lje_detour_export(mod, lua_replace, lua_replace);
+
+      // Formatted push (likely culprits for variadic issues)
+      lje_detour_export(mod, lua_pushfstring, lua_pushfstring);
+      lje_detour_export(mod, lua_pushvfstring, lua_pushvfstring);
+
+      // Length / comparisons
+      lje_detour_export(mod, lua_objlen, lua_objlen);
+      lje_detour_export(mod, lua_equal, lua_equal);
+      lje_detour_export(mod, lua_rawequal, lua_rawequal);
+      lje_detour_export(mod, lua_lessthan, lua_lessthan);
+
+      // Metatable access
+      lje_detour_export(mod, lua_getmetatable, lua_getmetatable);
+      lje_detour_export(mod, lua_setmetatable, lua_setmetatable);
+
+      // Iteration / concat / errors
+      lje_detour_export(mod, lua_next, lua_next);
+      lje_detour_export(mod, lua_concat, lua_concat);
+      lje_detour_export(mod, lua_error, lua_error);
+
+      // === Tier 3 ===
+
+      // Identity / debug-ish
+      lje_detour_export(mod, lua_topointer, lua_topointer);
+
+      // Coroutines / threads (translate state pointers if you have a mapping)
+      lje_detour_export(mod, lua_tothread, lua_tothread);
+      lje_detour_export(mod, lua_pushthread, lua_pushthread);
+      lje_detour_export(mod, lua_newthread, lua_newthread);
+
+      // Misc state
+      lje_detour_export(mod, lua_status, lua_status);
+      lje_detour_export(mod, lua_atpanic, lua_atpanic);
+      lje_detour_export(mod, lua_xmove, lua_xmove);
 
       /* LJE: This is a *tad* bit out-of-scope for LJE since we are very
        * vehemently avoiding having to deal with the engine as opposed to LuaJIT, but
@@ -1766,6 +1929,12 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
       {
         LJEScript* script = LJEG()->script_load_order[i];
         printf("[LJE] - %d. %s\n", i + 1, script->name);
+      }
+
+      LJEG()->isolated_state = lje_create_isolated_state();
+      if (LJEG()->isolated_state)
+      {
+        printf("[LJE] Created isolated Lua state for secure scripts.\n");
       }
 
     } else {

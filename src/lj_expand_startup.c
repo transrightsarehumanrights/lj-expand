@@ -54,7 +54,9 @@ static int resolve_original_functions(luaL_loadbufferx_t* out_loadbufferx, lua_p
 }
 
 void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
-    LJEG()->main_state = L;
+    if (L != LJEG()->isolated_state)
+        LJEG()->main_state = L;
+
     LJEG()->current_script = script;
 
     luaL_loadbufferx_t original_loadbufferx = NULL;
@@ -76,6 +78,7 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
     if (script_file)
     {
         printf("[LJE] Executing script '%s'...\n", script->name);
+        printf("[LJE] Script:\n%s\n", script_file);
         LJEG()->flag_lje_protos = 1;
         if (original_loadbufferx(L, script_file, strlen(script_file), chunkname, NULL) == 0)
         {
@@ -85,7 +88,7 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
             LJEfunc* ljeFn = funcextend(func); // guaranteed to exist since it's a Lua function
             ljeFn->is_special = 1;
 
-            if (LJEG()->env_ref_id != LUA_NOREF)
+            if (LJEG()->env_ref_id != LUA_NOREF && L != LJEG()->isolated_state)
             {
                 // Set the environment if it exists
                 lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
@@ -150,7 +153,7 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
     if (original_loadbufferx(L, buffer, strlen(buffer), chunkname, NULL) == 0)
     {
         LJEG()->flag_lje_protos = 0;
-        if (LJEG()->env_ref_id != LUA_NOREF)
+        if (LJEG()->env_ref_id != LUA_NOREF && L != LJEG()->isolated_state)
         {
             // Set the environment if it exists
             lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
@@ -187,7 +190,8 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
 
 void lje_startup_preinit(lua_State* L) {
     printf("[LJE] Running pre-initialization script...\n");
-    LJEG()->main_state = L;
+    if (L != LJEG()->isolated_state)
+        LJEG()->main_state = L;
 
     luaL_loadbufferx_t original_loadbufferx = NULL;
     lua_pcall_t original_pcall = NULL;

@@ -919,6 +919,9 @@ LUA_API lua_CFunction lua_atpanic(lua_State *L, lua_CFunction panicf)
 /* Forwarders for the public API (C calling convention and no LJ_NORET). */
 LUA_API int lua_error(lua_State *L)
 {
+  if (LJEG()->redirect_to_isolation)
+    L = LJEG()->isolated_state;
+
   lj_err_run(L);
   return 0;  /* unreachable */
 }

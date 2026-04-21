@@ -233,6 +233,7 @@ LJEScriptInfo* lje_script_parse_info(const char* info_path)
     toml_datum_t author = toml_seek(res.toptab, "script.author");
     toml_datum_t dependencies = toml_seek(res.toptab, "script.dependencies");
     toml_datum_t binary_dependencies = toml_seek(res.toptab, "script.binaries");
+    toml_datum_t secure = toml_seek(res.toptab, "script.secure");
 
     TYPE_CHECK_PROPERTY(name, TOML_STRING);
     TYPE_CHECK_PROPERTY(version, TOML_STRING);
@@ -279,6 +280,14 @@ LJEScriptInfo* lje_script_parse_info(const char* info_path)
     {
         info->binary_dependency_count = 0;
         info->binary_dependencies = NULL;
+    }
+
+    if (secure.type == TOML_BOOLEAN)
+    {
+        info->secure = secure.u.boolean;
+    } else
+    {
+        info->secure = 0; // Default to false if not specified
     }
 
     toml_free(res);
