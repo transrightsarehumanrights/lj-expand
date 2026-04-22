@@ -122,6 +122,7 @@ LUA_API int lua_checkstack(lua_State *L, int size)
 
 LUALIB_API void luaL_checkstack(lua_State *L, int size, const char *msg)
 {
+  lje_redirect_state(L);
   if (!lua_checkstack(L, size))
     lj_err_callerv(L, LJ_ERR_STKOVM, msg);
 }
@@ -260,6 +261,7 @@ LUA_API int lua_type(lua_State *L, int idx)
 
 LUALIB_API void luaL_checktype(lua_State *L, int idx, int tt)
 {
+  lje_redirect_state(L);
   if (lua_type(L, idx) != tt)
     lj_err_argt(L, idx, tt);
 }
@@ -386,6 +388,7 @@ LUA_API lua_Number lua_tonumber(lua_State *L, int idx)
 
 LUA_API lua_Number lua_tonumberx(lua_State *L, int idx, int *ok)
 {
+  lje_redirect_state(L);
   cTValue *o = index2adr(L, idx);
   TValue tmp;
   if (LJ_LIKELY(tvisnumber(o))) {
@@ -402,6 +405,7 @@ LUA_API lua_Number lua_tonumberx(lua_State *L, int idx, int *ok)
 
 LUALIB_API lua_Number luaL_checknumber(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   cTValue *o = index2adr(L, idx);
   TValue tmp;
   if (LJ_LIKELY(tvisnumber(o)))
@@ -413,6 +417,7 @@ LUALIB_API lua_Number luaL_checknumber(lua_State *L, int idx)
 
 LUALIB_API lua_Number luaL_optnumber(lua_State *L, int idx, lua_Number def)
 {
+  lje_redirect_state(L);
   cTValue *o = index2adr(L, idx);
   TValue tmp;
   if (LJ_LIKELY(tvisnumber(o)))
@@ -426,6 +431,7 @@ LUALIB_API lua_Number luaL_optnumber(lua_State *L, int idx, lua_Number def)
 
 LUA_API lua_Integer lua_tointeger(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   cTValue *o = index2adr(L, idx);
   TValue tmp;
   lua_Number n;
@@ -449,6 +455,7 @@ LUA_API lua_Integer lua_tointeger(lua_State *L, int idx)
 
 LUA_API lua_Integer lua_tointegerx(lua_State *L, int idx, int *ok)
 {
+  lje_redirect_state(L);
   cTValue *o = index2adr(L, idx);
   TValue tmp;
   lua_Number n;
@@ -478,6 +485,7 @@ LUA_API lua_Integer lua_tointegerx(lua_State *L, int idx, int *ok)
 
 LUALIB_API lua_Integer luaL_checkinteger(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   cTValue *o = index2adr(L, idx);
   TValue tmp;
   lua_Number n;
@@ -501,6 +509,7 @@ LUALIB_API lua_Integer luaL_checkinteger(lua_State *L, int idx)
 
 LUALIB_API lua_Integer luaL_optinteger(lua_State *L, int idx, lua_Integer def)
 {
+  lje_redirect_state(L);
   cTValue *o = index2adr(L, idx);
   TValue tmp;
   lua_Number n;
@@ -553,6 +562,7 @@ LUA_API const char *lua_tolstring(lua_State *L, int idx, size_t *len)
 
 LUALIB_API const char *luaL_checklstring(lua_State *L, int idx, size_t *len)
 {
+  lje_redirect_state(L);
   TValue *o = index2adr(L, idx);
   GCstr *s;
   if (LJ_LIKELY(tvisstr(o))) {
@@ -572,6 +582,7 @@ LUALIB_API const char *luaL_checklstring(lua_State *L, int idx, size_t *len)
 LUALIB_API const char *luaL_optlstring(lua_State *L, int idx,
 				       const char *def, size_t *len)
 {
+  lje_redirect_state(L);
   TValue *o = index2adr(L, idx);
   GCstr *s;
   if (LJ_LIKELY(tvisstr(o))) {
@@ -594,6 +605,7 @@ LUALIB_API const char *luaL_optlstring(lua_State *L, int idx,
 LUALIB_API int luaL_checkoption(lua_State *L, int idx, const char *def,
 				const char *const lst[])
 {
+  lje_redirect_state(L);
   ptrdiff_t i;
   const char *s = lua_tolstring(L, idx, NULL);
   if (s == NULL && (s = def) == NULL)
@@ -781,6 +793,7 @@ LUA_API void lua_createtable(lua_State *L, int narray, int nrec)
 
 LUALIB_API int luaL_newmetatable(lua_State *L, const char *tname)
 {
+  lje_redirect_state(L);
   GCtab *regt = tabV(registry(L));
   TValue *tv = lj_tab_setstr(L, regt, lj_str_newz(L, tname));
   if (tvisnil(tv)) {
@@ -797,6 +810,7 @@ LUALIB_API int luaL_newmetatable(lua_State *L, const char *tname)
 
 LUA_API int lua_pushthread(lua_State *L)
 {
+  lje_redirect_state(L);
   setthreadV(L, L->top, L);
   incr_top(L);
   return (mainthread(G(L)) == L);
@@ -940,6 +954,7 @@ LUALIB_API int luaL_getmetafield(lua_State *L, int idx, const char *field)
 
 LUA_API void lua_getfenv(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   cTValue *o = index2adr(L, idx);
   api_checkvalidindex(L, o);
   if (tvisfunc(o)) {
@@ -991,6 +1006,7 @@ LUA_API void *lua_upvalueid(lua_State *L, int idx, int n)
 
 LUA_API void lua_upvaluejoin(lua_State *L, int idx1, int n1, int idx2, int n2)
 {
+  lje_redirect_state(L);
   GCfunc *fn1 = funcV(index2adr(L, idx1));
   GCfunc *fn2 = funcV(index2adr(L, idx2));
   n1--; n2--;
@@ -1139,6 +1155,7 @@ LUALIB_API void luaL_setmetatable(lua_State *L, const char *tname)
 
 LUA_API int lua_setfenv(lua_State *L, int idx)
 {
+  lje_redirect_state(L);
   cTValue *o = index2adr(L, idx);
   GCtab *t;
   api_checknelems(L, 1);
@@ -1192,6 +1209,7 @@ static TValue *api_call_base(lua_State *L, int nargs)
 
 LUA_API void lua_call(lua_State *L, int nargs, int nresults)
 {
+  lje_redirect_state(L);
   if (tvisfunc(L->base))
   {
     GCproto* p = funcproto(funcV(L->base));
@@ -1265,6 +1283,7 @@ static inline double lje_spinwait_deficit(double clock_deficit)
  */
 LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 {
+  lje_redirect_state(L);
   // Apply micro-sleeping to work off that clock deficit.
   if (LJEG()->clock_deficit > 0.0)
   {
@@ -1425,10 +1444,11 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
   if (L == LJEG()->main_state && !LJEG()->using_error_reporter && errfunc)
   {
     GCfunc* f = funcV(stkindex2adr(L, errfunc));
-    char is_function_null = f == LJ_GCVMASK;
+    char is_function_null = f == LJ_GCVMASK || (uintptr_t)f == 0x0000400000000000;
     if (is_function_null)
     {
       printf("[LJE] Warning: errfunc is set but function is null. This is unexpected, but we'll try to continue anyway.\n");
+      printf("[LJE] This often signals the stack is corrupted. Prepare for potential crash.");
     }
 
     char is_adv_error_reporter = 0;
@@ -1554,6 +1574,7 @@ static TValue *cpcall(lua_State *L, lua_CFunction func, void *ud)
 
 LUA_API int lua_cpcall(lua_State *L, lua_CFunction func, void *ud)
 {
+  lje_redirect_state(L);
   global_State *g = G(L);
   uint8_t oldh = hook_save(g);
   int status;
@@ -1565,6 +1586,7 @@ LUA_API int lua_cpcall(lua_State *L, lua_CFunction func, void *ud)
 
 LUALIB_API int luaL_callmeta(lua_State *L, int idx, const char *field)
 {
+  lje_redirect_state(L);
   if (luaL_getmetafield(L, idx, field)) {
     TValue *top = L->top--;
     if (LJ_FR2) setnilV(top++);
@@ -1585,6 +1607,7 @@ LUA_API int lua_isyieldable(lua_State *L)
 
 LUA_API int lua_yield(lua_State *L, int nresults)
 {
+  lje_redirect_state(L);
   void *cf = L->cframe;
   global_State *g = G(L);
   if (cframe_canyield(cf)) {
@@ -1625,6 +1648,7 @@ LUA_API int lua_yield(lua_State *L, int nresults)
 
 LUA_API int lua_resume(lua_State *L, int nargs)
 {
+  lje_redirect_state(L);
   if (L->cframe == NULL && L->status <= LUA_YIELD)
     return lj_vm_resume(L,
       L->status == LUA_OK ? api_call_base(L, nargs) : L->top - nargs,
@@ -1639,6 +1663,7 @@ LUA_API int lua_resume(lua_State *L, int nargs)
 
 LUA_API int lua_gc(lua_State *L, int what, int data)
 {
+  lje_redirect_state(L);
   global_State *g = G(L);
   int res = 0;
   switch (what) {
@@ -1693,6 +1718,7 @@ LUA_API lua_Alloc lua_getallocf(lua_State *L, void **ud)
 
 LUA_API void lua_setallocf(lua_State *L, lua_Alloc f, void *ud)
 {
+  lje_redirect_state(L);
   global_State *g = G(L);
   g->allocd = ud;
   g->allocf = f;
@@ -1836,6 +1862,47 @@ lje_detour_export(mod, lua_call, lua_call);
       lje_detour_export(mod, lua_status, lua_status);
       lje_detour_export(mod, lua_atpanic, lua_atpanic);
       lje_detour_export(mod, lua_xmove, lua_xmove);
+
+      lje_detour_export(mod, luaL_checklstring, luaL_checklstring);
+      lje_detour_export(mod, luaL_optlstring, luaL_optlstring);
+      lje_detour_export(mod, luaL_checknumber, luaL_checknumber);
+      lje_detour_export(mod, luaL_optnumber, luaL_optnumber);
+      lje_detour_export(mod, luaL_checkinteger, luaL_checkinteger);
+      lje_detour_export(mod, luaL_optinteger, luaL_optinteger);
+      lje_detour_export(mod, luaL_checktype, luaL_checktype);
+      lje_detour_export(mod, luaL_checkany, luaL_checkany);
+      lje_detour_export(mod, luaL_checkudata, luaL_checkudata);
+
+      // Errors (variadic — likely your current culprit)
+      lje_detour_export(mod, luaL_error, luaL_error);
+      lje_detour_export(mod, luaL_argerror, luaL_argerror);
+      lje_detour_export(mod, luaL_typerror, luaL_typerror);
+      lje_detour_export(mod, luaL_where, luaL_where);
+
+      // Metatables
+
+      // Refs (the registry-ref system from before)
+      lje_detour_export(mod, luaL_ref, luaL_ref);
+      lje_detour_export(mod, luaL_unref, luaL_unref);
+
+      // Library registration (engine registers things at startup)
+      lje_detour_export(mod, luaL_register, luaL_register);
+      lje_detour_export(mod, luaL_openlib, luaL_openlib);
+      lje_detour_export(mod, luaL_setfuncs, luaL_setfuncs);
+
+      // Metafield/callmeta (occasional but real)
+      lje_detour_export(mod, luaL_getmetafield, luaL_getmetafield);
+      lje_detour_export(mod, luaL_callmeta, luaL_callmeta);
+
+      // === Tier 2 luaL ===
+
+      lje_detour_export(mod, luaL_checkoption, luaL_checkoption);
+      lje_detour_export(mod, luaL_checkstack, luaL_checkstack);  // note: different from lua_checkstack
+      lje_detour_export(mod, luaL_gsub, luaL_gsub);
+      lje_detour_export(mod, luaL_findtable, luaL_findtable);
+      lje_detour_export(mod, luaL_testudata, luaL_testudata);
+      lje_detour_export(mod, luaL_setmetatable, luaL_setmetatable);
+      lje_detour_export(mod, luaL_pushmodule, luaL_pushmodule);
 
       /* LJE: This is a *tad* bit out-of-scope for LJE since we are very
        * vehemently avoiding having to deal with the engine as opposed to LuaJIT, but

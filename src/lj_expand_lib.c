@@ -10,6 +10,7 @@
 #include "lj_expand_cmd.h"
 #include "lj_expand_frame.h"
 #include "lj_expand_globals.h"
+#include "lj_expand_isolation.h"
 #include "lj_expand_startup.h"
 #include "lj_frame.h"
 #include "lj_gc.h"
@@ -655,40 +656,97 @@ static int lje_secure_gmod_api(lua_State* L)
 static int lje_secure_pull(lua_State* L)
 {
   // Pulls a global out of the client state and returns it to the secure state.
-  // This is necessary for secure scripts to be able to interact with the client state in a limited way, without exposing the full global environment.
+  // This is necessary for secure scripts to be able to interact with the client state
+  // in a limited way, without exposing the full global environment.
   if (!LJEG()->main_state)
   {
     luaL_error(L, "main state not set for secure pull");
     return 0;
   }
 
-  const char* name = luaL_checkstring(L, 1); // e.g: Msg or player.GetAll
-  lua_State* L2 = LJEG()->main_state;
-  // We cannot interact with the main state directly. Since there is no active function call,
-  // we must directly interface with the global environment. No stack at all.
-
-  GCtab* global = tabref(L2->env);
-  // We need to split the name by dots to traverse the table hierarchy.
-  // TODO: Add split by dots
-  global_State* g = G(L2);
-  size_t total_before = g->gc.total;
-  GCstr* str = lj_str_new(L2, name, strlen(name));
-  g->gc.total = total_before; // Neutralize GC pressure from string creation
-
-  cTValue* value = lj_tab_getstr(global, str);
-  printf("[LJE] Secure pull for '%s': %p\n", name, (void*)value);
-  if (!value || tvisnil(value))
+  const char* name = luaL_checkstring(L, 1); // e.g: "Msg" or "player.GetAll"
+  if (!name)
   {
     lua_pushnil(L);
     return 1;
   }
 
+  lua_State* L2 = LJEG()->main_state;
+  global_State* g = G(L2);
+
+  // We cannot interact with the main state directly. Since there is no active function call,
+  // we must directly interface with the global environment. No stack at all.
+  GCtab* current_tab = tabref(L2->env);
+  if (name[0] == '_' && name[1] == 'R' && name[2] == '.')
+  {
+    // _R. is a special case to go to registry.
+    TValue* registry = &g->registrytv;
+    current_tab = tabV(registry);
+    name += 3; // Skip past "_R."
+  }
+
+  cTValue* value = NULL;
+
+  // Walk the dot-separated path. For each segment, look it up in current_tab.
+  // If we hit a non-table mid-path, that's a failure. The final segment's value
+  // is what we return.
+  const char* segment_start = name;
+  const char* p = name;
+
+  for (;;)
+  {
+    // Advance p to the next '.' or end of string
+    while (*p != '\0' && *p != '.') p++;
+
+    size_t segment_len = (size_t)(p - segment_start);
+    if (segment_len == 0)
+    {
+      printf("[LJE] Secure pull: empty path segment in '%s'\n", name);
+      lua_pushnil(L);
+      return 1;
+    }
+
+    // Intern the segment as a GCstr in the main state's string table so we can
+    // do a proper hashed lookup against current_tab.
+    GCstr* key = lj_str_new(L2, segment_start, segment_len);
+    value = lj_tab_getstr(current_tab, key);
+
+    if (!value || tvisnil(value))
+    {
+      printf("[LJE] Secure pull: '%.*s' not found in path '%s'\n",
+             (int)segment_len, segment_start, name);
+      lua_pushnil(L);
+      return 1;
+    }
+
+    if (*p == '\0')
+    {
+      // This was the final segment.
+      break;
+    }
+
+    // More segments to come — current value must be a table to descend into.
+    if (!tvistab(value))
+    {
+      printf("[LJE] Secure pull: '%.*s' in path '%s' is not a table, cannot descend\n",
+             (int)segment_len, segment_start, name);
+      lua_pushnil(L);
+      return 1;
+    }
+
+    current_tab = tabV(value);
+    p++;  // skip the '.'
+    segment_start = p;
+  }
+
+  printf("[LJE] Secure pull for '%s': %p\n", name, (void*)value);
+
+  // Now `value` is the final resolved value. Currently we only allow C functions through.
   if (tvisfunc(value))
   {
     GCfunc* func = funcV(value);
     if (!iscfunc(func))
     {
-      // Only allow C functions to be pulled for now.
       printf("[LJE] Secure pull for '%s' is not a C function, rejecting.\n", name);
       lua_pushnil(L);
       return 1;
@@ -699,7 +757,8 @@ static int lje_secure_pull(lua_State* L)
     return 1;
   }
 
-  lua_pushnil(L);
+  // Not a function, so just copy it.
+  lje_copy_to_isolated_state_tv(L2, L, value);
   return 1;
 }
 
