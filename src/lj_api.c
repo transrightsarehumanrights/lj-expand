@@ -48,6 +48,7 @@
 #include "lj_expand_crash_handler.h"
 #include "lj_expand_dirs.h"
 #include "lj_expand_isolation.h"
+#include "lj_expand_proxy.h"
 
 /* -- Common helper functions --------------------------------------------- */
 
@@ -1479,7 +1480,17 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
           // Copy over the real arguments
           for (int arg = 0; arg < nargs; arg++)
           {
-            lje_copy_to_isolated_state(L, I, -nargs + arg);
+            //lje_copy_to_isolated_state(L, I, -nargs + arg);
+            cTValue* arg_val = stkindex2adr(L, -nargs + arg);
+            // Proxy anything which is a table or udata.
+            if (tvistab(arg_val) || tvisudata(arg_val))
+            {
+              lua_pushlightuserdata(I, lje_proxy(arg_val));
+            } else
+            {
+              // copy it, usually a simple primitive like numbers, strings or C functions
+              lje_copy_to_isolated_state(L, I, -nargs + arg);
+            }
           }
 
           if (lua_pcall(I, 3 + nargs, 0, 0) != LUA_OK)
@@ -1488,8 +1499,12 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
             const char* error_msg = lua_tostring(I, -1);
             printf("[LJE] Error in engine call hook for secure script %s: %s\n", script->info->name, error_msg);
             lua_pop(I, 1); // pop error message
+            lje_proxy_release_all();
+            lj_gc_step(I);
             continue;
           }
+          lje_proxy_release_all();
+          lj_gc_step(I);
         }
         else if (script->extra->engine_call_hook_ref_id != LUA_NOREF) /* Whichever scripts returns false first, we allow them to handle it. */
         {
@@ -2029,6 +2044,7 @@ lje_detour_export(mod, lua_call, lua_call);
         printf("[LJE] - %d. %s\n", i + 1, script->name);
       }
 
+      lje_proxy_arena_init();
       LJEG()->isolated_state = lje_create_isolated_state();
       if (LJEG()->isolated_state)
       {

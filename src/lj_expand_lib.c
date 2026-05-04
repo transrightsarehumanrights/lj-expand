@@ -11,6 +11,7 @@
 #include "lj_expand_frame.h"
 #include "lj_expand_globals.h"
 #include "lj_expand_isolation.h"
+#include "lj_expand_proxy.h"
 #include "lj_expand_startup.h"
 #include "lj_frame.h"
 #include "lj_gc.h"
@@ -760,6 +761,27 @@ static int lje_secure_pull(lua_State* L)
   return 1;
 }
 
+static int lje_proxy_type(lua_State* L)
+{
+  LJEProxy* proxy = lua_touserdata(L, 1);
+  // We need as much performance as possible, so no type checking here.
+
+  switch (proxy->host_type)
+  {
+  case ~LJ_TTAB:
+    lua_pushliteral(L, "table");
+    break;
+  case ~LJ_TUDATA:
+    lua_pushliteral(L, "userdata");
+    break;
+  default:
+    lua_pushliteral(L, "unknown");
+    break;
+  }
+
+  return 1;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -874,6 +896,11 @@ void lje_addfuncs(lua_State* L) {
     LJE_NEW_SECTION()
       LJE_SET_FUNC("pull", lje_secure_pull);
     LJE_END_SECTION("secure");
+
+    /* proxy: API for interacting with proxy objects in the secure state */
+    LJE_NEW_SECTION()
+      LJE_SET_FUNC("type", lje_proxy_type);
+    LJE_END_SECTION("proxy");
   }
 
   /* LJE API END */
