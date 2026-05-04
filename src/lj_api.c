@@ -1460,7 +1460,38 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
       /* LJE: Call our engine hooks, if we have any. */
       for (size_t i = 0; i < LJEG()->loaded_script_count; i++) {
         LJEScript* script = LJEG()->script_load_order[i];
-        if (script->extra->engine_call_hook_ref_id != LUA_NOREF) /* Whichever scripts returns false first, we allow them to handle it. */
+        if (script->info->secure && script->extra->engine_call_hook_ref_id != LUA_NOREF)
+        {
+          /* Secure scripts can observe engine call hooks. Right now, handling is likely to be
+           * either broken or detectable. More work will need to be done, so for now it is not
+           * supported. This is pretty good as it makes it much simpler, we just copy the stack
+           * to the isolated state and call it there.
+           *
+           * However, functions are passed as simple lightud pointers so scripts can do comparisons without
+           * actually copying a full function object to the isolated state.
+           */
+          lua_State* I = LJEG()->isolated_state;
+          lua_rawgeti(I, LUA_REGISTRYINDEX, script->extra->engine_call_hook_ref_id);
+          // Push function as lightud
+          lua_pushlightuserdata(I, f);
+          lua_pushinteger(I, nargs);
+          lua_pushinteger(I, nresults);
+          // Copy over the real arguments
+          for (int arg = 0; arg < nargs; arg++)
+          {
+            lje_copy_to_isolated_state(L, I, -nargs + arg);
+          }
+
+          if (lua_pcall(I, 3 + nargs, 0, 0) != LUA_OK)
+          {
+            /* If the hook errors, we just print the error and move on. */
+            const char* error_msg = lua_tostring(I, -1);
+            printf("[LJE] Error in engine call hook for secure script %s: %s\n", script->info->name, error_msg);
+            lua_pop(I, 1); // pop error message
+            continue;
+          }
+        }
+        else if (script->extra->engine_call_hook_ref_id != LUA_NOREF) /* Whichever scripts returns false first, we allow them to handle it. */
         {
           /* Since each script needs a try at handling the engine call, we'll save the stack up to the real function,
            * to preserve it for each script's hook.

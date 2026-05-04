@@ -123,7 +123,7 @@
 
 #if LJ_ALLOC_NTAVM
 /* Undocumented, but hey, that's what we all love so much about Windows. */
-typedef long (*PNTAVM)(HANDLE handle, void **addr, ULONG zbits,
+typedef long (*PNTAVM)(HANDLE handle, void **addr, ULONG_PTR zbits,
 		       size_t *size, ULONG alloctype, ULONG prot);
 static PNTAVM ntavm;
 
@@ -151,7 +151,7 @@ static void *CALL_MMAP(size_t size)
 }
 
 /* For direct MMAP, use MEM_TOP_DOWN to minimize interference */
-static void *DIRECT_MMAP(size_t size)
+static void *direct_mmap(size_t size)
 {
   DWORD olderr = GetLastError();
   void *ptr = NULL;
@@ -173,7 +173,7 @@ static void *CALL_MMAP(size_t size)
 }
 
 /* For direct MMAP, use MEM_TOP_DOWN to minimize interference */
-static void *DIRECT_MMAP(size_t size)
+static void *direct_mmap(size_t size)
 {
   DWORD olderr = GetLastError();
   void *ptr = VirtualAlloc(0, size, MEM_RESERVE|MEM_COMMIT|MEM_TOP_DOWN,
@@ -183,6 +183,8 @@ static void *DIRECT_MMAP(size_t size)
 }
 
 #endif
+
+#define DIRECT_MMAP(size)	direct_mmap(size)
 
 /* This function supports releasing coalesed segments */
 static int CALL_MUNMAP(void *ptr, size_t size)
@@ -609,7 +611,7 @@ static int has_segment_link(mstate m, msegmentptr ss)
   noncontiguous segments are added.
 */
 #define TOP_FOOT_SIZE\
-  (align_offset(chunk2mem(0))+pad_request(sizeof(struct malloc_segment))+MIN_CHUNK_SIZE)
+  (align_offset(TWO_SIZE_T_SIZES)+pad_request(sizeof(struct malloc_segment))+MIN_CHUNK_SIZE)
 
 /* ---------------------------- Indexing Bins ---------------------------- */
 

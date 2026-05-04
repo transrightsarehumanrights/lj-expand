@@ -645,11 +645,9 @@ static int lje_secure_gmod_api(lua_State* L)
   // zero-copy function call! state redirection handles this,
   // we just need to dispatch the c function raw.
   lua_CFunction func = (lua_CFunction)func_ptr;
-  printf("[LJE] Securely calling function at %p\n", func_ptr);
   LJEG()->redirect_to_isolation = 1;
   int results = func(LJEG()->main_state); /* make it think it's running in the main state, it won't know any better! */
   LJEG()->redirect_to_isolation = 0;
-  printf("[LJE] Function call complete, got %d results\n", results);
   return results;
 }
 

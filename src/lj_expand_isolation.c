@@ -78,11 +78,9 @@ static int lje_secure_gmod_api(lua_State* L)
     // zero-copy function call! state redirection handles this,
     // we just need to dispatch the c function raw.
     lua_CFunction func = (lua_CFunction)func_ptr;
-    printf("[LJE] Securely calling function at %p\n", func_ptr);
     LJEG()->redirect_to_isolation = 1;
     int results = func(LJEG()->main_state); /* make it think it's running in the main state, it won't know any better! */
     LJEG()->redirect_to_isolation = 0;
-    printf("[LJE] Function call complete, got %d results\n", results);
     return results;
 }
 
@@ -94,10 +92,8 @@ int lje_push_safe_cfunction(lua_State* L, lua_CFunction func)
     return 1;
 }
 
-static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, TValue* dst);
 
-static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, TValue* dst);
-
+static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, TValue* dst, GCtab* seen);
 /* Recover hbits from hmask. hmask is always (1<<hbits)-1 or 0 for the empty sentinel. */
 static uint32_t hmask_to_hbits(uint32_t hmask)
 {
@@ -108,13 +104,42 @@ static uint32_t hmask_to_hbits(uint32_t hmask)
     return hbits;
 }
 
-static GCtab* deep_copy_table(lua_State* from, lua_State* to, GCtab* from_table)
+static GCtab* deep_copy_table(lua_State* from, lua_State* to, GCtab* from_table, GCtab* seen)
 {
+    /* Check for cycles / shared references. lj_tab_get returns a pointer to
+       the global nil singleton for missing keys, NOT NULL — so we must check
+       tvisnil, not the pointer itself.
+
+       The seen-map is keyed by a lightuserdata pointing at the source table
+       (which is fine — source tables can't be collected during a copy), and
+       its value is the *actual* destination GCtab as a real GC reference.
+       Storing it as lightuserdata would mean `seen` holds zero GC children
+       from the collector's point of view, and any partially-built dst table
+       could be collected mid-copy, leading to repeated re-allocation and
+       runaway memory growth. */
+    TValue key;
+    setlightudV(&key, from_table);
+    cTValue* existing = lj_tab_get(to, seen, &key);
+    if (!tvisnil(existing))
+    {
+        lua_assert(tvistab(existing));
+        return tabV(existing);
+    }
+
     Node* from_nodes = noderef(from_table->node);
     int has_hash_part = (from_nodes != &G(from)->nilnode);
     uint32_t hbits = has_hash_part ? hmask_to_hbits(from_table->hmask) : 0;
 
     GCtab* new = lj_tab_new(to, from_table->asize, hbits);
+
+    { /* Record the mapping BEFORE recursing so cycles terminate.
+         Storing `new` as a real table value means `seen` transitively
+         keeps every destination table we've created so far alive for
+         the entire duration of the copy. */
+        TValue* slot = lj_tab_set(to, seen, &key);
+        settabV(to, slot, new);
+        lj_gc_anybarriert(to, seen);
+    }
 
     /* Sanity: lj_tab_new should have produced the same shape we asked for. */
     lua_assert(new->asize == from_table->asize);
@@ -126,71 +151,66 @@ static GCtab* deep_copy_table(lua_State* from, lua_State* to, GCtab* from_table)
         TValue* to_array = tvref(new->array);
         for (uint32_t i = 0; i < from_table->asize; i++)
         {
-            copy_to_isolated_state(from, to, &from_array[i], &to_array[i]);
+            copy_to_isolated_state(from, to, &from_array[i], &to_array[i], seen);
         }
     }
 
     if (has_hash_part)
     {
-        Node* to_nodes = noderef(new->node);
         for (uint32_t i = 0; i <= from_table->hmask; i++)
         {
-            /* Skip empty slots: nil key means the slot is unused. Copying
-               them is harmless but wasteful, and keeps `next` clean. */
             if (tvisnil(&from_nodes[i].key))
-            {
-                setnilV(&to_nodes[i].key);
-                setnilV(&to_nodes[i].val);
-                setmref(to_nodes[i].next, NULL);
                 continue;
-            }
 
-            copy_to_isolated_state(from, to, &from_nodes[i].key, &to_nodes[i].key);
-            copy_to_isolated_state(from, to, &from_nodes[i].val, &to_nodes[i].val);
+            /* Build the key in a temp TValue first */
+            TValue newkey;
+            copy_to_isolated_state(from, to, &from_nodes[i].key, &newkey, seen);
 
-            /* Translate the next pointer into the destination's node array,
-               preserving the hash collision chain. */
-            Node* src_next = nextnode(&from_nodes[i]);
-            if (src_next)
-            {
-                ptrdiff_t idx = src_next - from_nodes;
-                lua_assert(idx >= 0 && (uint32_t)idx <= from_table->hmask);
-                setmref(to_nodes[i].next, &to_nodes[idx]);
-            }
-            else
-            {
-                setmref(to_nodes[i].next, NULL);
-            }
+            /* Let LuaJIT place it in the correct main position */
+            TValue* slot = lj_tab_set(to, new, &newkey);
+
+            /* Now copy the value into the slot LuaJIT chose */
+            copy_to_isolated_state(from, to, &from_nodes[i].val, slot, seen);
         }
     }
 
-    /* Copy the metatable. Assumes copy_to_isolated_state handles cycles via
-       a seen-map; otherwise a self-referential metatable will recurse forever. */
+    /* Copy the metatable. The seen-map handles self-referential metatables. */
     if (gcref(from_table->metatable))
     {
         GCtab* mt_src = tabref(from_table->metatable);
-        GCtab* mt_dst = deep_copy_table(from, to, mt_src);
+        GCtab* mt_dst = deep_copy_table(from, to, mt_src, seen);
         setgcref(new->metatable, obj2gco(mt_dst));
-        lj_gc_objbarriert(to, new, mt_dst);
+        /* No per-child barrier needed here — the barrierback below covers it. */
     }
 
-    /* Preserve the nomm cache so metamethod lookups on the copy behave
-       the same as on the original. */
-    new->nomm = from_table->nomm;
+    /* Don't preserve nomm: if any metamethod was dropped during copy (e.g. a
+       Lua-function __index became nil), the cached "these metamethods are
+       absent" bits would be a lie and cause real metamethods to be skipped.
+       Letting LuaJIT rebuild it lazily is correct and cheap. */
+    new->nomm = 0;
+
+    /* Single barrierback covering every GC pointer we stored into `new`
+       (array values, hash keys/values, metatable). Without this, a GC step
+       triggered mid-copy by any of the lj_*_new allocations can turn `new`
+       black while we keep stuffing white children into it, leading to the
+       children being collected while `new` still references them — which
+       manifests as "random crash later" in barriers like lua_setmetatable's. */
+    lj_gc_barrierback(to, new);
 
     return new;
 }
 
-static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, TValue* dst)
+static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, TValue* dst, GCtab* seen)
 {
-    // LJE: Fast routine to copy a value from one state to the other. Functions are obviously not supported.
-    // The main issue with other tools trying to do this is the inane amount of function calls to the
-    // Lua C API that it requires since they're exports and can't be inlined. This is faster cause
-    // we can just use the internal functions.
+    /* LJE: Fast routine to copy a value from one state to the other. Functions
+       are (mostly) not supported — C functions are wrapped, Lua functions become nil.
+       The main issue with other tools trying to do this is the inane amount of function
+       calls to the Lua C API that it requires since they're exports and can't be inlined.
+       We use the internal functions directly. */
 
     if (tvisnumber(val))
     {
-        // It has no direct type, so we skip the switch statement
+        /* No direct type tag, so it's handled before the switch. */
         setnumV(dst, numV(val));
         return 1;
     }
@@ -211,22 +231,26 @@ static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, 
             setlightudV(dst, lightudV(val));
             break;
         case LJ_TSTR:
-            /* string interning is *not* consistent between universes, must copy */
+        {
+            /* String interning is *not* consistent between universes, must copy. */
             GCstr* copy = lj_str_new(to, strdata(strV(val)), strV(val)->len);
             setstrV(to, dst, copy);
             break;
+        }
         case LJ_TTAB:
-            settabV(to, dst, deep_copy_table(from, to, tabV(val)));
+            settabV(to, dst, deep_copy_table(from, to, tabV(val), seen));
             break;
         case LJ_TUDATA:
+        {
             GCudata* from_ud = udataV(val);
             GCudata* to_ud = lj_udata_new(to, from_ud->len, tabref(to->env));
-            printf("[LJE] Copying userdata of size %d from main state to isolated state.\n", from_ud->len);
             memcpy(uddata(to_ud), uddata(from_ud), from_ud->len);
             setudataV(to, dst, to_ud);
             break;
+        }
         case LJ_TFUNC:
-            // Copying over C functions is fine. We just need to wrap it.
+        {
+            /* C functions are wrappable. Lua/fast functions are not supported. */
             GCfunc* from_fn = funcV(val);
             if (iscfunc(from_fn))
             {
@@ -236,7 +260,9 @@ static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, 
                 setfuncV(to, dst, new);
                 break;
             }
-            printf("[LJE] Warning: Attempting to copy Lua/fast function from main state to isolated state, which is not supported. Copying as nil instead.\n");
+            unsupported = 1;
+            break;
+        }
         default:
             unsupported = 1;
             break;
@@ -244,7 +270,6 @@ static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, 
 
     if (unsupported)
     {
-        printf("[LJE] Warning: Unsupported type %d in copy_to_isolated_state, copying as nil.\n", itype(val));
         setnilV(dst);
         return 1;
     }
@@ -252,25 +277,36 @@ static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, 
     return 1;
 }
 
+static int lje_copy_with_seen(lua_State* from, lua_State* to, cTValue* val)
+{
+    GCtab* seen = lj_tab_new(to, 0, 4);
+    settabV(to, to->top, seen);
+    to->top++;
+
+    /* Copy into the slot above the anchor. */
+    int r;
+    if (tvisnil(val)) {
+        setnilV(to->top);
+        r = 0;
+    } else {
+        r = copy_to_isolated_state(from, to, val, to->top, seen);
+    }
+    to->top++;
+
+    /* Stack is now [..., seen, result]. Collapse to [..., result]. */
+    copyTV(to, to->top - 2, to->top - 1);
+    to->top--;
+
+    return r;
+}
+
 int lje_copy_to_isolated_state(lua_State* from, lua_State* to, int idx)
 {
     cTValue* val = stkindex2adr(from, idx);
-    if (tvisnil(val))
-    {
-        printf("[LJE] Warning: Attempting to copy nil value from main state to isolated state at index %d.\n", idx);
-        return 0;
-    }
-
-    return copy_to_isolated_state(from, to, val, to->top++);
+    return lje_copy_with_seen(from, to, val);
 }
 
 int lje_copy_to_isolated_state_tv(lua_State* from, lua_State* to, cTValue* val)
 {
-    if (tvisnil(val))
-    {
-        printf("[LJE] Warning: Attempting to copy nil value from main state to isolated state.\n");
-        return 0;
-    }
-
-    return copy_to_isolated_state(from, to, val, to->top++);
+    return lje_copy_with_seen(from, to, val);
 }
