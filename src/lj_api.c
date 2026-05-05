@@ -55,8 +55,9 @@
 #define api_checknelems(L, n)		api_check(L, (n) <= (L->top - L->base))
 #define api_checkvalidindex(L, i)	api_check(L, (i) != niltv(L))
 #define lje_redirect_state(L) \
-  if (LJEG()->redirect_to_isolation) \
-    L = LJEG()->isolated_state;
+q  if (LJEG()->redirect_to_isolation) { \
+    L = LJEG()->isolated_state; \
+  }
 
 static TValue *index2adr(lua_State *L, int idx)
 {
@@ -709,7 +710,6 @@ LUA_API void lua_pushlstring(lua_State *L, const char *str, size_t len)
 LUA_API void lua_pushstring(lua_State *L, const char *str)
 {
   lje_redirect_state(L);
-
   if (str == NULL) {
     setnilV(L->top);
   } else {
@@ -911,12 +911,33 @@ LUA_API void lua_rawget(lua_State *L, int idx)
 LUA_API void lua_rawgeti(lua_State *L, int idx, int n)
 {
   lje_redirect_state(L);
+
   cTValue *v, *t = index2adr(L, idx);
   api_check(L, tvistab(t));
   v = lj_tab_getint(tabV(t), n);
   if (v) {
     copyTV(L, L->top, v);
   } else {
+    if (LJEG()->redirect_to_isolation && idx == LUA_REGISTRYINDEX)
+    {
+      lua_State* host = LJEG()->main_state;
+      cTValue* reg = registry(host);
+      v = lj_tab_getint(tabV(reg), n);
+      if (v)
+      {
+        lje_copy_to_isolated_state_tv(host, L, v);
+        L->top--;
+        incr_top(L);
+
+        // Copying each time isn't good though. Save it in our registry so the next lookup succeeds without copying.
+        GCtab* isolated_reg = tabV(registry(L));
+        TValue* dst = lj_tab_setint(L, isolated_reg, n);
+        TValue* src = L->top - 1; /* what we just pushed */
+        copyTV(L, dst, src);
+        lj_gc_barriert(L, isolated_reg, dst);
+        return;
+      }
+    }
     setnilV(L->top);
   }
   incr_top(L);
