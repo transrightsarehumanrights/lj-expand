@@ -55,7 +55,7 @@
 #define api_checknelems(L, n)		api_check(L, (n) <= (L->top - L->base))
 #define api_checkvalidindex(L, i)	api_check(L, (i) != niltv(L))
 #define lje_redirect_state(L) \
-q  if (LJEG()->redirect_to_isolation) { \
+  if (LJEG()->redirect_to_isolation) { \
     L = LJEG()->isolated_state; \
   }
 
