@@ -782,6 +782,18 @@ static int lje_proxy_type(lua_State* L)
   return 1;
 }
 
+static int lje_proxy_copy(lua_State* L)
+{
+  LJEProxy* proxy = lua_touserdata(L, 1);
+  // Copies the given proxied object into the secure state.
+
+  TValue proxy_object;
+  setgcV(L, &proxy_object, proxy->host_obj, ~proxy->host_type);
+
+  lje_copy_to_isolated_state_tv(LJEG()->main_state, L, &proxy_object);
+  return 1;
+}
+
 #define LJE_SET_FUNC(name, func) \
   lua_pushcfunction(L, func); \
   lua_setfield(L, -2, name);
@@ -900,6 +912,7 @@ void lje_addfuncs(lua_State* L) {
     /* proxy: API for interacting with proxy objects in the secure state */
     LJE_NEW_SECTION()
       LJE_SET_FUNC("type", lje_proxy_type);
+      LJE_SET_FUNC("copy", lje_proxy_copy);
     LJE_END_SECTION("proxy");
   }
 
