@@ -29,9 +29,9 @@
 
 /* -- I/O error handling -------------------------------------------------- */
 #define lje_redirect_state(L) \
-  if (LJEG()->redirect_to_isolation) \
-    L = LJEG()->isolated_state;
-
+if (LJEG()->redirect_to_isolation) { \
+L = LJEG()->isolated_state; \
+}
 LUALIB_API int luaL_fileresult(lua_State *L, int stat, const char *fname)
 {
   lje_redirect_state(L);

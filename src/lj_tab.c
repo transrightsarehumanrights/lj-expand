@@ -438,6 +438,52 @@ cTValue *lj_tab_getstr(GCtab *t, GCstr *key)
   return NULL;
 }
 
+/*
+ * Look up a string key in a table without allocating a GCstr.
+ */
+cTValue *lj_tab_getstr_raw(GCtab *t, const char *str, size_t lenx)
+{
+  MSize len = (MSize)lenx;
+  MSize a, b, h = len;
+  Node *n;
+
+  /* --- Hash (identical to lj_str_new) ------------------------------- */
+  if (len >= 4) {
+    a  = lj_getu32(str);
+    h ^= lj_getu32(str + len - 4);
+    b  = lj_getu32(str + (len >> 1) - 2);
+    h ^= b; h -= lj_rol(b, 14);
+    b += lj_getu32(str + (len >> 2) - 1);
+  } else if (len > 0) {
+    a  = *(const uint8_t *)str;
+    h ^= *(const uint8_t *)(str + len - 1);
+    b  = *(const uint8_t *)(str + (len >> 1));
+    h ^= b; h -= lj_rol(b, 14);
+  } else {
+    /* Empty string: interned strempty has hash 0. Fall through with h=0;
+     * we still need to walk the chain in case "" is a key in this table. */
+    a = 0;
+  }
+  if (len > 0) {
+    a ^= h; a -= lj_rol(h, 11);
+    b ^= a; b -= lj_rol(a, 25);
+    h ^= b; h -= lj_rol(b, 16);
+  }
+
+  /* --- Probe -------------------------------------------------------- */
+  n = &noderef(t->node)[h & t->hmask];
+  do {
+    if (tvisstr(&n->key)) {
+      GCstr *sx = strV(&n->key);
+      /* hash check is cheap and prunes most non-matching nodes before memcmp */
+      if (sx->hash == h && sx->len == len &&
+          memcmp(strdata(sx), str, len) == 0)
+        return &n->val;
+    }
+  } while ((n = nextnode(n)));
+  return NULL;
+}
+
 cTValue *lj_tab_get(lua_State *L, GCtab *t, cTValue *key)
 {
   if (tvisstr(key)) {

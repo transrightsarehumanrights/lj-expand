@@ -245,6 +245,25 @@ static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, 
             GCudata* from_ud = udataV(val);
             GCudata* to_ud = lj_udata_new(to, from_ud->len, tabref(to->env));
             memcpy(uddata(to_ud), uddata(from_ud), from_ud->len);
+            if (gcref(from_ud->metatable))
+            {
+                // We need to copy the metatable, check if it's a GMod one:
+                GCtab* mt_src = tabref(from_ud->metatable);
+                cTValue* meta_name = lj_tab_getstr_lit(mt_src, "MetaName");
+                if (meta_name && tvisstr(meta_name))
+                {
+                    const char* name = strdata(strV(meta_name));
+                    // Check if the to state has its own version already (metatables can be manipulated)
+                    GCtab* to_reg = tabV(registry(to));
+                    cTValue* to_metatable = lj_tab_getstr_raw(to_reg, name, strlen(name)); // Can't use raw GCstr, comes from the from state
+                    if (to_metatable && tvistab(to_metatable))
+                    {
+                        // This metatable exists within the to state, so use it.
+                        setgcref(to_ud->metatable, obj2gco(tabV(to_metatable)));
+                        lj_gc_objbarrier(to, to_ud, tabV(to_metatable));
+                    }
+                }
+            }
             setudataV(to, dst, to_ud);
             break;
         }
