@@ -1330,91 +1330,17 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     GCobj *ud_sentinel = gcref(mainthread(G(L))->nextgc);
     GCSize saved_threshold = G(L)->gc.threshold;
     GCSize saved_total = G(L)->gc.total;
-    char disable_gc_stealth = lje_get_command_line_options()->disable_gc_stealth;
-    if (!disable_gc_stealth)
-      G(L)->gc.threshold = LJ_MAX_MEM;
+q
 
-    lje_addfuncs(L);
     printf("[LJE] Added LJE functions to Lua state\n");
     lje_clear_global_refs();
-
-    lje_startup_preinit(L);
-
-    if (LJEG()->loaded_binary_module_count > 0)
-    {
-      printf("[LJE] Running preinit for %d binary modules...\n", LJEG()->loaded_binary_module_count);
-      for (int i = 0; i < LJEG()->loaded_binary_module_count; i++)
-      {
-        lje_binary_module_run_preinit(&LJEG()->loaded_binary_modules[i], L);
-      }
-    }
-
-    lje_save_random_state();
-    for (int i = 0; i < LJEG()->loaded_script_count; i++)
-    {
-      LJEScript* script = LJEG()->script_load_order[i];
-      if (script->preinit_path && !script->info->secure)
-      {
-        lje_startup_execute(L, script, script->preinit_path);
-      }
-    }
-    lje_restore_random_state();
-
+    LJEG()->main_state = L;
     LJEG()->using_error_reporter = 0;
-
-    if (!disable_gc_stealth)
-    {
-      // Fix root list objects
-      {
-        GCobj *o = gcref(G(L)->gc.root);
-        while (o != NULL && o != root_sentinel) {
-          o->gch.marked |= LJ_GC_FIXED | LJ_GC_SFIXED;
-          o = gcref(o->gch.nextgc);
-        }
-      }
-
-      // Fix userdata list
-      {
-        GCobj *o = gcref(mainthread(G(L))->nextgc);
-        while (o != NULL && o != ud_sentinel) {
-          o->gch.marked |= LJ_GC_FIXED | LJ_GC_SFIXED;
-          o = gcref(o->gch.nextgc);
-        }
-      }
-
-      // Fix ALL unfixed strings (blanket)
-      {
-        MSize i;
-        for (i = 0; i <= G(L)->strmask; i++) {
-          GCobj *o = gcref(G(L)->strhash[i]);
-          while (o != NULL) {
-            if (!(o->gch.marked & LJ_GC_FIXED))
-              o->gch.marked |= LJ_GC_FIXED | LJ_GC_SFIXED;
-            o = gcref(o->gch.nextgc);
-          }
-        }
-      }
-
-      // Shrink tmpbuf to baseline, used if LJE scripts use any string buffers.
-      lj_buf_shrink(L, &G(L)->tmpbuf);
-      lj_buf_shrink(L, &G(L)->tmpbuf);
-
-      // Set compensation for over-fixed strings, will be totally honest,
-      // I don't know how these happen, but I just have to assume it's some quirk at preinit
-      // that I haven't fully wrapped my head around. Point is, 34 bytes remain overcompensated no matter what,
-      // so it seems like it's some kind of GCO being made by GMod's C code?
-      LJEG()->gc_compensation = 34;
-
-      G(L)->gc.total = saved_total;
-      G(L)->gc.threshold = saved_threshold;
-      printf("[LJE] Completed init.lua preinit, fixed GC objects, and neutralized GC pressure.\n");
-    } else {
-      printf("[LJE] Completed init.lua preinit without GC stealth (GC compensation is disabled, expect GC spikes during init).\n");
-    }
 
     // Determine if any secure scripts need to run.
     // They only support `main.lua`, which is at preinit, the most secure stage of the clientstate.
 
+    lje_startup_secure_preinit(LJEG()->isolated_state);
     for (int i = 0; i < LJEG()->loaded_script_count; i++)
     {
       LJEScript* script = LJEG()->script_load_order[i];
@@ -1514,8 +1440,12 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
             }
           }
 
+          LJEG()->is_engine_call_handled = 0; /* reset before call, hook will set to 1 if it handles the call. */
+          LJEG()->using_error_reporter = 1;
+          LJEG()->redirect_to_isolation = 0;
           if (lua_pcall(I, 3 + nargs, 0, 0) != LUA_OK)
           {
+            LJEG()->using_error_reporter = 0;
             /* If the hook errors, we just print the error and move on. */
             const char* error_msg = lua_tostring(I, -1);
             printf("[LJE] Error in engine call hook for secure script %s: %s\n", script->info->name, error_msg);
@@ -1524,6 +1454,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
             lj_gc_step(I);
             continue;
           }
+          LJEG()->using_error_reporter = 0;
           lje_proxy_release_all();
           lj_gc_step(I);
         }
@@ -1607,6 +1538,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
       }
     }
   }
+
 
   global_State *g = G(L);
   uint8_t oldh = hook_save(g);

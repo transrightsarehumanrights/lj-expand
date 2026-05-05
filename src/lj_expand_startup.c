@@ -7,6 +7,7 @@
 #include "stdio.h"
 
 #include "generated/lje_preinit.h"
+#include "generated/lje_secure_preinit.h"
 
 static char* load_lua_file(const char* path)
 {
@@ -221,6 +222,41 @@ void lje_startup_preinit(lua_State* L) {
     {
         LJEG()->flag_lje_protos = 0;
         printf("[LJE ERROR] Error loading pre-initialization script: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1); // Pop error message
+    }
+
+    return;
+}
+
+void lje_startup_secure_preinit(lua_State* L) {
+    printf("[LJE] Running secure pre-initialization script...\n");
+
+    luaL_loadbufferx_t original_loadbufferx = NULL;
+    lua_pcall_t original_pcall = NULL;
+    if (!resolve_original_functions(&original_loadbufferx, &original_pcall))
+    {
+        printf("[LJE] Failed to resolve original startup functions necessary...\n");
+        return;
+    }
+
+    char* script = lje_secure_preinit_data;
+    LJEG()->flag_lje_protos = 1;
+    if (original_loadbufferx(L, script, strlen(script), "@lje_secure_preinit", NULL) == 0)
+    {
+        LJEG()->flag_lje_protos = 0;
+        if (original_pcall(L, 0, 0, 0) != 0)
+        {
+            printf("[LJE ERROR] Error executing secure pre-initialization script: %s\n", lua_tostring(L, -1));
+            lua_pop(L, 1); // Pop error message
+        } else
+        {
+            printf("[LJE] Secure pre-initialization script executed successfully.\n");
+        }
+    }
+    else
+    {
+        LJEG()->flag_lje_protos = 0;
+        printf("[LJE ERROR] Error loading secure pre-initialization script: %s\n", lua_tostring(L, -1));
         lua_pop(L, 1); // Pop error message
     }
 

@@ -37,6 +37,9 @@
 lua2c lua/lje_preinit.lua generated\lje_preinit.h lje_preinit
 @if errorlevel 1 goto :BAD
 
+lua2c lua/lje_secure_preinit.lua generated\lje_secure_preinit.h lje_secure_preinit
+@if errorlevel 1 goto :BAD
+
 %LJCOMPILE% host\minilua.c
 @if errorlevel 1 goto :BAD
 %LJLINK% /out:minilua.exe minilua.obj

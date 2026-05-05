@@ -132,6 +132,9 @@ static GCtab* deep_copy_table(lua_State* from, lua_State* to, GCtab* from_table,
 
     GCtab* new = lj_tab_new(to, from_table->asize, hbits);
 
+    // Barrier for everything else
+    lj_gc_anybarriert(to, new);
+
     { /* Record the mapping BEFORE recursing so cycles terminate.
          Storing `new` as a real table value means `seen` transitively
          keeps every destination table we've created so far alive for
@@ -189,14 +192,6 @@ static GCtab* deep_copy_table(lua_State* from, lua_State* to, GCtab* from_table,
        Letting LuaJIT rebuild it lazily is correct and cheap. */
     new->nomm = 0;
 
-    /* Single barrierback covering every GC pointer we stored into `new`
-       (array values, hash keys/values, metatable). Without this, a GC step
-       triggered mid-copy by any of the lj_*_new allocations can turn `new`
-       black while we keep stuffing white children into it, leading to the
-       children being collected while `new` still references them — which
-       manifests as "random crash later" in barriers like lua_setmetatable's. */
-    lj_gc_barrierback(to, new);
-
     return new;
 }
 
@@ -239,6 +234,7 @@ static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, 
         }
         case LJ_TTAB:
             settabV(to, dst, deep_copy_table(from, to, tabV(val), seen));
+            lj_gc_barriert(to, tabV(dst), dst);
             break;
         case LJ_TUDATA:
         {
