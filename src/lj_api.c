@@ -1330,7 +1330,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     GCobj *ud_sentinel = gcref(mainthread(G(L))->nextgc);
     GCSize saved_threshold = G(L)->gc.threshold;
     GCSize saved_total = G(L)->gc.total;
-q
+
 
     printf("[LJE] Added LJE functions to Lua state\n");
     lje_clear_global_refs();
