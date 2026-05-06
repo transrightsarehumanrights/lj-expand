@@ -50,6 +50,7 @@
 #include "lj_expand_isolation.h"
 #include "lj_expand_proxy.h"
 
+
 /* -- Common helper functions --------------------------------------------- */
 
 #define api_checknelems(L, n)		api_check(L, (n) <= (L->top - L->base))
@@ -1647,7 +1648,6 @@ LUA_API int lua_yield(lua_State *L, int nresults)
 
 LUA_API int lua_resume(lua_State *L, int nargs)
 {
-  lje_redirect_state(L);
   if (L->cframe == NULL && L->status <= LUA_YIELD)
     return lj_vm_resume(L,
       L->status == LUA_OK ? api_call_base(L, nargs) : L->top - nargs,
@@ -1821,7 +1821,6 @@ lje_detour_export(mod, lua_createtable, lua_createtable);
 lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
 
 // Call
-lje_detour_export(mod, lua_call, lua_call);
 
       // Stack reordering
       lje_detour_export(mod, lua_remove, lua_remove);
@@ -1853,14 +1852,10 @@ lje_detour_export(mod, lua_call, lua_call);
       lje_detour_export(mod, lua_topointer, lua_topointer);
 
       // Coroutines / threads (translate state pointers if you have a mapping)
-      lje_detour_export(mod, lua_tothread, lua_tothread);
-      lje_detour_export(mod, lua_pushthread, lua_pushthread);
-      lje_detour_export(mod, lua_newthread, lua_newthread);
 
       // Misc state
       lje_detour_export(mod, lua_status, lua_status);
       lje_detour_export(mod, lua_atpanic, lua_atpanic);
-      lje_detour_export(mod, lua_xmove, lua_xmove);
 
       lje_detour_export(mod, luaL_checklstring, luaL_checklstring);
       lje_detour_export(mod, luaL_optlstring, luaL_optlstring);

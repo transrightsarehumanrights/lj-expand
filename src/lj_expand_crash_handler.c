@@ -295,7 +295,7 @@ static void lje_write_dump_state(const struct _EXCEPTION_POINTERS* exception_poi
         }
         else
         {
-            fprintf(f, "  [%d] Unknown function type: %p\n", level, fn);
+            fprintf(f, "  [%d] Unknown function type (ffid=%d): %p\n", level, fn->c.ffid, fn);
         }
     }
 
