@@ -705,10 +705,7 @@ static int lje_secure_pull(lua_State* L)
       return 1;
     }
 
-    // Intern the segment as a GCstr in the main state's string table so we can
-    // do a proper hashed lookup against current_tab.
-    GCstr* key = lj_str_new(L2, segment_start, segment_len);
-    value = lj_tab_getstr(current_tab, key);
+    value = lj_tab_getstr_raw(current_tab, segment_start, segment_len);
 
     if (!value || tvisnil(value))
     {

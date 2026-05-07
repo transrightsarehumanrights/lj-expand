@@ -38,6 +38,7 @@ Player = lje.secure.pull("Player")
 Vector = lje.secure.pull("Vector")
 Angle = lje.secure.pull("Angle")
 Matrix = lje.secure.pull("Matrix")
+LocalPlayer = lje.secure.pull("LocalPlayer")
 
 -- Classes
 registry.Entity = lje.secure.pull("_R.Entity")
@@ -56,6 +57,8 @@ registry.Vehicle = lje.secure.pull("_R.Vehicle")
 registry.Panel = lje.secure.pull("_R.Panel")
 registry.CSEnt = lje.secure.pull("_R.CSEnt")
 registry.NPC = lje.secure.pull("_R.NPC")
+
+NULL = lje.secure.pull("NULL") -- For some reason, the null entity is a special userdata..?
 
 -- Polyfills for common things
 local cam2D = { type = "2D" }
