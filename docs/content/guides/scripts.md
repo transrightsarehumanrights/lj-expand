@@ -16,15 +16,15 @@ Generally, you want to create detours in `preinit.lua`, and general hooks in `ma
 You can structure your LJE scripts any way you want. [lje.require](/api/lua#require) and [lje.include](/api/base#include) searches at the root of the script folder no matter what for simplicity.
 
 This is how the average LJE script may look:
-```
---- hax/
----    detours/
----       capture.lua
----    utils/
----       foo.lua
---- main.lua
---- preinit.lua
---- info.toml
+```bash
+ hax/
+  ├── detours/
+  │    └── capture.lua
+  ├── utils/
+  │    └── foo.lua
+  ├── main.lua
+  ├── preinit.lua
+  └── info.toml
 ```
 
 In either main.lua or preinit.lua, this script would require files like so:
