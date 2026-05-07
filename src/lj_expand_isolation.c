@@ -75,8 +75,7 @@ static int lje_secure_gmod_api(lua_State* L)
         return 1;
     }
 
-    // zero-copy function call! state redirection handles this,
-    // we just need to dispatch the c function raw.
+    // we just need to dispatch the c function ourselves.
     lua_CFunction func = (lua_CFunction)func_ptr;
     LJEG()->redirect_to_isolation = 1;
     int results = func(LJEG()->main_state); /* make it think it's running in the main state, it won't know any better! */
@@ -106,17 +105,6 @@ static uint32_t hmask_to_hbits(uint32_t hmask)
 
 static GCtab* deep_copy_table(lua_State* from, lua_State* to, GCtab* from_table, GCtab* seen)
 {
-    /* Check for cycles / shared references. lj_tab_get returns a pointer to
-       the global nil singleton for missing keys, NOT NULL — so we must check
-       tvisnil, not the pointer itself.
-
-       The seen-map is keyed by a lightuserdata pointing at the source table
-       (which is fine — source tables can't be collected during a copy), and
-       its value is the *actual* destination GCtab as a real GC reference.
-       Storing it as lightuserdata would mean `seen` holds zero GC children
-       from the collector's point of view, and any partially-built dst table
-       could be collected mid-copy, leading to repeated re-allocation and
-       runaway memory growth. */
     TValue key;
     setlightudV(&key, from_table);
     cTValue* existing = lj_tab_get(to, seen, &key);
@@ -132,7 +120,7 @@ static GCtab* deep_copy_table(lua_State* from, lua_State* to, GCtab* from_table,
 
     GCtab* new = lj_tab_new(to, from_table->asize, hbits);
 
-    // Barrier for everything else
+    // Barrier for any insertions into the new table.
     lj_gc_anybarriert(to, new);
 
     { /* Record the mapping BEFORE recursing so cycles terminate.
@@ -177,19 +165,13 @@ static GCtab* deep_copy_table(lua_State* from, lua_State* to, GCtab* from_table,
         }
     }
 
-    /* Copy the metatable. The seen-map handles self-referential metatables. */
     if (gcref(from_table->metatable))
     {
         GCtab* mt_src = tabref(from_table->metatable);
         GCtab* mt_dst = deep_copy_table(from, to, mt_src, seen);
         setgcref(new->metatable, obj2gco(mt_dst));
-        /* No per-child barrier needed here — the barrierback below covers it. */
     }
 
-    /* Don't preserve nomm: if any metamethod was dropped during copy (e.g. a
-       Lua-function __index became nil), the cached "these metamethods are
-       absent" bits would be a lie and cause real metamethods to be skipped.
-       Letting LuaJIT rebuild it lazily is correct and cheap. */
     new->nomm = 0;
 
     return new;
