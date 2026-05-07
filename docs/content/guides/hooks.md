@@ -10,7 +10,7 @@ However, there is a strong community library built to allow for undetectable hoo
 
 ## ljeutil
 
-You want to add [ljeutil](https://github.com/Eyoko1/ljeutil) into your `~/.lje_scripts` folder so it loads. Then declare a dependency on it in your `info.toml`. For example:
+You want to add [ljeutil](https://github.com/Eyoko1/ljeutil) into your `~/.lje/scripts` folder so it loads. Then declare a dependency on it in your `info.toml`. For example:
 ```toml
 [script]
 name = "example"
@@ -35,7 +35,7 @@ end)
 
 This is probably a common pattern you'll want to use, but it renders all of this in a way where anti-cheats cannot screengrab it.
 
-For anything else, you can use the normal GMod hook name with `hook.pre/post` depending on when you want to run, here's an example from `gilbhax`:
+For anything else, you can use the normal GMod hook name with `hook.pre/post` depending on when you want to run, here's an example from [`gilbhax`](https://github.com/lj-expand/gilbhax):
 ```lua
 hook.pre("CreateMove", "gilbhax.bhop", function(cmd)
     lje.gc.begin_track()
