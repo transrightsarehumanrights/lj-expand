@@ -28,7 +28,7 @@ jobs:
         shell: cmd
         run: |
           cd src
-          call "C:\Program Files\Microsoft Visual Studio\2026\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           ./msvcbuild.bat gc64
 
       - name: Download rcedit
