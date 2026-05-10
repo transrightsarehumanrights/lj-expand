@@ -119,7 +119,7 @@ if exist luajit.exe.manifest^
 @rem Compile launcher
 %LJCOMPILE% /I "launcher" launcher/*.c
 @if errorlevel 1 goto :BAD
-%LJLINK% /out:lje-launcher.exe ljel_*.obj %LJLIBNAME%
+%LJLINK% /out:lje-launcher.exe ljel_*.obj %LJLIBNAME% user32.lib kernel32.lib
 @if errorlevel 1 goto :BAD
 
 @del *.obj *.manifest minilua.exe buildvm.exe
