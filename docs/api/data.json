@@ -1,10 +1,10 @@
 {
   "namespace": "data",
-  "description": "Simple persistent blob storage for scripts. Data is stored in a `.lje_script_data` folder relative to the working directory.",
+  "description": "Simple persistent blob storage for scripts. Data is stored in a `.lje/data` folder relative to the working directory.",
   "functions": [
     {
       "name": "write",
-      "description": "Writes a binary blob to the `.lje_script_data` folder under the given name. Creates the folder if it does not exist. Returns `true` on success, `false` on failure. Progress is always printed to the console.",
+      "description": "Writes a binary blob to the `.lje/data` folder under the given name. Creates the folder if it does not exist. Returns `true` on success, `false` on failure. Progress is always printed to the console.",
       "note": "Don't use file extensions, they are purposely omitted for security.",
       "params": [
         {
@@ -27,7 +27,7 @@
     },
     {
       "name": "read",
-      "description": "Reads a previously written blob from the `.lje_script_data` folder. Returns nothing if the folder does not exist or if the entry is not found.",
+      "description": "Reads a previously written blob from the `.lje/data` folder. Returns nothing if the folder does not exist or if the entry is not found.",
       "note": "Don't use file extensions, they are purposely omitted for security.",
       "params": [
         {
