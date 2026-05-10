@@ -49,6 +49,14 @@ int main(int argc, char* argv[])
     if (gmod_path == NULL)
     {
         ljel_log("GMOD_PATH is not set. Please set this environment variable to the GMod executable path in bin/win64.");
+
+        MessageBoxA(
+          NULL,
+          "GMOD_PATH is not set.\nPlease set this environment variable to the GMod executable path in bin/win64.",
+          "Error",
+          MB_OK | MB_ICONERROR
+        );
+
         return 1;
     }
 
