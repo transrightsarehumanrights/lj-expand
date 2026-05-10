@@ -5,7 +5,8 @@
 lje.con_print("Running secure preinit script...")
 
 local registry = lje.util.get_registry()
-registry[2] = { hook = {} } -- hook ref GMod uses
+registry[2] = { hook = {Call = function() end} } -- hook ref GMod uses
+registry[1337153] = function() return "hello" end
 
 -- Only a subset of necessary GMod C APIs are pulled in. We have our own versions of any base library as well.
 achievements = lje.secure.pull("achievements")
@@ -39,6 +40,7 @@ Vector = lje.secure.pull("Vector")
 Angle = lje.secure.pull("Angle")
 Matrix = lje.secure.pull("Matrix")
 LocalPlayer = lje.secure.pull("LocalPlayer")
+Material = lje.secure.pull("Material")
 
 -- Classes
 registry.Entity = lje.secure.pull("_R.Entity")
@@ -87,3 +89,5 @@ function hook.Listen()
     end
   end)
 end
+
+function hook.Call() --[[no-op]] end

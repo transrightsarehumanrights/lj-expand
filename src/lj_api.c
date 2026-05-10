@@ -909,9 +909,22 @@ LUA_API void lua_rawget(lua_State *L, int idx)
   copyTV(L, L->top-1, lj_tab_get(L, tabV(t), L->top-1));
 }
 
+static void lje_dump_stack(lua_State* L);
 LUA_API void lua_rawgeti(lua_State *L, int idx, int n)
 {
   lje_redirect_state(L);
+
+  if (LJEG()->redirect_to_isolation)
+  {
+    // dump stack
+  }
+
+  if (idx == -1 && n == 153)
+  {
+    // Special GMod errfunc, redirect to us
+    idx = LUA_REGISTRYINDEX;
+    n = 1337153;
+  }
 
   cTValue *v, *t = index2adr(L, idx);
   api_check(L, tvistab(t));
@@ -1307,6 +1320,20 @@ static inline double lje_spinwait_deficit(double clock_deficit)
 LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 {
   lje_redirect_state(L);
+  if (LJEG()->redirect_to_isolation)
+  {
+    // dump stack
+    lje_dump_stack(L);
+    printf("[LJE] Warning: redirect_to_isolation is true. This means we're likely in a very early call before the main state is fully set up. We'll try to continue, but be aware of potential issues.\n");
+    // Don't do it. Just fake it
+    lua_pop(L, nargs + 1); // Pop args
+    int results = nresults == LUA_MULTRET ? 0 : nresults;
+    for (int i = 0; i < results; i++)
+      lua_pushnil(L); // Push nil results
+    return LUA_OK;
+  }
+
+
   // Apply micro-sleeping to work off that clock deficit.
   if (LJEG()->clock_deficit > 0.0)
   {
