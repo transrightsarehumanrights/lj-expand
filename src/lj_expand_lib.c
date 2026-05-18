@@ -646,9 +646,14 @@ static int lje_secure_gmod_api(lua_State* L)
   // zero-copy function call! state redirection handles this,
   // we just need to dispatch the c function raw.
   lua_CFunction func = (lua_CFunction)func_ptr;
-  LJEG()->redirect_to_isolation = 1;
+  // Latch incase isolation is being forced
+  int redirection_required = LJEG()->redirect_to_isolation == 0;
+
+  if (redirection_required)
+    LJEG()->redirect_to_isolation = 1;
   int results = func(LJEG()->main_state); /* make it think it's running in the main state, it won't know any better! */
-  LJEG()->redirect_to_isolation = 0;
+  if (redirection_required)
+    LJEG()->redirect_to_isolation = 0;
   return results;
 }
 
@@ -756,6 +761,13 @@ static int lje_secure_pull(lua_State* L)
   // Not a function, so just copy it.
   lje_copy_to_isolated_state_tv(L2, L, value);
   return 1;
+}
+
+static int lje_secure_isolate(lua_State* L)
+{
+  int force_isolation = lua_toboolean(L, 1);
+  LJEG()->redirect_to_isolation = force_isolation;
+  return 0;
 }
 
 static int lje_proxy_type(lua_State* L)
@@ -904,6 +916,7 @@ void lje_addfuncs(lua_State* L) {
     /* secure: API for secure state only tasks */
     LJE_NEW_SECTION()
       LJE_SET_FUNC("pull", lje_secure_pull);
+      LJE_SET_FUNC("isolate", lje_secure_isolate);
     LJE_END_SECTION("secure");
 
     /* proxy: API for interacting with proxy objects in the secure state */

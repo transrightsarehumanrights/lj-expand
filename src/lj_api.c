@@ -916,7 +916,16 @@ LUA_API void lua_rawgeti(lua_State *L, int idx, int n)
 
   if (LJEG()->redirect_to_isolation)
   {
-    // dump stack
+    // Don't allow any non-table accesses when running hooks
+    if (idx == -1)
+    {
+      if (!tvistab(index2adr(L, n)))
+      {
+        setnilV(L->top);
+        incr_top(L);
+        return;
+      }
+    }
   }
 
   if (idx == -1 && n == 153)
@@ -1320,19 +1329,6 @@ static inline double lje_spinwait_deficit(double clock_deficit)
 LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 {
   lje_redirect_state(L);
-  if (LJEG()->redirect_to_isolation)
-  {
-    // dump stack
-    lje_dump_stack(L);
-    printf("[LJE] Warning: redirect_to_isolation is true. This means we're likely in a very early call before the main state is fully set up. We'll try to continue, but be aware of potential issues.\n");
-    // Don't do it. Just fake it
-    lua_pop(L, nargs + 1); // Pop args
-    int results = nresults == LUA_MULTRET ? 0 : nresults;
-    for (int i = 0; i < results; i++)
-      lua_pushnil(L); // Push nil results
-    return LUA_OK;
-  }
-
 
   // Apply micro-sleeping to work off that clock deficit.
   if (LJEG()->clock_deficit > 0.0)

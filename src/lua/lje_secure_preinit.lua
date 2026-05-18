@@ -7,6 +7,7 @@ lje.con_print("Running secure preinit script...")
 local registry = lje.util.get_registry()
 registry[2] = { hook = {Call = function() end} } -- hook ref GMod uses
 registry[1337153] = function() return "hello" end
+  registry[13371010] = function() return end -- Dummy Lua function
 
 -- Only a subset of necessary GMod C APIs are pulled in. We have our own versions of any base library as well.
 achievements = lje.secure.pull("achievements")

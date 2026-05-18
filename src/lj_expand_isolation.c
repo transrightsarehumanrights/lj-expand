@@ -256,6 +256,16 @@ static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, 
                 setlightudV(&new->c.upvalue[0], from_fn->c.f);
                 setfuncV(to, dst, new);
                 break;
+            } else if (isluafunc(from_fn))
+            {
+              // Print out exactly what this is
+              GCproto* pt = funcproto(from_fn);
+              printf("[LJE] Encountered Lua function from %s, not copying.\n", proto_chunknamestr(pt));
+              // Set an empty Lua function, then.
+              // Our registry has 13371010 as the empty Lua function, so we can just copy that in.
+              cTValue* empty_lua_func = lj_tab_getint(tabV(registry(to)), 13371010);
+              setfuncV(to, dst, funcV(empty_lua_func));
+              break;
             }
             unsupported = 1;
             break;
