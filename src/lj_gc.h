@@ -45,11 +45,6 @@ enum {
 #define fixstring(s)	((s)->marked |= LJ_GC_FIXED)
 #define markfinalized(x)	((x)->gch.marked |= LJ_GC_FINALIZED)
 
-/* LJE-specific expose */
-LJ_FUNC size_t propagatemark(global_State* g);
-LJ_FUNC GCRef *gc_sweep(global_State *g, GCRef *p, uint32_t lim);
-LJ_FUNC size_t gc_onestep(lua_State *L);
-
 /* Collector. */
 LJ_FUNC size_t lj_gc_separateudata(global_State *g, int all);
 LJ_FUNC void lj_gc_finalize_udata(lua_State *L);

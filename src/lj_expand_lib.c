@@ -525,84 +525,6 @@ int lje_set_show_special_frames(lua_State* L)
   return 0;
 }
 
-static int lje_gc_end_track(lua_State* L);
-int lje_gc_begin_track(lua_State* L)
-{
-  if (lje_get_command_line_options()->disable_gc_stealth)
-  {
-    return 0;
-  }
-
-  global_State *g = G(L);
-  LJEGCTracker *tracker = &LJEG()->gc_tracker;
-
-  if (tracker->active) {
-    //luaL_error(L, "gc tracking already active");
-    // Just automatically end it for them, sometimes this can happen if a script errors.
-    // Note we still continue with starting tracking.
-    lje_gc_end_track(L);
-  }
-
-  tracker->root_sentinel = gcref(g->gc.root);
-  tracker->ud_sentinel = gcref(mainthread(g)->nextgc);
-  tracker->saved_total = g->gc.total;
-  tracker->saved_threshold = g->gc.threshold;
-  g->gc.threshold = LJ_MAX_MEM;
-  tracker->active = 1;
-  return 0;
-}
-
-static int lje_gc_end_track(lua_State *L)
-{
-  if (lje_get_command_line_options()->disable_gc_stealth)
-  {
-    return 0;
-  }
-
-  global_State *g = G(L);
-  LJEGCTracker *tracker = &LJEG()->gc_tracker;
-
-  if (!tracker->active) {
-    luaL_error(L, "gc tracking not active");
-    return 0;
-  }
-
-  tracker->active = 0;
-
-  GCSize hidden = g->gc.total - tracker->saved_total;
-
-  // Tag root list objects, we've co-opted FIXED as essentially a 'LJE' tag.
-  {
-    GCobj *o = gcref(g->gc.root);
-    while (o != NULL && o != tracker->root_sentinel) {
-      o->gch.marked |= LJ_GC_FIXED;
-      o = gcref(o->gch.nextgc);
-    }
-  }
-
-  // Tag userdata list objects
-  {
-    GCobj *o = gcref(mainthread(g)->nextgc);
-    while (o != NULL && o != tracker->ud_sentinel) {
-      o->gch.marked |= LJ_GC_FIXED;
-      o = gcref(o->gch.nextgc);
-    }
-  }
-
-  g->gc.total = tracker->saved_total;
-  g->gc.threshold = tracker->saved_threshold;
-
-  // Apply pressure to the GC to make up for the fact we hid it.
-  // This isn't directly visible to Lua (prying anticheat scripts),
-  // and makes it appear normal.
-  if (g->gc.threshold > hidden)
-    g->gc.threshold = tracker->saved_threshold - hidden;
-  else
-    g->gc.threshold = 0;  // Force immediate GC
-
-  return 0;
-}
-
 static int lje_create_table(lua_State* L)
 {
   int narr = luaL_optinteger(L, 1, 0);
@@ -894,8 +816,6 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("get_total", lje_get_gc_total);
     LJE_SET_FUNC("set_total", lje_set_gc_total);
     LJE_SET_FUNC("run_full_gc", lje_run_full_gc);
-    LJE_SET_FUNC("begin_track", lje_gc_begin_track);
-    LJE_SET_FUNC("end_track", lje_gc_end_track);
   LJE_END_SECTION("gc");
 
   /* vm: virtual machine manipulation */

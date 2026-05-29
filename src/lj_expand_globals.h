@@ -25,16 +25,6 @@ typedef struct LJEMetatableRemap
     GCtab* replacement;
 } LJEMetatableRemap;
 
-typedef struct LJEGCTracker
-{
-    GCobj *root_sentinel;
-    GCobj *ud_sentinel;
-    GCSize saved_total;
-    GCSize saved_threshold;
-    MSize saved_sbuf_sz;
-    int active;
-} LJEGCTracker;
-
 /* LJE: This is our own global state, sysmalloc'd without any
  * interference with LuaJIT's own global_State. This is because
  * it has very *very* specific and precise allocation to facilitate JITed
@@ -78,9 +68,6 @@ typedef struct LJEGlobalState
     /* Loaded binary modules */
     LJEBinaryModule* loaded_binary_modules;
     size_t loaded_binary_module_count;
-    /* GC */
-    GCSize gc_compensation;
-    LJEGCTracker gc_tracker;
     /* Timing attacks */
     double clock_deficit;
     /* Isolated state */

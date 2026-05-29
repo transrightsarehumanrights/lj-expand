@@ -24,7 +24,6 @@
 #include "lj_ctype.h"
 #include "lj_cdata.h"
 #endif
-#include "lj_expand_globals.h"
 #include "lj_trace.h"
 #include "lj_vm.h"
 
@@ -406,15 +405,7 @@ GCRef *gc_sweep(global_State *g, GCRef *p, uint32_t lim)
       setgcrefr(*p, o->gch.nextgc);
       if (o == gcref(g->gc.root))
 	setgcrefr(g->gc.root, o->gch.nextgc);  /* Adjust list anchor. */
-      if (o->gch.marked & LJ_GC_FIXED) /* LJE: This is a hidden LJE object. Have it get freed, but its total was never accounted for. */
-      {
-        GCSize before = g->gc.total;
-        gc_freefunc[o->gch.gct - ~LJ_TSTR](g, o);
-        g->gc.total = before;
-      } else
-      {
-        gc_freefunc[o->gch.gct - ~LJ_TSTR](g, o);
-      }
+      gc_freefunc[o->gch.gct - ~LJ_TSTR](g, o);
     }
   }
   return p;
@@ -649,11 +640,6 @@ size_t gc_onestep(lua_State *L)
     lua_assert(old >= g->gc.total);
     g->gc.estimate -= old - g->gc.total;
     if (gcref(*mref(g->gc.sweep, GCRef)) == NULL) {
-      /* LJE: Compensate any over-fixed strings. */
-      if (LJEG()->gc_compensation && LJEG()->main_state == L) {
-        g->gc.total -= LJEG()->gc_compensation;
-        LJEG()->gc_compensation = 0;
-      }
       if (g->strnum <= (g->strmask >> 2) && g->strmask > LJ_MIN_STRTAB*2-1)
 	lj_str_resize(L, g->strmask >> 1);  /* Shrink string table. */
       if (gcref(g->gc.mmudata)) {  /* Need any finalizations? */
