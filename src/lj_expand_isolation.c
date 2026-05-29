@@ -7,6 +7,7 @@
 
 #include <windows.h>
 
+#include "lj_dispatch.h"
 #include "lj_func.h"
 #include "lj_gc.h"
 #include "lj_str.h"
@@ -50,6 +51,8 @@ lua_State* lje_create_isolated_state() {
     LJEG()->isolated_state = L;
     gmod_openlibs(L); // Open standard libraries (using GMod's openlibs, since this is a GMod-shaped state)
     lje_addfuncs(L);  // Add LJE-specific functions to the isolated state
+    // Open dispatch table with our stuff, however.
+    lj_dispatch_init((GG_State*)L);
 
     printf("[LJE] Created isolated Lua state: %p\n", (void*)L);
     return L;
