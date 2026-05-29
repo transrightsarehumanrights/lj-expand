@@ -254,29 +254,6 @@ int lje_run_full_gc(lua_State* L)
   return 0;
 }
 
-int lje_patch_bytecodes(lua_State* L)
-{
-  // Patch bytecodes for this state
-  GG_State* gg = L2GG(L);
-  lj_trace_flushall(L);
-
-  /* ISEQV/ISNEV are used for fast equality comparisons. This
-   * will break for spoofs, so we patch them to use
-   * our spoof-aware versions.
-   */
-  lje_patch_bytecode(gg, BC_ISEQV);
-  lje_patch_bytecode(gg, BC_ISNEV);
-  /* TGETS is used for metatable lookups. We need to
-   * patch this to our own version that blocks metatable
-   * lookups when LJE is involved and/or remaps are set.
-   */
-  lje_patch_bytecode(gg, BC_TGETS);
-  lje_patch_bytecode(gg, BC_CALLT);
-  lje_patch_bytecode(gg, BC_CALLMT);
-
-  return 0;
-}
-
 int lje_get_current_script(lua_State* L)
 {
   LJEScript* script = LJEG()->current_script;
@@ -820,7 +797,6 @@ void lje_addfuncs(lua_State* L) {
 
   /* vm: virtual machine manipulation */
   LJE_NEW_SECTION()
-    LJE_SET_FUNC("patch_bytecodes", lje_patch_bytecodes);
     LJE_SET_FUNC("set_engine_call_hook", lje_set_engine_call_hook);
     LJE_SET_FUNC("handle_engine_call", lje_handle_engine_call);
   LJE_END_SECTION("vm");

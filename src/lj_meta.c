@@ -178,21 +178,9 @@ static TValue *mmcall(lua_State *L, ASMFunction cont, cTValue *mo,
 
 /* -- C helpers for some instructions, called from assembler VM ----------- */
 
-static void* gmod_lj_cont_ra = NULL;
 /* Helper for TGET*. __index chain and metamethod. */
 cTValue *lj_meta_tget(lua_State *L, cTValue *o, cTValue *k)
 {
-  /* Check if we need to initialize gmod_lj_cont_ra */
-  if (!gmod_lj_cont_ra)
-  {
-    /* 0f b6 4e fd 48 8b 28 48 89 2c ca 8b 06 0f b6 cc 0f b6 e8 48 83 c6 04 */
-    lje_Module* mod = lje_module_find("lua_shared.dll");
-    if (mod)
-    {
-      gmod_lj_cont_ra = lje_module_scan(mod, "0f b6 4e fd 48 8b 28 48 89 2c ca 8b 06 0f b6 cc 0f b6 e8 48 83 c6 04");
-    }
-  }
-
   int loop;
   for (loop = 0; loop < LJ_MAX_IDXCHAIN; loop++) {
     cTValue *mo;
@@ -232,7 +220,7 @@ cTValue *lj_meta_tget(lua_State *L, cTValue *o, cTValue *k)
        * So any patched function that makes a continuation frame MUST use GMod's lj_cont_* function, not LJE's, or it will
        * crash very randomly in any place that does metamethod lookups.
        */
-      L->top = mmcall(L, (ASMFunction)gmod_lj_cont_ra, mo, o, k);
+      L->top = mmcall(L, lj_cont_ra, mo, o, k);
       return NULL;  /* Trigger metamethod call. */
     }
     o = mo;
