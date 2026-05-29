@@ -649,29 +649,13 @@ char lje_find_pcall(lua_State* L)
 LJ_NOINLINE void lj_err_run(lua_State *L)
 {
   ptrdiff_t ef = finderrfunc(L);
-  char lje_detour_found = 0;
 
   /* LJE: Block any errors surfacing from LJE code. */
   if (lje_frame_is_lje_involved(L, 0, 2)) /* Only considered involved if it is within 2 frames of the error point */
   {
-    /* LJE: Check if caller is a detour (is_special) frame. If so, yeah we want to forward this error so that it can be handled by the detour's caller.
-     * Otherwise, it becomes a noticeable detection point since anything calling a detour that causes an error will simply not see it, even if it should.
-     */
-    cTValue* current_frame = L->base-1;
-    cTValue* caller_frame = frame_prev(current_frame);
-    GCfunc* caller_func = frame_func(caller_frame);
-    if (isluafunc(caller_func))
-    {
-      LJEfunc* fn = funcextend(caller_func);
-      if (fn->is_special)
-      {
-        lje_detour_found = 1;
-      }
-    }
-
     /* LJE: However, we need to ensure that there is no LJE pcall expecting to handle it. */
     char lje_pcall_found = lje_find_pcall(L);
-    if (!lje_pcall_found && !lje_detour_found)
+    if (!lje_pcall_found)
     {
         cTValue* potential_error_msg = L->top - 1;
       if (tvisstr(potential_error_msg))

@@ -7,16 +7,6 @@
 #include "lj_expand_script_watcher.h"
 #include "lj_expand_binary_module.h"
 
-/* LJE: Fast linked list to hold spoofed functions. Useful for doing a fast lookup of either
- * spoof to target or target to spoof.
- */
-typedef struct LJESpoofRecord
-{
-   GCfunc* spoof; // e.g: lua function pretending to be target
-    GCfunc* target; // e.g: original function being spoofed, can be C function or lua function
-   struct LJESpoofRecord* next;
-} LJESpoofRecord;
-
 typedef struct LJERandomState
 {
     /* LJE: It's easier copying the PRNG struct then having to expose it publicly. */
@@ -63,7 +53,6 @@ typedef struct LJEGlobalState
     int waiting_for_init_call;
     int waiting_for_startup_call;
     int original_gc;
-    LJESpoofRecord spoof_record_root;
     LJEScript* loaded_scripts;
     size_t loaded_script_count;
     LJEScript** script_load_order;
@@ -103,11 +92,6 @@ typedef struct LJEGlobalState
 LJEGlobalState* lje_get_global_state();
 
 void lje_clear_global_refs();
-void lje_insert_spoof_record(GCfunc* spoof, GCfunc* target);
-GCfunc* lje_find_spoof_by_target(GCfunc* target);
-void lje_remove_spoof_record_by_spoof(GCfunc* spoof);
-void lje_remove_spoof_record_by_target(GCfunc* target);
-void lje_clear_spoof_records();
 char* lje_concat_path(const char* relative_path);
 
 /* LJE: No-ops if environment is not set. */

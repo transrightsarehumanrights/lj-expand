@@ -47,20 +47,6 @@ Node *hashkey(const GCtab *t, cTValue *key)
     return hashmask(t, boolV(key));
   else
   {
-    /* LJE: Check for spoofed functions */
-    if (tvisfunc(key))
-    {
-      GCfunc* fn = funcV(key);
-      if (isluafunc(fn) && funcspoof(fn))
-      {
-        // Our spoofs dont contain type tag information like usual TValues do. So we'll do that with a fake TValue.
-        TValue spoofed_ref;
-        setgcVraw(&spoofed_ref, (GCobj*)funcspoof(fn), LJ_TFUNC);
-
-        return hashgcref(t, spoofed_ref.gcr);
-      }
-    }
-
     return hashgcref(t, key->gcr);
   }
   /* Only hash 32 bits of lightuserdata on a 64 bit CPU. Good enough? */

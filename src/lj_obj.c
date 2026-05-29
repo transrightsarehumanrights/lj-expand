@@ -26,27 +26,7 @@ int LJ_FASTCALL lj_obj_equal(cTValue *o1, cTValue *o2)
     if (tvispri(o1))
       return 1;
     if (!tvisnum(o1))
-    {
-      GCRef gcrO1 = o1->gcr;
-      GCRef gcrO2 = o2->gcr;
-
-      if (tvisspoofedfunc(o1))
-      {
-        gcrO1 = funcextend(funcV(o1))->spoof;
-        gcrO1.gcptr64 = (uintptr_t)gcrO1.gcptr64 & LJ_GCVMASK;
-        gcrO2.gcptr64 = (uintptr_t)gcrO2.gcptr64 & LJ_GCVMASK;
-        /* LJE: Strange issue here, but since these GCRs are unions, the type tag might be used on the TValue, so we need to clear it all out first. */
-      }
-
-      if (tvisspoofedfunc(o2))
-      {
-        gcrO2 = funcextend(funcV(o2))->spoof;
-        gcrO2.gcptr64 = (uintptr_t)gcrO2.gcptr64 & LJ_GCVMASK;
-        gcrO1.gcptr64 = (uintptr_t)gcrO1.gcptr64 & LJ_GCVMASK;
-      }
-
-      return gcrefeq(gcrO1, gcrO2);
-    }
+      return gcrefeq(o1->gcr, o2->gcr);
   } else if (!tvisnumber(o1) || !tvisnumber(o2)) {
     return 0;
   }
@@ -56,44 +36,15 @@ int LJ_FASTCALL lj_obj_equal(cTValue *o1, cTValue *o2)
 /* Return pointer to object or its object data. */
 const void * LJ_FASTCALL lj_obj_ptr(cTValue *o)
 {
-  void* result = NULL;
   if (tvisudata(o))
-    result = uddata(udataV(o));
+    return uddata(udataV(o));
   else if (tvislightud(o))
-    result = lightudV(o);
+    return lightudV(o);
   else if (LJ_HASFFI && tviscdata(o))
-    result = cdataptr(cdataV(o));
+    return cdataptr(cdataV(o));
   else if (tvisgcv(o))
-    /* LJE: Check if a spoofed lua function. If so, return the spoofed target pointer */
-      if (tvisfunc(o))
-      {
-        GCfunc* fn = funcV(o);
-        if (isluafunc(fn))
-        {
-          LJEfunc* ljeFn = funcextend(fn);
-          GCfunc* target = gcrefp(ljeFn->spoof, GCfunc);
-          if (target != NULL)
-          {
-            result = (void*)target;
-          }
-          else
-          {
-            result = gcV(o);
-          }
-        } else
-        {
-          // a C function, just return normally
-          result = gcV(o);
-        }
-      } else
-      {
-        result = gcV(o);
-      }
+    return gcV(o);
   else
     return NULL;
-
-  /* LJE: Stupid change by GMod. We need to OR the pointer with a mask to avoid noticeable differences */
-  void* maskedResult = (void*)((uintptr_t)result | GMOD_PTR_MASK);
-  return maskedResult;
 }
 

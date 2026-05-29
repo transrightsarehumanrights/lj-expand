@@ -260,13 +260,6 @@ const char *lj_debug_uvnamev(cTValue *o, uint32_t idx, TValue **tvp)
   if (tvisfunc(o)) {
     GCfunc *fn = funcV(o);
     if (isluafunc(fn)) {
-        /* LJE: Use spoofed function, if it exists */
-        LJEfunc* ljeFn = funcextend(fn);
-        if (gcref(ljeFn->spoof) != NULL)
-        {
-            fn = gcrefp(ljeFn->spoof, GCfunc);
-        }
-        
       GCproto *pt = funcproto(fn);
       if (idx < pt->sizeuv) {
 	*tvp = uvval(&gcref(fn->l.uvptr[idx])->uv);
@@ -336,56 +329,9 @@ const char *lj_debug_funcname(lua_State *L, cTValue *frame, const char **name)
     return NULL;
   if (frame_isvarg(frame))
     frame = frame_prevd(frame);
-/* LJE: Hooks can run within the real frame of a detour. This frame is *usually* inaccessible to
- * most scripts because it is marked special and exits immediately. Not with debug.sethook, however.
- * We disable/enable the hooks, which results in a proper sethook trace but the frame is still there,
- * messing up the stack trace and function name resolution. So, we skip it here if we are in a hook context.
- */
-GCfunc* possibleFn = frame_func(frame);
-GCfunc* prevFn = frame_func(frame_prev(frame));
-if (isluafunc(prevFn) && funcspoof(prevFn) && possibleFn->c.ffid == ERROR_FFID)
-{
-    /* LJE: Cause of how error never returns and calls out to the error handler, last frame is always the actual error call
-     * which is not ideal since it wont resolve the call site properly. So we skip it.
-     */
-    frame = frame_prev(frame);
-    possibleFn = frame_func(frame);
-}
 
-GCfunc* spoof = lje_find_spoof_by_target(possibleFn);
-if (spoof)
-{
-    /* LJE: Spoofed function. We need to adjust the frame to point to the original function's frame,
-     * that way LuaJIT can properly resolve stack-based debug information like name and namewhat.
-     *
-     * We go back twice if there is a tailcall-inherited frame link chain detected. Otherwise (normal detours) we
-     * simply go back once.
-     */
-    cTValue* originalFrame = frame;
-    if (frame_func(frame) == frame_func(frame_prev(frame)))
-    {
-        // Go back one more frame. Likely a tailcall situation.
-        // Otherwise, only one will suffice (normal detour call)
-        frame = frame_prev(frame);
-        frame = frame_prev(frame);
-    }
-
-    if (!frame_islua(frame))
-    {
-        // This is not right, just restore the original frame
-        frame = originalFrame;
-    }
-}
   pframe = frame_prev(frame);
   fn = frame_func(pframe);
-/* LJE: Handle spoofed functions, only if we're not in a hook. Hooks have a special frame context and need namewhat to resolve properly */
-if (isluafunc(fn) && LJEG()->in_hook == 0) {
-    LJEfunc* ljeFn = funcextend(fn);
-    if (gcref(ljeFn->spoof) != NULL)
-    {
-        fn = gcrefp(ljeFn->spoof, GCfunc);
-    }
-}
   pc = debug_framepc(L, fn, frame);
   if (pc != NO_BCPOS) {
     GCproto *pt = funcproto(fn);
@@ -536,16 +482,6 @@ int lj_debug_getinfo(lua_State *L, const char *what, lj_Debug *ar, int ext)
     fn = frame_func(frame);
     lua_assert(fn->c.gct == ~LJ_TFUNC);
   }
-
-if (isluafunc(fn))
-{
-    /* LJE: Check if spoofed, if so, use their spoofed function for this. */
-    LJEfunc* ljeFunc = funcextend(fn);
-    if (gcref(ljeFunc->spoof) != NULL)
-    {
-        fn = gcrefp(ljeFunc->spoof, GCfunc);
-    }
-}
 
   for (; *what; what++) {
     if (*what == 'S') {
@@ -788,8 +724,7 @@ LUALIB_API void luaL_traceback (lua_State *L, lua_State *L1, const char *msg,
       if (*ar.what == 'm') {
 	lua_pushliteral(L, " in main chunk");
       } else if (*ar.what == 'C') {
-          /* LJE: GMod masks C function addresses */
-	lua_pushfstring(L, " at %p", (void*)((uintptr_t)fn->c.f | GMOD_PTR_MASK));
+	lua_pushfstring(L, " at %p", (void*)fn->c.f);
       } else {
 	lua_pushfstring(L, " in function <%s:%d>",
 			ar.short_src, ar.linedefined);

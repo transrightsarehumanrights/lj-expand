@@ -195,12 +195,6 @@ static TRef getcurrf(jit_State *J)
 */
 int lj_record_objcmp(jit_State *J, TRef a, TRef b, cTValue *av, cTValue *bv)
 {
-  /* LJE: Force trace abort if we are comparing functions.
-   * This is to avoid any attacks that bypass our spoof equality.
-   */
-  if (tref_isfunc(a) || tref_isfunc(b))
-    lj_trace_err(J, LJ_TRERR_NYIBC);
-
   int diff = !lj_obj_equal(av, bv);
   if (!tref_isk2(a, b)) {  /* Shortcut, also handles primitives. */
     IRType ta = tref_isinteger(a) ? IRT_INT : tref_type(a);

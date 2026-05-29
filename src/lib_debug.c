@@ -54,14 +54,6 @@ LJLIB_CF(debug_setmetatable)
 LJLIB_CF(debug_getfenv)
 {
   lj_lib_checkany(L, 1);
-  /* LJE: Check for spoofed functions, although this takes an indirect reference, so we must overwrite the TV. */
-  if (tvisfunc(L->base))
-  {
-    GCfunc* fn = funcV(L->base);
-    use_spoofed_func(fn);
-    setfuncV(L, L->base, fn);
-  }
-
   lua_getfenv(L, 1);
   return 1;
 }
@@ -69,14 +61,6 @@ LJLIB_CF(debug_getfenv)
 LJLIB_CF(debug_setfenv)
 {
   lj_lib_checktab(L, 2);
-  /* LJE: Check for spoofed functions like getfenv. */
-  if (tvisfunc(L->base))
-  {
-    GCfunc* fn = funcV(L->base);
-    use_spoofed_func(fn);
-    setfuncV(L, L->base, fn);
-  }
-
   L->top = L->base+2;
   if (!lua_setfenv(L, 1))
     lj_err_caller(L, LJ_ERR_SETFENV);
@@ -173,26 +157,7 @@ LJLIB_CF(debug_getinfo)
   }
   if (opt_L) treatstackoption(L, L1, "activelines");
   if (opt_f)
-  {
-    /* LJE: Bit of a niche issue here, so
-     * when debug.sethook is used on a Lua based detour,
-     * it can sometimes find the *real* spoofed function we are
-     * trying to avoid being leaked. The only way to grab it
-     * is through this function, so before we copy it into the
-     * table, we run a full GC (slightly expensive) check to see
-     * if this function is being spoofed by any other function.
-     */
-    GCfunc* fn = funcV(L->top-2);
-    GCfunc* spoof = lje_find_spoof_by_target(fn);
-    if (spoof)
-    {
-      /* LJE: Replace function with spoofed version. */
-      printf("[LJE]: debug.getinfo returned real function for %p, replacing with spoofed %p\n", fn, spoof);
-      setfuncV(L, L->top-2, spoof);
-    }
-
     treatstackoption(L, L1, "func");
-  }
   return 1;  /* Return result table. */
 }
 
@@ -204,18 +169,6 @@ LJLIB_CF(debug_getlocal)
   const char *name;
   int slot = lj_lib_checkint(L, arg+2);
   if (tvisfunc(L->base+arg)) {
-    /* LJE: Quick hack to support getting locals from direct references of spoofed functions */
-    /* This is bad, I know, but somehow simpler than having to delve into the internals of lj_debug_uv* functions */
-    GCfunc* fn = funcV(L->base+arg);
-    if (isluafunc(fn))
-    {
-      LJEfunc* ljeFn = funcextend(fn);
-      if (gcref(ljeFn->spoof) != NULL)
-      {
-        setfuncV(L, L->base+arg, gcrefp(ljeFn->spoof, GCfunc));
-      }
-    }
-
     L->top = L->base+arg+1;
     lua_pushstring(L, lua_getlocal(L, NULL, slot));
     return 1;

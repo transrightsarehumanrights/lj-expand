@@ -455,12 +455,6 @@ typedef union GCfunc {
   GCfuncL l;
 } GCfunc;
 
-typedef struct LJEfunc
-{
-  uint8_t is_special;
-  GCRef spoof;
-} LJEfunc;
-
 typedef struct LJEproto
 {
   uint8_t is_from_lje;
@@ -477,18 +471,6 @@ typedef struct LJEproto
   (isluafunc(fn) && ((protoextend(funcproto(fn)))->is_from_lje))
 #define funcproto(fn) \
   check_exp(isluafunc(fn), (GCproto *)(mref((fn)->l.pc, char)-sizeof(GCproto)))
-#define funcextend(fn) \
-  check_exp(isluafunc(fn), \
-      (LJEfunc *)((char *)(fn) + sizeLfunc((MSize)(fn)->l.nupvalues)))
-#define funcextendc(fn) \
-  check_exp(iscfunc(fn), \
-      (LJEfunc *)((char *)(fn) + sizeCfunc((MSize)(fn)->c.nupvalues)))
-#define funcspoof(fn) \
-  check_exp(isluafunc(fn), gcrefp(funcextend(fn)->spoof, GCfunc))
-#define use_spoofed_func(fn) \
-  if (isluafunc(fn) && funcspoof(fn)) { \
-      fn = funcspoof(fn); \
-  }
 
 #define sizeCfunc(n)	(sizeof(GCfuncC)-sizeof(TValue)+sizeof(TValue)*(n))
 #define sizeLfunc(n)	((sizeof(GCfuncL)-sizeof(GCRef)+sizeof(GCRef)*(n)))
@@ -796,8 +778,6 @@ typedef union GCobj {
 #define tvispri(o)	(itype(o) >= LJ_TISPRI)
 #define tvistabud(o)	(itype(o) <= LJ_TISTABUD)  /* && !tvisnum() */
 #define tvisgcv(o)	((itype(o) - LJ_TISGCV) > (LJ_TNUMX - LJ_TISGCV))
-#define tvisspoofedfunc(o) \
-  (tvisfunc(o) && isluafunc(funcV(o)) && funcspoof(funcV(o)) != NULL)
 
 /* Special macros to test numbers for NaN, +0, -0, +1 and raw equality. */
 #define tvisnan(o)	((o)->n != (o)->n)
@@ -1007,8 +987,6 @@ LJ_DATA const char *const lj_obj_typename[1+LUA_TCDATA+1];
 LJ_DATA const char *const lj_obj_itypename[~LJ_TNUMX+1];
 
 #define lj_typename(o)	(lj_obj_itypename[itypemap(o)])
-#define GMOD_PTR_MASK 0x8088082280880822ULL
-
 /* Compare two objects without calling metamethods. */
 LJ_FUNC int LJ_FASTCALL lj_obj_equal(cTValue *o1, cTValue *o2);
 LJ_FUNC const void * LJ_FASTCALL lj_obj_ptr(cTValue *o);

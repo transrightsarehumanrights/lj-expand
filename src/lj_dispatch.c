@@ -370,27 +370,10 @@ void callhook(lua_State *L, int event, BCLine line)
   GCfunc* fn = curr_func(L);
   if (isluafunc(fn))
   {
-    LJEfunc* ljeFn = funcextend(fn);
     LJEproto* ljePt = protoextend(funcproto(fn));
-    if (ljeFn->is_special || ljePt->is_from_lje)
+    if (ljePt->is_from_lje)
     {
       return; // Don't let anyone hook into special functions, or anything from LJE for that matter.
-    }
-  }
-
-  if (iscfunc(fn))
-  {
-    // Make sure none of our metahook functions get exposed
-    lua_CFunction cfunc = fn->c.f;
-    if (cfunc == lje_enable_hooks || cfunc == lje_disable_hooks || lje_is_addr_in_lje(cfunc))
-    {
-      return;
-    }
-
-    // Also don't run if this is a LJE-created C-closure
-    if (funcextendc(fn)->is_special)
-    {
-      return;
     }
   }
 

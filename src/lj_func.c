@@ -17,7 +17,6 @@
 #include "lj_expand_frame.h"
 
 #include "lj_expand_globals.h"
-#include "lj_expand_startup.h"
 #include "lj_tab.h"
 #include "lj_str.h"
 #include "stdio.h"
@@ -114,9 +113,7 @@ void LJ_FASTCALL lj_func_freeuv(global_State *g, GCupval *uv)
 
 GCfunc *lj_func_newC(lua_State *L, MSize nelems, GCtab *env)
 {
-  GCfunc *fn = (GCfunc *)lj_mem_newgco(L, sizeCfunc(nelems) + sizeof(LJEfunc));
-  /* LJE: Reduce reported memory usage for functions to avoid detection */
-  G(L)->gc.total -= sizeof(LJEfunc);
+  GCfunc *fn = (GCfunc *)lj_mem_newgco(L, sizeCfunc(nelems));
 
   fn->c.gct = ~LJ_TFUNC;
   fn->c.ffid = FF_C;
@@ -125,18 +122,13 @@ GCfunc *lj_func_newC(lua_State *L, MSize nelems, GCtab *env)
   setmref(fn->c.pc, &G(L)->bc_cfunc_ext);
   setgcref(fn->c.env, obj2gco(env));
 
-  LJEfunc* ljeFn = (LJEfunc*)((char*)fn + sizeCfunc(nelems));
-  memset(ljeFn, 0, sizeof(LJEfunc));
-
   return fn;
 }
 
 static GCfunc *func_newL(lua_State *L, GCproto *pt, GCtab *env)
 {
   uint32_t count;
-  GCfunc *fn = (GCfunc *)lj_mem_newgco(L, sizeLfunc((MSize)pt->sizeuv) + sizeof(LJEfunc));
-  /* LJE: Reduce reported memory usage for functions to avoid detection */
-  G(L)->gc.total -= sizeof(LJEfunc);
+  GCfunc *fn = (GCfunc *)lj_mem_newgco(L, sizeLfunc((MSize)pt->sizeuv));
 
   fn->l.gct = ~LJ_TFUNC;
   fn->l.ffid = FF_LUA;
@@ -147,9 +139,6 @@ static GCfunc *func_newL(lua_State *L, GCproto *pt, GCtab *env)
   /* Saturating 3 bit counter (0..7) for created closures. */
   count = (uint32_t)pt->flags + PROTO_CLCOUNT;
   pt->flags = (uint8_t)(count - ((count >> PROTO_CLC_BITS) & PROTO_CLCOUNT));
-
-  LJEfunc* ljeFn = (LJEfunc*)((char*)fn + sizeLfunc((MSize)pt->sizeuv));
-  memset(ljeFn, 0, sizeof(LJEfunc));
 
   return fn;
 }
@@ -243,16 +232,6 @@ void LJ_FASTCALL lj_func_free(global_State *g, GCfunc *fn)
 {
   MSize size = isluafunc(fn) ? sizeLfunc((MSize)fn->l.nupvalues) :
 			       sizeCfunc((MSize)fn->c.nupvalues);
-  size += sizeof(LJEfunc);
-
-  /* LJE: Remove spoof record. */
-  if (isluafunc(fn) && funcspoof(fn))
-  {
-    lje_remove_spoof_record_by_spoof(fn);
-  }
-
   lj_mem_free(g, fn, size);
-  // Add back LJEfunc size since we subtracted it earlier, we just want to make sure it frees the whole alloc.
-  g->gc.total += sizeof(LJEfunc);
 }
 
