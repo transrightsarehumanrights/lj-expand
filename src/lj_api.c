@@ -43,7 +43,6 @@
 #include "lj_ffrecord.h"
 #include "stdio.h"
 #include "lj_buf.h"
-#include "lj_expand_clock.h"
 #include "lj_expand_cmd.h"
 #include "lj_expand_crash_handler.h"
 #include "lj_expand_dirs.h"
@@ -1294,33 +1293,6 @@ static void lje_dump_stack(lua_State* L)
   printf("^ = L->top\n");
 }
 
-static inline double lje_spinwait_deficit(double clock_deficit)
-{
-  // We'll spinwait 40% of deficit time. Usually deficits are in the 0.1-0.5ms range.
-  double spinwait_time = clock_deficit * 0.5;
-  if (clock_deficit < 0.0005)
-  {
-    // Try and do all of it if it's less than half a millisecond.
-    spinwait_time = clock_deficit;
-  }
-  // And we also use QPC to accurately pull off the spinwait, to minimize overshooting.
-
-  uint64_t start, now;
-  start = lje_clock_get_ticks();
-
-  double target_ticks = lje_clock_seconds_to_ticks(spinwait_time);
-
-  while (1) {
-    now = lje_clock_get_ticks();
-    if ((double)(now - start) >= target_ticks)
-      break;
-  }
-
-  // Return actual time spent so caller can subtract from deficit
-  now = lje_clock_get_ticks();
-  return lje_clock_ticks_to_seconds((double)(now - start));
-}
-
 /* LJE: lua_pcall is essentially the Lua entrypoint for the entire game.
  * We've co-opted it to perform a lot of orthogonal tasks related to LJE,
  * like initializing our functions, running preinit scripts, handling engine calls,
@@ -1329,19 +1301,6 @@ static inline double lje_spinwait_deficit(double clock_deficit)
 LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 {
   lje_redirect_state(L);
-
-  // Apply micro-sleeping to work off that clock deficit.
-  if (LJEG()->clock_deficit > 0.0)
-  {
-    // Of course, it's always possible to just get rid of it all at once.
-    // This is not ideal because it creates a *noticeable* hitch and jump in clock time.
-    double spinwait_time = lje_spinwait_deficit(LJEG()->clock_deficit);
-    LJEG()->clock_deficit -= spinwait_time;
-  } else
-  {
-    // Ensure it's never negative, just in case of weird timing issues.
-    LJEG()->clock_deficit = 0.0;
-  }
 
   if (tvisfunc(L->base) && LJEG()->waiting_for_init_call)
   {
@@ -1481,66 +1440,6 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
           LJEG()->using_error_reporter = 0;
           lje_proxy_release_all();
           lj_gc_step(I);
-        }
-        else if (script->extra->engine_call_hook_ref_id != LUA_NOREF) /* Whichever scripts returns false first, we allow them to handle it. */
-        {
-          /* Since each script needs a try at handling the engine call, we'll save the stack up to the real function,
-           * to preserve it for each script's hook.
-           */
-
-          TValue saved_stack[32] = {0}; // Arbitrary limit of 32 values for now.
-          cTValue* save_base = L->top-1-nargs;
-          size_t save_base_index = save_base - L->base;
-          size_t stack_size = nargs + 1; // +1 since we need to also save the function being called
-          int original_nargs = nargs;
-
-          memcpy(saved_stack, save_base, sizeof(TValue) * (stack_size < 32 ? stack_size : 32));
-
-          int func_index = lua_gettop(L) - nargs; // index of real function
-          lua_pushvalue(L, func_index); // push a copy of it
-          lua_rawgeti(L, LUA_REGISTRYINDEX, script->extra->engine_call_hook_ref_id); // get the hook
-          lua_replace(L, func_index); // replace real func with hook
-          lua_insert(L, func_index + 1); // move real func to be first arg (it remained on the top)
-          nargs += 1; // we added an argument
-          /* now add nargs and nresults */
-          lua_pushinteger(L, nargs - 1); /* -1 because the real func is now an arg */
-          lua_insert(L, func_index + 2); // move nargs to be second arg
-          lua_pushinteger(L, nresults);
-          lua_insert(L, func_index + 3); // move nresults to be third arg
-          nargs += 2; // we added two arguments
-
-          /* Stack is ready at this point. We need to resolve the errfunc now. */
-          ptrdiff_t ef = 0;
-          if (errfunc != 0)
-          {
-            cTValue *o = stkindex2adr(L, errfunc);
-            api_checkvalidindex(L, o);
-            ef = savestack(L, o);
-          }
-
-          /* fire it off! */
-          LJEG()->is_engine_call_handled = 0; /* hook will set this to 1 if handled, it's just faster and easier than having it return a value */
-          int status = lj_vm_pcall(L, api_call_base(L, nargs), nresults + 1, ef);
-
-          if (status != LUA_OK)
-          {
-            return status; /* propagate to caller */
-          }
-
-          if (LJEG()->is_engine_call_handled)
-          {
-            /* Script handled engine call, return now. */
-            return LUA_OK;
-          }
-
-          /* Restore stack for next script to try. If no script handles it, it'll pass through to the
-           * original lua_pcall below and get called properly.
-           */
-          save_base = L->base + save_base_index; /* recompute pointer in case of stack resize */
-          memcpy(save_base, saved_stack, sizeof(TValue) * (stack_size < 32 ? stack_size : 32));
-          L->top = save_base + stack_size;
-          // Since we're going back down to the original function, restore nargs.
-          nargs = original_nargs;
         }
       }
     }

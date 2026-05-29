@@ -55,8 +55,6 @@ static int resolve_original_functions(luaL_loadbufferx_t* out_loadbufferx, lua_p
 }
 
 void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
-    if (L != LJEG()->isolated_state)
-        LJEG()->main_state = L;
 
     LJEG()->current_script = script;
 
@@ -84,21 +82,6 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
         if (original_loadbufferx(L, script_file, strlen(script_file), chunkname, NULL) == 0)
         {
             LJEG()->flag_lje_protos = 0;
-            // Mark it as a special function first
-            GCfunc* func = funcV(L->top-1);
-            LJEfunc* ljeFn = funcextend(func); // guaranteed to exist since it's a Lua function
-            ljeFn->is_special = 1;
-
-            if (LJEG()->env_ref_id != LUA_NOREF && L != LJEG()->isolated_state)
-            {
-                // Set the environment if it exists
-                lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
-                lua_setfenv(L, -2);
-            } else
-            {
-                printf("[LJE WARNING] No custom environment set for script? Probably not intentional.\n");
-            }
-
             // Disable hooks during execution
             LJEG()->skip_hooks = 1;
             if (lua_pcall(L, 0, 0, 0) != 0) /* mental note: figure out why this seems to randomly not work? */
@@ -154,13 +137,6 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
     if (original_loadbufferx(L, buffer, strlen(buffer), chunkname, NULL) == 0)
     {
         LJEG()->flag_lje_protos = 0;
-        if (LJEG()->env_ref_id != LUA_NOREF && L != LJEG()->isolated_state)
-        {
-            // Set the environment if it exists
-            lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
-            lua_setfenv(L, -2);
-        }
-
         if (!execute)
         {
             // Just return the loaded function
@@ -191,8 +167,6 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
 
 void lje_startup_preinit(lua_State* L) {
     printf("[LJE] Running pre-initialization script...\n");
-    if (L != LJEG()->isolated_state)
-        LJEG()->main_state = L;
 
     luaL_loadbufferx_t original_loadbufferx = NULL;
     lua_pcall_t original_pcall = NULL;
@@ -275,11 +249,6 @@ int lje_startup_compile(lua_State* L, const char* source) {
     if (original_loadbufferx(L, source, strlen(source), "@lje_dynamic_compile", NULL) == 0)
     {
         LJEG()->flag_lje_protos = 0;
-        // Mark it as a special function first
-        GCfunc* func = funcV(L->top-1);
-        LJEfunc* ljeFn = funcextend(func); // guaranteed to exist since it's a Lua function
-        ljeFn->is_special = 1;
-
         return 1; // success, function is on top of stack
     }
     else
@@ -295,22 +264,6 @@ int lje_startup_compile(lua_State* L, const char* source) {
 LJ_FUNC void lje_startup_reload(lua_State* L, LJEScript* script)
 {
     printf("[LJE] Reloading script '%s'...\n", script->name);
-    if (L != LJEG()->isolated_state)
-    {
-        /* We need to clear its require cache before reloading. */
-        if (LJEG()->env_ref_id == LUA_NOREF)
-        {
-            printf("[LJE] No custom environment set for script? Probably not intentional. Can't reload.\n");
-            return;
-        }
-
-        lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
-        lua_getfield(L, -1, "lje");
-        lua_getfield(L, -1, "includeCache");
-        lua_pushnil(L);
-        lua_setfield(L, -2, script->name); // includeCache[script->name] = nil
-        lua_pop(L, 3); // Pop includeCache, lje, env
-    }
 
     lje_startup_execute(L, script, NULL);
 }
