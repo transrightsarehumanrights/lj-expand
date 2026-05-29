@@ -68,8 +68,6 @@ typedef struct LJEGlobalState
     /* Loaded binary modules */
     LJEBinaryModule* loaded_binary_modules;
     size_t loaded_binary_module_count;
-    /* Timing attacks */
-    double clock_deficit;
     /* Isolated state */
     lua_State* isolated_state;
     char redirect_to_isolation;
