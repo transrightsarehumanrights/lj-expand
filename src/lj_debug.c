@@ -31,18 +31,12 @@ cTValue *lj_debug_frame(lua_State *L, int level, int *size)
     if (frame_gc(frame) == obj2gco(L))
       level++;  /* Skip dummy frames. See lj_err_optype_call(). */
 
-    /* LJE: Alternate check if this frame is both lua and marked special, if so then it definitely needs to be skipped */
+    /* LJE: Skip frames from LJE-originated functions */
     if (isluafunc(frame_func(frame)) && !LJEG()->show_special_frames)
     {
-        LJEfunc* ljeFn = funcextend(frame_func(frame));
-        // TODO: Determine if we should also just skip LJE functions that are not marked special?
-        if (ljeFn->is_special)
+        LJEproto* pt = protoextend(funcproto(frame_func(frame)));
+        if (pt->is_from_lje)
         {
-            /* LJE: Only skip if the next frame is different, which implies an actual frame transition in the frame link chain.
-             * If we do not do this, we'll end up skipping tailcall-collapsed frames like a main chunk that only calls our special function.
-             *
-             * We also cannot simply just block consecutive special frame chains since legitimate detours may not be consecutive.
-             */
             if (frame_func(frame) != frame_func(nextframe))
             {
                 level++;

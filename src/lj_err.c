@@ -9,6 +9,7 @@
 #include "lj_obj.h"
 #include "lj_err.h"
 #include "lj_debug.h"
+#include "lauxlib.h"
 #include "lj_expand_frame.h"
 #include "lj_expand_globals.h"
 #include "lj_str.h"

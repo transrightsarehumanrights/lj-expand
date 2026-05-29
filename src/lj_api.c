@@ -1352,7 +1352,6 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     printf("[LJE] Created script watcher for startup scripts.\n");
 
     printf("[LJE] Starting up Lua...\n");
-    lje_clear_spoof_records();
     lje_save_random_state();
     LJEG()->using_error_reporter = 1;
     for (int i = 0; i < LJEG()->loaded_script_count; i++)

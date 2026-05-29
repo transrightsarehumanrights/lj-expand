@@ -40,7 +40,6 @@ int lje_set_push_string_callback(lua_State* L)
     lj_err_arg(L, 1, LJ_ERR_NOLFUNC);
   }
 
-  funcextend(callback)->is_special = 1;
   LJEG()->push_string_ref_id = luaL_ref(L, LUA_REGISTRYINDEX);
   return 0;
 }
@@ -313,7 +312,6 @@ int lje_set_script_hook_callback(lua_State* L)
     lj_err_arg(L, 1, LJ_ERR_NOLFUNC);
   }
 
-  funcextend(callback)->is_special = 1;
   LJEG()->script_hook_ref_id = luaL_ref(L, LUA_REGISTRYINDEX);
   return 0;
 }
@@ -407,7 +405,6 @@ int lje_set_engine_call_hook(lua_State* L)
     lj_err_arg(L, 1, LJ_ERR_NOLFUNC);
   }
 
-  funcextend(callback)->is_special = 1;
   current_script->extra->engine_call_hook_ref_id = luaL_ref(L, LUA_REGISTRYINDEX);
   return 0;
 }

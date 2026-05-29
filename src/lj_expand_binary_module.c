@@ -112,17 +112,7 @@ static int isnil(lua_State* L, int idx)
 
 static void mark_special(lua_State* L, int idx)
 {
-    cTValue* obj = stkindex2adr(L, idx);
-    if (tvisfunc(obj))
-    {
-        GCfunc* func = funcV(obj);
-        if (isluafunc(func))
-            funcextend(func)->is_special = 1;
-        else if (iscfunc(func))
-            funcextendc(func)->is_special = 1;
-        else
-            printf("[LJE] Warning: Tried to mark non-function as special!\n");
-    }
+    // Binary module functions are registered into the registry — no special marking needed.
 }
 
 static LjeLuaApi* create_lua_api()

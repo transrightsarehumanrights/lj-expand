@@ -164,7 +164,7 @@ static GCproto *check_Lproto(lua_State *L, int nolua)
     } else if (tvisfunc(o)) {
       if (isluafunc(funcV(o)))
       {
-        return funcproto(o);
+        return funcproto(funcV(o));
       }
 
       if (nolua)

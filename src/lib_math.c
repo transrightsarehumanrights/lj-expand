@@ -16,6 +16,7 @@
 #include "lj_lib.h"
 #include "lj_vm.h"
 #include "lj_expand_globals.h"
+#include "lj_expand_frame.h"
 
 /* ------------------------------------------------------------------------ */
 

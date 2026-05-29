@@ -55,7 +55,7 @@ int lje_frame_is_lje_involved(lua_State* L, int frame_offset, int max_level)
         // which indicates this is a special C-closure made by LJE and not anything else.
         if (iscfunc(fn))
         {
-            if (funcextendc(fn)->is_special)
+            if (lje_is_addr_in_lje((uintptr_t)fn->c.f))
             {
                 return 1;
             }
@@ -86,7 +86,7 @@ int lje_frame_is_lje(lua_State* L, int frame_offset)
 
     if (iscfunc(fn))
     {
-        if (funcextendc(fn)->is_special)
+        if (lje_is_addr_in_lje((uintptr_t)fn->c.f))
         {
             return 1;
         }
