@@ -1403,6 +1403,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
            * However, functions are passed as simple lightud pointers so scripts can do comparisons without
            * actually copying a full function object to the isolated state.
            */
+
           lua_State* I = LJEG()->isolated_state;
           lua_rawgeti(I, LUA_REGISTRYINDEX, script->extra->engine_call_hook_ref_id);
           // Push function as lightud
@@ -1425,6 +1426,28 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
             }
           }
 
+          // Run the pcall right here for the engine if the script has requested post engine call hooks, meaning
+          // this script wants to run their work *after* it was called.
+          int status = 0;
+          if (script->extra->engine_call_post)
+          {
+            ptrdiff_t ef = 0;
+            global_State *g = G(L);
+            uint8_t oldh = hook_save(g);
+            if (errfunc == 0)
+            {
+              ef = 0;
+            } else
+            {
+              cTValue *o = stkindex2adr(L, errfunc);
+              api_checkvalidindex(L, o);
+              ef = savestack(L, o);
+            }
+
+            status = lj_vm_pcall(L, api_call_base(L, nargs), nresults+1, ef);
+            if (status) hook_restore(g, oldh);
+          }
+
           LJEG()->is_engine_call_handled = 0; /* reset before call, hook will set to 1 if it handles the call. */
           LJEG()->using_error_reporter = 1;
           LJEG()->redirect_to_isolation = 0;
@@ -1437,11 +1460,21 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
             lua_pop(I, 1); // pop error message
             lje_proxy_release_all();
             lj_gc_step(I);
+
+            // If this script is a post engine call handler, an error means we cannot let the engine
+            // call fall through as it already has happened. Just skip entirely.
+            if (script->extra->engine_call_post)
+              return status; /* return the error status from the pcall, which will propagate the error up to the game. */
+
             continue;
           }
+
           LJEG()->using_error_reporter = 0;
           lje_proxy_release_all();
           lj_gc_step(I);
+
+          if (script->extra->engine_call_post)
+            return status; // The engine call already happened, so we must move on.
         }
       }
     }

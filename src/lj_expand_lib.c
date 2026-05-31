@@ -409,6 +409,19 @@ int lje_set_engine_call_hook(lua_State* L)
   return 0;
 }
 
+int lje_set_engine_call_hook_post(lua_State* L)
+{
+  int post = lua_toboolean(L, 1);
+  LJEScript* current_script = LJEG()->current_script;
+  if (!current_script)
+  {
+    lj_err_msg(L, LJ_ERR_LJE_NOSCRIPT);
+  }
+
+  current_script->extra->engine_call_post = post;
+  return 0;
+}
+
 int lje_handle_engine_call(lua_State* L) { LJEG()->is_engine_call_handled = 1; return 0; }
 
 int lje_compile_string(lua_State* L)
@@ -710,6 +723,7 @@ void lje_addfuncs(lua_State* L) {
   /* vm: virtual machine manipulation */
   LJE_NEW_SECTION()
     LJE_SET_FUNC("set_engine_call_hook", lje_set_engine_call_hook);
+    LJE_SET_FUNC("set_engine_call_hook_post", lje_set_engine_call_hook_post);
     LJE_SET_FUNC("handle_engine_call", lje_handle_engine_call);
   LJE_END_SECTION("vm");
 

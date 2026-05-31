@@ -41,6 +41,10 @@ typedef struct LJEScriptInfo
 typedef struct LJEScriptExtraInfo
 {
     int engine_call_hook_ref_id;
+    /* If script would like to receive engine calls *after* they have happened,
+     * i.e. 'post' hooks.
+     */
+    int engine_call_post;
 } LJEScriptExtraInfo;
 
 /* LJEScripts represent a folder containing Lua scripts to be loaded by LJE.
