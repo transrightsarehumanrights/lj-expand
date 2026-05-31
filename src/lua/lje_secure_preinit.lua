@@ -42,6 +42,11 @@ Angle = lje.secure.pull("Angle")
 Matrix = lje.secure.pull("Matrix")
 LocalPlayer = lje.secure.pull("LocalPlayer")
 Material = lje.secure.pull("Material")
+GetConVar_Internal = lje.secure.pull("GetConVar_Internal")
+SysTime = lje.secure.pull("SysTime")
+CurTime = lje.secure.pull("CurTime")
+RealTime = lje.secure.pull("RealTime")
+FrameTime = lje.secure.pull("FrameTime")
 
 -- Classes
 registry.Entity = lje.secure.pull("_R.Entity")
