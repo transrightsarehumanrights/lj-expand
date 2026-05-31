@@ -1309,11 +1309,6 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 
     printf("[LJE] Detected running of client Lua function for init.lua\n");
     LJEG()->original_gc = G(L)->gc.total;
-    GCobj *root_sentinel = gcref(G(L)->gc.root);
-    GCobj *ud_sentinel = gcref(mainthread(G(L))->nextgc);
-    GCSize saved_threshold = G(L)->gc.threshold;
-    GCSize saved_total = G(L)->gc.total;
-
 
     printf("[LJE] Added LJE functions to Lua state\n");
     lje_clear_global_refs();
@@ -1322,6 +1317,14 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 
     // Determine if any secure scripts need to run.
     // They only support `main.lua`, which is at preinit, the most secure stage of the clientstate.
+
+    // Run binary modules
+    for (int i = 0; i < LJEG()->loaded_binary_module_count; i++)
+    {
+      LJEBinaryModule* mod = &LJEG()->loaded_binary_modules[i];
+      printf("[LJE] Loading binary module %s into isolated state...\n", mod->name);
+      lje_binary_module_run_preinit(mod, LJEG()->isolated_state);
+    }
 
     lje_startup_secure_preinit(LJEG()->isolated_state);
     for (int i = 0; i < LJEG()->loaded_script_count; i++)
