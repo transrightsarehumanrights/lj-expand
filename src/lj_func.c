@@ -168,12 +168,9 @@ GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
   if (is_init_lua(proto_chunknamestr(pt)) && !lje_frame_is_lua_involved(L, 0))
   {
     GCtab* globalEnv = tabref(L->env);
-    cTValue* clientBool = lj_tab_getstr(globalEnv, lj_str_newlit(L, "CLIENT"));
+    cTValue* clientBool = lj_tab_getstr_lit(globalEnv, "CLIENT"); // Doesn't create any GC size
     if (clientBool && tvistrue(clientBool))
     {
-      // Keep track of original GC total. CLIENT is seven bytes
-      LJEG()->original_gc = G(L)->gc.total - (7 + sizeof(GCstr));
-
       printf("[LJE] Pre-initializing Lua...\n");
       LJEG()->waiting_for_init_call = 1;
     }
