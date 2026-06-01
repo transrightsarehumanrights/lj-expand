@@ -719,19 +719,6 @@ LUA_API void lua_pushstring(lua_State *L, const char *str)
     setstrV(L, L->top, s);
   }
   incr_top(L);
-
-  /* LJE: Run callback, if it exists, with the pushed string */
-  if (LJEG()->push_string_ref_id != LUA_NOREF && L == LJEG()->main_state)
-  {
-    lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->push_string_ref_id);
-    lua_pushvalue(L, -2); // Push the string
-    if (lua_pcall(L, 1, 0, 0) != LUA_OK)
-    {
-      const char* err = lua_tostring(L, -1);
-      printf("[LJE ERROR] Error in lua_pushstring callback: %s\n", err);
-      lua_pop(L, 1); // Pop the error
-    }
-  }
 }
 
 LUA_API const char *lua_pushvfstring(lua_State *L, const char *fmt,
@@ -1308,7 +1295,6 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     LJEG()->using_error_reporter = 1;
 
     printf("[LJE] Detected running of client Lua function for init.lua\n");
-    LJEG()->original_gc = G(L)->gc.total;
 
     printf("[LJE] Added LJE functions to Lua state\n");
     lje_clear_global_refs();
@@ -1355,7 +1341,6 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     printf("[LJE] Created script watcher for startup scripts.\n");
 
     printf("[LJE] Starting up Lua...\n");
-    lje_save_random_state();
     LJEG()->using_error_reporter = 1;
     for (int i = 0; i < LJEG()->loaded_script_count; i++)
     {
@@ -1365,7 +1350,6 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
       lje_startup_execute(L, script, NULL);
     }
     LJEG()->using_error_reporter = 0;
-    lje_restore_random_state();
   }
 
   /* LJE: Determine if this is an engine call. */
@@ -1413,8 +1397,8 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
           // Copy over the real arguments
           for (int arg = 0; arg < nargs; arg++)
           {
-            //lje_copy_to_isolated_state(L, I, -nargs + arg);
             cTValue* arg_val = stkindex2adr(L, -nargs + arg);
+
             // Proxy anything which is a table or udata.
             if (tvistab(arg_val) || tvisudata(arg_val))
             {

@@ -172,16 +172,12 @@ LUALIB_API int luaL_loadbufferx(lua_State *L, const char *buf, size_t size,
     lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->script_hook_ref_id);
     lua_pushstring(L, name ? name : "unknown");
     lua_pushstring(L, buf);
-    LJEG()->skip_hooks = 1; // Disable hooks during script hook execution
-    LJEG()->disable_metatables = 1; // Disable metatables during script hook execution
     if (lua_pcall(L, 2, 1, 0) != LUA_OK)
     {
       const char* err = lua_tostring(L, -1);
       printf("[LJE ERROR] Error in script hook callback: %s\n", err);
       lua_pop(L, 1); // Pop the error
     }
-    LJEG()->disable_metatables = 0; // Re-enable metatables
-    LJEG()->skip_hooks = 0; // Re-enable hooks
 
     // Ensure the returned value is a string
     if (!lua_isstring(L, -1))

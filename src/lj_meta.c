@@ -69,49 +69,6 @@ cTValue *lj_meta_lookup(lua_State *L, cTValue *o, MMS mm)
   else
     mt = tabref(basemt_obj(G(L), o));
   if (mt) {
-    /* LJE: Check if any LJE code has caused this lookup, and if so, remap the metatable if needed.
-     * If there is no remap, we just want to cancel and block the metamethod lookup.
-     */
-    if (LJEG()->main_state == L && !LJEG()->redirect_to_isolation)
-    {
-      GCfunc* curr_func = curr_func(L);
-      if (!isluafunc(curr_func(L)))
-      {
-        /* LJE: Sometimes, a C function can be doing the metamethod lookup on behalf of a Lua function (usually tostring).
-         * In that case, we need to get the caller function.
-         */
-        cTValue* bottom = tvref(L->stack)+LJ_FR2;
-        TValue* caller_frame = frame_prev(L->base - 1);
-        if (caller_frame && caller_frame > bottom)
-          curr_func = frame_func(caller_frame);
-      }
-
-      if (isluafunc(curr_func))
-      {
-        LJEproto* pt = protoextend(funcproto(curr_func));
-        if (pt->is_from_lje)
-        {
-          cTValue* metaName = lj_tab_getstr(mt, lj_str_newlit(L, "MetaName"));
-          if (metaName && tvisstr(metaName))
-          {
-            const char* typeName = strdata(strV(metaName));
-            LJEMetatableRemap* remap = lje_get_metatable_remap(typeName);
-            if (remap)
-            {
-              mt = remap->replacement;
-              // No print here since it might lag the metamethod lookup too much, this is the expected case.
-            } else
-            {
-              /* LJE: Block metamethod lookup if no remap is found. */
-              return niltv(L);
-            }
-          } else if (!lje_is_metatable_authorized(mt))
-          {
-            return niltv(L);
-          }
-        }
-      }
-    }
 
     cTValue *mo = lj_tab_getstr(mt, mmname_str(G(L), mm));
     if (mo)
@@ -190,21 +147,8 @@ cTValue *lj_meta_tget(lua_State *L, cTValue *o, cTValue *k)
       /* LJE: Handle the fast-path __index chain. Unfortunately... this
        * kind of does slow down things a *tad* amount, but it's necessary for LJE.
        */
-      GCtab* mt = tabref(t->metatable);
-      GCfunc* func = curr_func(L);
-      if (mt && isljefunc(func) && !LJEG()->redirect_to_isolation)
-      {
-        /* LJE: Remaps don't exist for table-based objects, so no need to check for that. All we need to do is the
-         * authentication check.
-         */
-        if (!lje_is_metatable_authorized(mt))
-        {
-          /* LJE: Block metamethod lookup if not authorized. */
-          return NULL;
-        }
-      }
       if (!tvisnil(tv) ||
-	  !(mo = lj_meta_fast(L, mt, MM_index)))
+	  !(mo = lj_meta_fast(L, tabref(t->metatable), MM_index)))
 	return tv;
     } else if (tvisnil(mo = lj_meta_lookup(L, o, MM_index))) {
       lj_err_optype(L, o, LJ_ERR_OPINDEX);

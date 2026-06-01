@@ -45,21 +45,6 @@
       ]
     },
     {
-      "name": "set_push_string_callback",
-      "description": "Registers a Lua function to be called whenever LJE pushes a string value. The function is automatically marked as special. Only one callback can be active at a time.",
-      "params": [
-        {
-          "name": "fn",
-          "type": "function",
-          "description": "Must be a Lua function, not a C function."
-        }
-      ],
-      "returns": [],
-      "errors": [
-        "Argument 1 must be a Lua function (not a C function)."
-      ]
-    },
-    {
       "name": "set_script_hook_callback",
       "description": "Registers a Lua function to be called on script hook events. The function is automatically marked as special. Only one callback can be active at a time.",
       "params": [

@@ -32,68 +32,12 @@ int lje_con_print(lua_State* L)
     return 0;
 }
 
-int lje_set_push_string_callback(lua_State* L)
-{
-  GCfunc* callback = lj_lib_checkfunc(L, 1);
-  if (!isluafunc(callback))
-  {
-    lj_err_arg(L, 1, LJ_ERR_NOLFUNC);
-  }
-
-  LJEG()->push_string_ref_id = luaL_ref(L, LUA_REGISTRYINDEX);
-  return 0;
-}
-
-int lje_enable_hooks(lua_State* L)
-{
-  LJEG()->skip_hooks = 0;
-  return 0;
-}
-
-int lje_disable_hooks(lua_State* L)
-{
-  LJEG()->skip_hooks = 1;
-  return 0;
-}
-
-int lje_ignore_fn_on_hook(lua_State* L)
-{
-  GCfunc* func = lj_lib_checkfunc(L, 1);
-  setgcrefp(LJEG()->ignore_fn_on_hook, func);
-  return 0;
-}
-
 int lje_include(lua_State* L)
 {
   const char* relative_path = luaL_checkstring(L, 1);
   int execute = lua_gettop(L) < 2 || lua_toboolean(L, 2);
 
   return lje_startup_include(L, relative_path, execute);
-}
-
-int lje_get_env(lua_State* L)
-{
-  if (LJEG()->env_ref_id != LUA_NOREF)
-  {
-    lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
-    return 1;
-  }
-
-  return 0;
-}
-
-int lje_set_env(lua_State* L)
-{
-  lj_lib_checktab(L, 1);
-  if (LJEG()->env_ref_id != LUA_NOREF)
-  {
-    luaL_unref(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
-    LJEG()->env_ref_id = LUA_NOREF;
-  }
-
-  lua_pushvalue(L, 1);
-  LJEG()->env_ref_id = luaL_ref(L, LUA_REGISTRYINDEX);
-  return 0;
 }
 
 int lje_get_bytecode_hash(lua_State* L)
@@ -294,16 +238,6 @@ int lje_is_lje_frame(lua_State* L)
   return 1;
 }
 
-int lje_disable_metatables(lua_State* L) {
-  LJEG()->disable_metatables = 1;
-  return 0;
-}
-
-int lje_enable_metatables(lua_State* L) {
-  LJEG()->disable_metatables = 0;
-  return 0;
-}
-
 int lje_set_script_hook_callback(lua_State* L)
 {
   GCfunc* callback = lj_lib_checkfunc(L, 1);
@@ -369,28 +303,6 @@ int lje_data_read(lua_State* L)
   return 0;
 }
 
-int lje_random_save(lua_State* L) { /*lje_save_random_state();*/ return 0;}
-int lje_random_restore(lua_State* L) { /*lje_restore_random_state();*/ return 0;}
-
-int lje_remap_metatable(lua_State* L)
-{
-  const char* type_name = luaL_checkstring(L, 1);
-  GCtab* replacement = lj_lib_checktab(L, 2);
-
-  lje_set_metatable_remap(type_name, replacement);
-  printf("[LJE] Remapped metatable for type '%s'\n", type_name);
-  return 0;
-}
-
-int lje_lib_auth_metatable(lua_State* L)
-{
-  GCtab* metatable = lj_lib_checktab(L, 1);
-  lje_auth_metatable(metatable);
-  printf("[LJE] Authorized metatable %p\n", (void*)metatable);
-
-  return 0;
-}
-
 int lje_set_engine_call_hook(lua_State* L)
 {
   GCfunc* callback = lj_lib_checkfunc(L, 1);
@@ -434,16 +346,6 @@ int lje_compile_string(lua_State* L)
 
   if (!lje_startup_compile(L, script))
     lua_pushnil(L);
-
-  if (!lua_isnil(L, -1))
-  {
-    /* Set the environment if it exists */
-    if (LJEG()->env_ref_id != LUA_NOREF)
-    {
-      lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
-      lua_setfenv(L, -2);
-    }
-  }
 
   return 1; // Return compiled function
 }
@@ -664,17 +566,8 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("type", lje_get_func_type);
   LJE_END_SECTION("func");
 
-  /* hooks: anything to do particularly with LuaJIT's debug hook functionality */
-  LJE_NEW_SECTION()
-    LJE_SET_FUNC("enable", lje_enable_hooks);
-    LJE_SET_FUNC("disable", lje_disable_hooks);
-    LJE_SET_FUNC("ignore_fn_once", lje_ignore_fn_on_hook);
-  LJE_END_SECTION("hooks");
-
   /* env: environment management, from lje to global.  */
   LJE_NEW_SECTION()
-    LJE_SET_FUNC("get", lje_get_env);
-    LJE_SET_FUNC("set", lje_set_env);
     LJE_SET_FUNC("current_script", lje_get_current_script);
     LJE_SET_FUNC("current_script_path", lje_get_current_script_path);
     LJE_SET_FUNC("find_script_files", lje_find_script_files);
@@ -682,24 +575,6 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("is_lje_involved", lje_is_lje_involved);
     LJE_SET_FUNC("is_lje_frame", lje_is_lje_frame);
     /* the following affect the global environment. */
-    LJE_SET_FUNC("disable_metatables", lje_disable_metatables);
-    LJE_SET_FUNC("enable_metatables", lje_enable_metatables);
-    /* NOTE:
-     * These functions essentially create a branch of the PRNG state, where
-     * your calls in between a save and restore will only affect the state temporarily.
-     *
-     * This is useful for scripts that want to use randomness without detection, but do be warned:
-     * If you save and restore once, you essentially erase all the randomness that happened in between.
-     * If you immediately save and restore again, you'll get the same sequence of random numbers, which may be undesirable.
-     *
-     * Instead, you want to really only do this maybe once a frame or so. Either that, or you can seed the PRNG to force a new
-     * sequence of random numbers, but you would have to manage that yourself. However, once your vacuum of code is over, it is likely
-     * that other scripts will step the PRNG state, so randomness will *eventually* come back to normal.
-     */
-    LJE_SET_FUNC("save_random_state", lje_random_save);
-    LJE_SET_FUNC("restore_random_state", lje_random_restore);
-    LJE_SET_FUNC("remap_metatable", lje_remap_metatable);
-    LJE_SET_FUNC("auth_metatable", lje_lib_auth_metatable);
     LJE_SET_FUNC("show_special_frames", lje_set_show_special_frames); /* useful for making inter-LJE debug introspection work */
   LJE_END_SECTION("env");
 
@@ -708,7 +583,6 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("get_bytecode_hash", lje_get_bytecode_hash);
     LJE_SET_FUNC("get_call_stack", lje_get_call_stack);
     LJE_SET_FUNC("get_registry", lje_get_registry);
-    LJE_SET_FUNC("set_push_string_callback", lje_set_push_string_callback);
     LJE_SET_FUNC("set_script_hook_callback", lje_set_script_hook_callback);
     LJE_SET_FUNC("create_table", lje_create_table);
   LJE_END_SECTION("util");

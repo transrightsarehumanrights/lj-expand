@@ -361,12 +361,6 @@ LUA_API int lua_gethookcount(lua_State *L)
 /* Call a hook. */
 void callhook(lua_State *L, int event, BCLine line)
 {
-  /* LJE: Absolutely no hooks are ran if skip_hooks is enabled */
-  if (LJEG()->skip_hooks)
-  {
-    return;
-  }
-
   GCfunc* fn = curr_func(L);
   if (isluafunc(fn))
   {
@@ -375,14 +369,6 @@ void callhook(lua_State *L, int event, BCLine line)
     {
       return; // Don't let anyone hook into special functions, or anything from LJE for that matter.
     }
-  }
-
-  // Next, check if this is a function that *should* be ignored once if it was hooked
-  if (gcrefp(LJEG()->ignore_fn_on_hook, GCfunc) == fn)
-  {
-    // Clear the ignore function so it only ignores once
-    setgcrefnull(LJEG()->ignore_fn_on_hook);
-    return;
   }
 
   // Sometimes, call debug hooks might trigger in a LJE function.
@@ -419,9 +405,7 @@ void callhook(lua_State *L, int event, BCLine line)
 #else
     hook_enter(g);
 #endif
-    LJEG()->in_hook = 1;
       hookf(L, &ar);
-    LJEG()->in_hook = 0;
 
     lua_assert(hook_active(g));
     setgcref(g->cur_L, obj2gco(L));

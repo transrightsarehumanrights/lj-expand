@@ -53,7 +53,7 @@
       "description": [
         "Marks a Lua function as a special (internal) frame.",
         "",
-        "Special frames are hidden from stack introspection unless `lje.env.show_special_frames` is enabled. Automatically applied to callbacks registered with LJE (e.g. `lje.util.set_push_string_callback`)."
+        "Special frames are hidden from stack introspection unless `lje.env.show_special_frames` is enabled. Automatically applied to callbacks registered with LJE."
       ],
       "note": "You shouldn't need to use this unless you know what you are doing!",
       "params": [

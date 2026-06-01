@@ -82,17 +82,10 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
         if (original_loadbufferx(L, script_file, strlen(script_file), chunkname, NULL) == 0)
         {
             LJEG()->flag_lje_protos = 0;
-            // Disable hooks during execution
-            LJEG()->skip_hooks = 1;
             if (lua_pcall(L, 0, 0, 0) != 0) /* mental note: figure out why this seems to randomly not work? */
             {
-                LJEG()->skip_hooks = 0;
-
                 printf("[LJE] Error executing script: %s\n", lua_tostring(L, -1));
                 lua_pop(L, 1); // Pop error message
-            } else
-            {
-                LJEG()->skip_hooks = 0;
             }
         }
         else
