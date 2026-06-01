@@ -17,6 +17,3 @@ SIGDEF(lj_func_freeproto, "44 8b 42 38 48 8b c1 4c 29 41 20 45 33 c9 48 8b 49 18
 
 // For modifying protos during parsing
 SIGDEF(fs_finish, "40 55 56 41 54 41 55 41 56 41 57 48 83 ec 38 48 8b 31")
-
-// Allows LJE to block errors
-SIGDEF(lj_err_run, "48 89 5c 24 08 57 48 83 ec 20 4c 8b 49 38 48 8b f9 4c 8b 41 20")
