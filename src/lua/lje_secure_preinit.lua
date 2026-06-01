@@ -97,3 +97,49 @@ function hook.Listen()
 end
 
 function hook.Call() --[[no-op]] end
+
+-- Helpers
+lje.includeCache = {}
+lje.require = function(path)
+    local currentScript = lje.env.current_script()
+    if not currentScript then
+        lje.con_print("Error: lje.require called outside of a script context!")
+        return
+    end
+
+    lje.includeCache[currentScript] = lje.includeCache[currentScript] or {}
+    local scriptCache = lje.includeCache[currentScript]
+    if scriptCache[path] then
+        return scriptCache[path]
+    end
+
+    local result = lje.include(path)
+    scriptCache[path] = result
+    return result
+end
+
+  -- Little printf console helper with color parsing
+  -- Usage: lje.con_printf("$red{Error}: Something happened!")
+  local ANSI_COLORS = {
+    black = "1;30m",
+    red = "1;31m",
+    green = "1;32m",
+    yellow = "1;33m",
+    blue = "1;34m",
+    magenta = "1;35m",
+    cyan = "1;36m",
+    white = "1;37m",
+    default = "1;39m",
+  }
+
+  local COLOR_PATTERN = "%$(%a+)(%b{})"
+  lje.con_printf = function(fmt, ...)
+    -- First, replace color codes
+    local result = string.format(fmt, ...)
+    local coloredResult = string.gsub(result, COLOR_PATTERN, function(colorName, text)
+      local colorCode = ANSI_COLORS[string.lower(colorName)] or ANSI_COLORS["default"]
+      return "\x1b[" .. colorCode .. string.sub(text, 2, -2) .. "\x1b[0m" -- remove braces
+    end)
+
+    lje.con_print(coloredResult .. "\x1b[0m") -- Reset color at the end
+  end

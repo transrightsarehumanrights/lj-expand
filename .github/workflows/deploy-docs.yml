@@ -7,7 +7,6 @@ on:
     paths:
       - 'docs/**'
       - 'src/lj_expand_lib.c'
-      - 'src/lua/lje_preinit.lua'
 
   workflow_dispatch:
 

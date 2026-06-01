@@ -34,9 +34,6 @@
 @if errorlevel 1 goto :BAD
 
 @rem Convert script(s) to C headers.
-lua2c lua/lje_preinit.lua generated\lje_preinit.h lje_preinit
-@if errorlevel 1 goto :BAD
-
 lua2c lua/lje_secure_preinit.lua generated\lje_secure_preinit.h lje_secure_preinit
 @if errorlevel 1 goto :BAD
 
