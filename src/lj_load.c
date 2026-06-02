@@ -169,29 +169,30 @@ LUALIB_API int luaL_loadbufferx(lua_State *L, const char *buf, size_t size,
   if (LJEG()->main_state == L && LJEG()->script_hook_ref_id != LUA_NOREF)
   {
     /* LJE: Prepare to run script hook */
-    lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->script_hook_ref_id);
-    lua_pushstring(L, name ? name : "unknown");
-    lua_pushstring(L, buf);
-    if (lua_pcall(L, 2, 1, 0) != LUA_OK)
+    lua_State* I = LJEG()->isolated_state;
+    lua_rawgeti(I, LUA_REGISTRYINDEX, LJEG()->script_hook_ref_id);
+    lua_pushstring(I, name ? name : "unknown");
+    lua_pushstring(I, buf);
+    if (lua_pcall(I, 2, 1, 0) != LUA_OK)
     {
-      const char* err = lua_tostring(L, -1);
+      const char* err = lua_tostring(I, -1);
       printf("[LJE ERROR] Error in script hook callback: %s\n", err);
-      lua_pop(L, 1); // Pop the error
+      lua_pop(I, 1); // Pop the error
     }
 
     // Ensure the returned value is a string
-    if (!lua_isstring(L, -1))
+    if (!lua_isstring(I, -1))
     {
       printf("[LJE ERROR] Script hook did not return a string, aborting loadbufferx.\n");
-      lua_pop(L, 1); // Pop the invalid return value
+      lua_pop(I, 1); // Pop the invalid return value
     } else
     {
       // Replace the buffer with the modified one
       size_t new_size = 0;
-      const char* new_buf = lua_tolstring(L, -1, &new_size);
+      const char* new_buf = lua_tolstring(I, -1, &new_size);
       ctx.str = new_buf;
       ctx.size = new_size;
-      lua_pop(L, 1); // Pop the returned string
+      lua_pop(I, 1); // Pop the returned string
     }
   }
 
