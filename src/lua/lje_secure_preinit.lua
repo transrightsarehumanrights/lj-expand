@@ -47,6 +47,7 @@ SysTime = lje.secure.pull("SysTime")
 CurTime = lje.secure.pull("CurTime")
 RealTime = lje.secure.pull("RealTime")
 FrameTime = lje.secure.pull("FrameTime")
+AddConsoleCommand = lje.secure.pull("AddConsoleCommand")
 
 -- Classes
 registry.Entity = lje.secure.pull("_R.Entity")

@@ -377,6 +377,7 @@ LJEScript* lje_script_load_all_scripts(size_t* out_script_count) {
 
                 LJEScriptExtraInfo* extra = (LJEScriptExtraInfo*)malloc(sizeof(LJEScriptExtraInfo));
                 extra->engine_call_hook_ref_id = LUA_NOREF;
+                extra->engine_call_post = 0;
                 scripts[script_count].extra = extra;
 
                 // Check for preinit.lua
@@ -561,6 +562,32 @@ char** lje_script_find(LJEScript* script, const char* relative_path, size_t* out
 #else
 #error "lje_script_find not implemented for this platform"
 #endif
+}
+
+char* lje_script_read(LJEScript* script, const char* relative_path, size_t* out_size)
+{
+  // Literally just read from the script folder
+  char path[MAX_PATH] = { 0 };
+  strcpy_s(path, MAX_PATH, script->folder);
+  strncat_s(path, MAX_PATH, "\\", _TRUNCATE);
+  strncat_s(path, MAX_PATH, relative_path, _TRUNCATE);
+
+  FILE* file = NULL;
+  file = fopen(path, "rb");
+  if (file == NULL)
+    return NULL;
+
+  fseek(file, 0, SEEK_END);
+  size_t file_size = ftell(file);
+  fseek(file, 0, SEEK_SET);
+
+  char* buffer = (char*)malloc(file_size + 1);
+  fread(buffer, 1, file_size, file);
+  buffer[file_size] = '\0';
+  fclose(file);
+
+  *out_size = file_size; // For binary data, incase the file isn't null-terminated.
+  return buffer;
 }
 
 void lje_script_get_path(LJEScript* script, char* out_buffer, size_t buffer_size)

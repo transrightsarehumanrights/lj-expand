@@ -195,6 +195,26 @@ int lje_find_script_files(lua_State* L)
   return 1;
 }
 
+int lje_read_script_file(lua_State* L)
+{
+  if (!LJEG()->current_script)
+  {
+    lua_pushnil(L);
+    return 1;
+  }
+
+  const char* relative_path = luaL_checkstring(L, 1);
+  size_t content_size = 0;
+  char* content = lje_script_read(LJEG()->current_script, relative_path, &content_size);
+  if (content)
+  {
+    lua_pushlstring(L, content, content_size);
+    return 1;
+  }
+
+  return 0;
+}
+
 int lje_is_lua_involved(lua_State* L)
 {
   int frame_offset = luaL_optinteger(L, 1, 1);
@@ -571,6 +591,7 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("current_script", lje_get_current_script);
     LJE_SET_FUNC("current_script_path", lje_get_current_script_path);
     LJE_SET_FUNC("find_script_files", lje_find_script_files);
+    LJE_SET_FUNC("read_script_file", lje_read_script_file);
     LJE_SET_FUNC("is_lua_involved", lje_is_lua_involved);
     LJE_SET_FUNC("is_lje_involved", lje_is_lje_involved);
     LJE_SET_FUNC("is_lje_frame", lje_is_lje_frame);
