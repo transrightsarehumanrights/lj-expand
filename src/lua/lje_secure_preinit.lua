@@ -10,7 +10,7 @@ local registry = lje.util.get_registry()
 
 -- Neatly print out any value using lje.con_print. Handles nested tables with
 -- indentation and guards against recursive (cyclic) references.
-local function inspect(x)
+function lje.util.inspect(x)
     local seen = {}
 
     local function valueToString(v, indent)
@@ -63,25 +63,55 @@ local function inspect(x)
     lje.con_print(valueToString(x, ""))
 end
 
-local function isGModMetaTableRef(x)
-  return type(x) == "table" and x.MetaID
-  end
-
-if not __LJE_REGISTRY_ALLOWED_KEYS then
-    -- Build the allowed keys list. This is how we can differentiate between old, dead registry entries and the old ones we want to keep.
-    -- It's a permanent global latch, so once it's written to at the first game joined, it'll stay here forever.
-    __LJE_REGISTRY_ALLOWED_KEYS = {}
-    for k, v in pairs(registry) do
-        __LJE_REGISTRY_ALLOWED_KEYS[k] = true
+-- Recursively deep copy a value. Tables are duplicated key-by-key; everything
+-- else (functions, userdata, cdata, etc.) is referenced as-is since those can't
+-- be meaningfully duplicated. Cyclic references are preserved via the `seen` map,
+-- and metatables are kept (by reference, as they're shared).
+local function deepCopy(value, seen)
+    if type(value) ~= "table" then
+        return value
     end
-else
-    -- Clean up any old registry entries that aren't in the allowed keys list. This is necessary to prevent old, stale entries from interfering with the new game session.
-    -- However, we want to keep any GMod metatable references since those are still valid across sessions and necessary for the API to work.
-  for k, v in pairs(registry) do
-    if not __LJE_REGISTRY_ALLOWED_KEYS[k] then
+
+    seen = seen or {}
+    if seen[value] then
+        return seen[value]
+    end
+
+    local copy = {}
+    seen[value] = copy
+
+    for k, v in pairs(value) do
+        copy[k] = deepCopy(v, seen)
+    end
+
+    local mt = getmetatable(value)
+    if mt ~= nil then
+        setmetatable(copy, mt)
+    end
+
+    return copy
+end
+
+function __LJE_RESTORE_REGISTRY()
+    for k in pairs(registry) do
         registry[k] = nil
     end
-  end
+    for k, v in pairs(__LJE_REGISTRY_SAVED) do
+        registry[k] = deepCopy(v)
+    end
+end
+
+if not __LJE_REGISTRY_SAVED then
+    -- First game session: snapshot the pristine registry by deep copying every
+    -- value into a permanent global latch. It's written once at the first game
+    -- joined and stays here forever, surviving across sessions.
+    __LJE_REGISTRY_SAVED = deepCopy(registry)
+else
+    -- Subsequent sessions: the live registry may contain stale entries left over
+    -- from the previous game. Wipe it clean and restore the pristine snapshot by
+    -- copying the saved values back in. Each value is deep copied again so the
+    -- snapshot itself stays pristine for any future restores.
+    __LJE_RESTORE_REGISTRY()
 end
 
 registry[2] = { hook = {Call = function() end} } -- hook ref GMod uses

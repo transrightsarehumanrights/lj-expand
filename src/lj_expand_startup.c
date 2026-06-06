@@ -216,6 +216,36 @@ int lje_startup_compile(lua_State* L, const char* source) {
     return 0;
 }
 
+int lje_startup_run(lua_State* L, const char* source) {
+    luaL_loadbufferx_t original_loadbufferx = NULL;
+    lua_pcall_t original_pcall = NULL;
+    if (!resolve_original_functions(&original_loadbufferx, &original_pcall))
+    {
+        printf("[LJE] Failed to resolve original startup functions necessary...\n");
+        return -1;
+    }
+
+    LJEG()->flag_lje_protos = 1;
+    int status = original_loadbufferx(L, source, strlen(source), "@lje_run", NULL);
+    LJEG()->flag_lje_protos = 0;
+
+    if (status != 0)
+    {
+        printf("[LJE ERROR] Error loading script: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1); // Pop error message
+        return status;
+    }
+
+    status = original_pcall(L, 0, 0, 0);
+    if (status != 0)
+    {
+        printf("[LJE ERROR] Error executing script: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1); // Pop error message
+    }
+
+    return status;
+}
+
 LJ_FUNC void lje_startup_reload(lua_State* L, LJEScript* script)
 {
     printf("[LJE] Reloading script '%s'...\n", script->name);

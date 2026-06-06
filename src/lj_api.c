@@ -925,6 +925,15 @@ LUA_API void lua_rawgeti(lua_State *L, int idx, int n)
   api_check(L, tvistab(t));
   v = lj_tab_getint(tabV(t), n);
 
+  if (LJEG()->redirect_to_isolation)
+  {
+    printf("[LJE] lua_rawgeti: idx=%d, n=%d\n", idx, n);
+    if (v)
+      printf("  + value exists, type=%d\n", ~itype(v));
+    else
+      printf("  + value does not exist\n");
+  }
+
   if (v) {
     if (LJEG()->redirect_to_isolation && idx == LUA_REGISTRYINDEX && tvisnil(v))
     {
@@ -1699,6 +1708,13 @@ static void lua_close_detour(lua_State* L)
     lj_gc_fullgc(LJEG()->isolated_state);
     LJEG()->main_state = NULL;
     lje_clear_global_refs();
+    // Kill off old registry.
+    lj_tab_clear(tabV(registry(LJEG()->isolated_state)));
+    // Restore any of the initial conditions
+    if (lje_startup_run(LJEG()->isolated_state, "__LJE_RESTORE_REGISTRY()") != LUA_OK)
+    {
+      printf("[LJE] Failed to restore registry on isolated state! This may cause issues if the game is restarted without fully exiting.\n");
+    }
   }
 
   if (lua_close_trampoline)
