@@ -5,6 +5,85 @@
 lje.con_print("Running secure preinit script...")
 
 local registry = lje.util.get_registry()
+
+-- Helpers
+
+-- Neatly print out any value using lje.con_print. Handles nested tables with
+-- indentation and guards against recursive (cyclic) references.
+local function inspect(x)
+    local seen = {}
+
+    local function valueToString(v, indent)
+        local t = type(v)
+
+        if t == "string" then
+            return '"' .. v .. '"'
+        elseif t == "number" or t == "boolean" then
+            return tostring(v)
+        elseif t == "nil" then
+            return "nil"
+        elseif t ~= "table" then
+            -- function, userdata, thread, cdata, etc.
+            return "<" .. t .. ": " .. tostring(v) .. ">"
+        end
+
+        -- It's a table from here on.
+        if seen[v] then
+            return "<recursion: " .. tostring(v) .. ">"
+        end
+        seen[v] = true
+
+        local childIndent = indent .. "  "
+        local out = "{\n"
+        local isEmpty = true
+
+        for k, val in pairs(v) do
+            isEmpty = false
+
+            local keyStr
+            if type(k) == "string" then
+                keyStr = k
+            else
+                keyStr = "[" .. tostring(k) .. "]"
+            end
+
+            out = out .. childIndent .. keyStr .. " = " .. valueToString(val, childIndent) .. ",\n"
+        end
+
+        -- Allow this table to be visited again on sibling branches once we're done with it.
+        seen[v] = nil
+
+        if isEmpty then
+            return "{}"
+        end
+
+        return out .. indent .. "}"
+    end
+
+    lje.con_print(valueToString(x, ""))
+end
+
+local function isGModMetaTableRef(x)
+  return type(x) == "table" and x.MetaID
+  end
+
+if not __LJE_REGISTRY_ALLOWED_KEYS then
+    -- Build the allowed keys list. This is how we can differentiate between old, dead registry entries and the old ones we want to keep.
+    -- It's a permanent global latch, so once it's written to at the first game joined, it'll stay here forever.
+    __LJE_REGISTRY_ALLOWED_KEYS = {}
+    for k, v in pairs(registry) do
+        __LJE_REGISTRY_ALLOWED_KEYS[k] = true
+    end
+else
+    -- Clean up any old registry entries that aren't in the allowed keys list. This is necessary to prevent old, stale entries from interfering with the new game session.
+    -- However, we want to keep any GMod metatable references since those are still valid across sessions and necessary for the API to work.
+  for k, v in pairs(registry) do
+    if not __LJE_REGISTRY_ALLOWED_KEYS[k] then
+        registry[k] = nil
+    end
+  end
+end
+
 registry[2] = { hook = {Call = function() end} } -- hook ref GMod uses
 registry[1337153] = function() return "hello" end
   registry[13371010] = function() return end -- Dummy Lua function
@@ -99,7 +178,8 @@ end
 
 function hook.Call() --[[no-op]] end
 
--- Helpers
+
+
 lje.includeCache = {}
 lje.require = function(path)
     local currentScript = lje.env.current_script()
@@ -134,13 +214,13 @@ end
   }
 
   local COLOR_PATTERN = "%$(%a+)(%b{})"
-  lje.con_printf = function(fmt, ...)
+lje.con_printf = function(fmt, ...)
     -- First, replace color codes
     local result = string.format(fmt, ...)
     local coloredResult = string.gsub(result, COLOR_PATTERN, function(colorName, text)
-      local colorCode = ANSI_COLORS[string.lower(colorName)] or ANSI_COLORS["default"]
-      return "\x1b[" .. colorCode .. string.sub(text, 2, -2) .. "\x1b[0m" -- remove braces
+        local colorCode = ANSI_COLORS[string.lower(colorName)] or ANSI_COLORS["default"]
+        return "\x1b[" .. colorCode .. string.sub(text, 2, -2) .. "\x1b[0m" -- remove braces
     end)
 
     lje.con_print(coloredResult .. "\x1b[0m") -- Reset color at the end
-  end
+end

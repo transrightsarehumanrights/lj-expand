@@ -14,7 +14,7 @@
 @if not defined INCLUDE goto :FAIL
 
 @setlocal
-@set LJINCLUDES=/I "libs/tomlc17/src" /I "../sdk/include"
+@set LJINCLUDES=/I "libs/tomlc17/src" /I "libs/minhook/include" /I "../sdk/include"
 @set LJCOMPILE=cl /nologo /c /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline /DLUAJIT_DISABLE_VMEVENT /DLUAJIT_DISABLE_FFI %LJINCLUDES%
 @set LJLINK=link /nologo
 @set LJMT=mt /nologo
@@ -89,9 +89,9 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 :NODEBUG
 @if "%1"=="amalg" goto :AMALGDLL
 @if "%1"=="static" goto :STATIC
-%LJCOMPILE% /MD /DLUA_BUILD_AS_DLL lj_*.c lib_*.c libs/tomlc17/src/tomlc17.c
+%LJCOMPILE% /MD /DLUA_BUILD_AS_DLL lj_*.c lib_*.c libs/tomlc17/src/tomlc17.c libs/minhook/src/buffer.c libs/minhook/src/hook.c libs/minhook/src/trampoline.c libs/minhook/src/hde/hde32.c libs/minhook/src/hde/hde64.c
 @if errorlevel 1 goto :BAD
-%LJLINK% /DLL /out:%LJDLLNAME% lj_*.obj lib_*.obj kernel32.lib user32.lib tomlc17.obj crypt32.lib advapi32.lib dbghelp.lib shell32.lib
+%LJLINK% /DLL /out:%LJDLLNAME% lj_*.obj lib_*.obj kernel32.lib user32.lib tomlc17.obj buffer.obj hook.obj trampoline.obj hde32.obj hde64.obj crypt32.lib advapi32.lib dbghelp.lib shell32.lib
 @if errorlevel 1 goto :BAD
 @goto :MTDLL
 :STATIC

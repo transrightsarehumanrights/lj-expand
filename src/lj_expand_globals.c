@@ -28,6 +28,7 @@ void lje_clear_global_refs() {
     {
         LJEScript* script = LJEG()->script_load_order[i];
         script->extra->engine_call_hook_ref_id = LUA_NOREF;
+        script->extra->cleanup_ref_id = LUA_NOREF;
     }
 
     if (LJEG()->script_watcher)

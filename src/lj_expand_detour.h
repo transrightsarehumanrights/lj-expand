@@ -22,5 +22,7 @@
 
 // Dead simple detours. No original function is provided.
 LJ_FUNC int lje_detour(void* target, void* detour);
+// Detour, but the ability to trampoline back to it. Useful basically only for state-related functions
+int lje_detour_trampoline(void* target, void* detour, void** out_trampoline);
 
 #endif

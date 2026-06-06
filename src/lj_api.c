@@ -924,11 +924,17 @@ LUA_API void lua_rawgeti(lua_State *L, int idx, int n)
   cTValue *v, *t = index2adr(L, idx);
   api_check(L, tvistab(t));
   v = lj_tab_getint(tabV(t), n);
+
   if (v) {
+    if (LJEG()->redirect_to_isolation && idx == LUA_REGISTRYINDEX && tvisnil(v))
+    {
+      goto copy_to_isolated_registry; /* Means we invalidated this from the preinit Lua script. Fetch it again from host. */
+    }
     copyTV(L, L->top, v);
   } else {
     if (LJEG()->redirect_to_isolation && idx == LUA_REGISTRYINDEX)
     {
+copy_to_isolated_registry:
       lua_State* host = LJEG()->main_state;
       cTValue* reg = registry(host);
       v = lj_tab_getint(tabV(reg), n);
@@ -1304,13 +1310,6 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     // Determine if any secure scripts need to run.
     // They only support `main.lua`, which is at preinit, the most secure stage of the clientstate.
 
-    // Run binary modules
-    for (int i = 0; i < LJEG()->loaded_binary_module_count; i++)
-    {
-      LJEBinaryModule* mod = &LJEG()->loaded_binary_modules[i];
-      printf("[LJE] Loading binary module %s into isolated state...\n", mod->name);
-      lje_binary_module_run_preinit(mod, LJEG()->isolated_state);
-    }
 
     lje_startup_secure_preinit(LJEG()->isolated_state);
     for (int i = 0; i < LJEG()->loaded_script_count; i++)
@@ -1664,6 +1663,48 @@ LUA_API void lua_setallocf(lua_State *L, lua_Alloc f, void *ud)
   g->allocf = f;
 }
 
+typedef void (*lua_close_t)(lua_State* L);
+static lua_close_t lua_close_trampoline = NULL;
+
+static void lua_close_detour(lua_State* L)
+{
+  if (L == LJEG()->main_state)
+  {
+    printf("[LJE] Detected main state being closed. Cleaning up LJE resources...\n");
+    lje_iterate_scripts()
+      if (script->info->secure && script->extra->cleanup_ref_id != LUA_NOREF)
+      {
+        lua_State* I = LJEG()->isolated_state;
+        lua_rawgeti(I, LUA_REGISTRYINDEX, script->extra->cleanup_ref_id);
+        if (lua_isfunction(I, -1))
+        {
+          printf("[LJE] Running cleanup for secure script %s...\n", script->info->name);
+          if (lua_pcall(I, 0, 0, 0) != LUA_OK)
+          {
+            const char* error_msg = lua_tostring(I, -1);
+            printf("[LJE] Error in cleanup for secure script %s: %s\n", script->info->name, error_msg);
+            lua_pop(I, 1); // pop error message
+          }
+        } else
+        {
+          lua_pop(I, 1); // pop non-function
+          printf("[LJE] No cleanup function found for secure script %s.\n", script->info->name);
+        }
+      } else {
+        printf("[LJE] No cleanup needed for script %s.\n", script->info->name);
+      }
+    lje_iterate_scripts_end()
+
+    // Fully run a GC pass on the isolated state
+    lj_gc_fullgc(LJEG()->isolated_state);
+    LJEG()->main_state = NULL;
+    lje_clear_global_refs();
+  }
+
+  if (lua_close_trampoline)
+    lua_close_trampoline(L);
+}
+
 #ifdef LJ_TARGET_WINDOWS
 #include <windows.h>
 #include <stdio.h>
@@ -1839,6 +1880,16 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
       lje_detour_export(mod, luaL_setmetatable, luaL_setmetatable);
       lje_detour_export(mod, luaL_pushmodule, luaL_pushmodule);
 
+      lua_close_t original_close = lje_module_get_func(mod, "lua_close");
+      if (original_close)
+      {
+        int attached = lje_detour_trampoline(original_close, lua_close_detour, (void*)&lua_close_trampoline);
+        if (!attached)
+          printf("[LJE] Failed to detour lua_close! This may cause resource leaks when the game closes.");
+        else
+          printf("[LJE] Detoured lua_close successfully!\n");
+      }
+
       /* LJE: This is a *tad* bit out-of-scope for LJE since we are very
        * vehemently avoiding having to deal with the engine as opposed to LuaJIT, but
        * given that the game makes *all* engine calls via this function, we have no choice.
@@ -1938,6 +1989,13 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
       if (LJEG()->isolated_state)
       {
         printf("[LJE] Created isolated Lua state for secure scripts.\n");
+      }
+
+      for (int i = 0; i < LJEG()->loaded_binary_module_count; i++)
+      {
+        LJEBinaryModule* mod = &LJEG()->loaded_binary_modules[i];
+        printf("[LJE] Loading binary module %s into isolated state...\n", mod->name);
+        lje_binary_module_run_preinit(mod, LJEG()->isolated_state);
       }
 
     } else {

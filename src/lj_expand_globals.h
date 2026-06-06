@@ -49,4 +49,11 @@ char* lje_concat_path(const char* relative_path);
 
 int lje_is_addr_in_lje(uintptr_t addr);
 
+#define lje_iterate_scripts() \
+  for (size_t i = 0; i < LJEG()->loaded_script_count; i++) { \
+    LJEScript* script = LJEG()->script_load_order[i]; \
+
+#define lje_iterate_scripts_end() \
+  }
+
 #endif

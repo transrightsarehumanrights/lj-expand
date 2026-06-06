@@ -341,6 +341,24 @@ int lje_set_engine_call_hook(lua_State* L)
   return 0;
 }
 
+int lje_set_cleanup_hook(lua_State* L)
+{
+  GCfunc* callback = lj_lib_checkfunc(L, 1);
+  LJEScript* current_script = LJEG()->current_script;
+  if (!current_script)
+  {
+    lj_err_msg(L, LJ_ERR_LJE_NOSCRIPT);
+  }
+
+  if (!isluafunc(callback))
+  {
+    lj_err_arg(L, 1, LJ_ERR_NOLFUNC);
+  }
+
+  current_script->extra->cleanup_ref_id = luaL_ref(L, LUA_REGISTRYINDEX);
+  return 0;
+}
+
 int lje_set_engine_call_hook_post(lua_State* L)
 {
   int post = lua_toboolean(L, 1);
@@ -597,6 +615,7 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("is_lje_frame", lje_is_lje_frame);
     /* the following affect the global environment. */
     LJE_SET_FUNC("show_special_frames", lje_set_show_special_frames); /* useful for making inter-LJE debug introspection work */
+    LJE_SET_FUNC("on_cleanup", lje_set_cleanup_hook);
   LJE_END_SECTION("env");
 
   /* util: unassorted utility functions */
