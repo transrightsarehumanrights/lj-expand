@@ -39,6 +39,7 @@ typedef struct LJEGlobalState
     /* Isolated state */
     lua_State* isolated_state;
     char redirect_to_isolation;
+    GCtab* shadow_registry;
 } LJEGlobalState;
 
 #define LJEG() (lje_get_global_state())

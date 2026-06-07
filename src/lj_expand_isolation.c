@@ -54,6 +54,12 @@ lua_State* lje_create_isolated_state() {
     // Open dispatch table with our stuff, however.
     lj_dispatch_init((GG_State*)L);
 
+    // Create the shadow registry
+  lua_newtable(L);
+  LJEG()->shadow_registry = tabV(L->top - 1);
+  lua_setfield(L, LUA_REGISTRYINDEX, "__lje_shadow_registry");
+
+
     printf("[LJE] Created isolated Lua state: %p\n", (void*)L);
     return L;
 }
@@ -235,7 +241,7 @@ static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, 
                 {
                     const char* name = strdata(strV(meta_name));
                     // Check if the to state has its own version already (metatables can be manipulated)
-                    GCtab* to_reg = tabV(registry(to));
+                    GCtab* to_reg = tabV(registry(LJEG()->isolated_state)); /* not shadow, metatables are stored in main */
                     cTValue* to_metatable = lj_tab_getstr_raw(to_reg, name, strlen(name)); // Can't use raw GCstr, comes from the from state
                     if (to_metatable && tvistab(to_metatable))
                     {
@@ -266,7 +272,7 @@ static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, 
               printf("[LJE] Encountered Lua function from %s, not copying.\n", proto_chunknamestr(pt));
               // Set an empty Lua function, then.
               // Our registry has 13371010 as the empty Lua function, so we can just copy that in.
-              cTValue* empty_lua_func = lj_tab_getint(tabV(registry(to)), 13371010);
+              cTValue* empty_lua_func = lj_tab_getint(LJEG()->shadow_registry, 13371010);
               setfuncV(to, dst, funcV(empty_lua_func));
               break;
             }

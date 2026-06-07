@@ -69,7 +69,6 @@ cTValue *lj_meta_lookup(lua_State *L, cTValue *o, MMS mm)
   else
     mt = tabref(basemt_obj(G(L), o));
   if (mt) {
-
     cTValue *mo = lj_tab_getstr(mt, mmname_str(G(L), mm));
     if (mo)
       return mo;

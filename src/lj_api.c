@@ -72,6 +72,13 @@ static TValue *index2adr(lua_State *L, int idx)
     settabV(L, o, tabref(L->env));
     return o;
   } else if (idx == LUA_REGISTRYINDEX) {
+    if (LJEG()->redirect_to_isolation)
+    {
+      TValue* o = &G(L)->tmptv;
+      settabV(L, o, LJEG()->shadow_registry);
+      return o;
+    }
+
     return registry(L);
   } else {
     GCfunc *fn = curr_func(L);
@@ -902,16 +909,7 @@ LUA_API void lua_rawgeti(lua_State *L, int idx, int n)
 
   if (LJEG()->redirect_to_isolation)
   {
-    // Don't allow any non-table accesses when running hooks
-    if (idx == -1)
-    {
-      if (!tvistab(index2adr(L, n)))
-      {
-        setnilV(L->top);
-        incr_top(L);
-        return;
-      }
-    }
+
   }
 
   if (idx == -1 && n == 153)
@@ -921,7 +919,15 @@ LUA_API void lua_rawgeti(lua_State *L, int idx, int n)
     n = 1337153;
   }
 
+  TValue shadow_registry;
+  settabV(L, &shadow_registry, LJEG()->shadow_registry);
+
   cTValue *v, *t = index2adr(L, idx);
+  if (LJEG()->redirect_to_isolation && idx == LUA_REGISTRYINDEX)
+  {
+    t = &shadow_registry;
+  }
+
   api_check(L, tvistab(t));
   v = lj_tab_getint(tabV(t), n);
 
@@ -954,7 +960,7 @@ copy_to_isolated_registry:
         incr_top(L);
 
         // Copying each time isn't good though. Save it in our registry so the next lookup succeeds without copying.
-        GCtab* isolated_reg = tabV(registry(L));
+        GCtab* isolated_reg = LJEG()->shadow_registry;
         TValue* dst = lj_tab_setint(L, isolated_reg, n);
         TValue* src = L->top - 1; /* what we just pushed */
         copyTV(L, dst, src);
@@ -1489,6 +1495,16 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     }
   }
 
+  if (LJEG()->isolated_state == L && errfunc)
+  {
+    // Ensure it's not nil. This can sometimes happen, for reasons still unknown to me. Anyway, if its, just set to 0 so we handle it.
+    cTValue* o = stkindex2adr(L, errfunc);
+    if (o && !tvisfunc(o))
+    {
+      printf("[LJE] Warning: errfunc is set but not a function. This is unexpected, but we'll try to continue anyway.\n");
+      __debugbreak();
+    }
+  }
 
   global_State *g = G(L);
   uint8_t oldh = hook_save(g);
@@ -1505,6 +1521,14 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
   }
   status = lj_vm_pcall(L, api_call_base(L, nargs), nresults+1, ef);
   if (status) hook_restore(g, oldh);
+  if (status == LUA_ERRERR)
+  {
+    printf("[LJE] ERRERR detected. state = %p\n", L);
+    if (L == LJEG()->isolated_state)
+    {
+      printf("  + is isolated state!!!\n");
+    }
+  }
   return status;
 }
 
@@ -1709,12 +1733,7 @@ static void lua_close_detour(lua_State* L)
     LJEG()->main_state = NULL;
     lje_clear_global_refs();
     // Kill off old registry.
-    lj_tab_clear(tabV(registry(LJEG()->isolated_state)));
-    // Restore any of the initial conditions
-    if (lje_startup_run(LJEG()->isolated_state, "__LJE_RESTORE_REGISTRY()") != LUA_OK)
-    {
-      printf("[LJE] Failed to restore registry on isolated state! This may cause issues if the game is restarted without fully exiting.\n");
-    }
+    lj_tab_clear(LJEG()->shadow_registry);
   }
 
   if (lua_close_trampoline)

@@ -92,31 +92,10 @@ local function deepCopy(value, seen)
     return copy
 end
 
-function __LJE_RESTORE_REGISTRY()
-    for k in pairs(registry) do
-        registry[k] = nil
-    end
-    for k, v in pairs(__LJE_REGISTRY_SAVED) do
-        registry[k] = deepCopy(v)
-    end
-end
+registry["__lje_shadow_registry"][2] = { hook = {Call = function() end} } -- hook ref GMod uses
+registry["__lje_shadow_registry"][1337153] = function() return "hello" end
+  registry["__lje_shadow_registry"][13371010] = function() return end -- Dummy Lua function
 
-if not __LJE_REGISTRY_SAVED then
-    -- First game session: snapshot the pristine registry by deep copying every
-    -- value into a permanent global latch. It's written once at the first game
-    -- joined and stays here forever, surviving across sessions.
-    __LJE_REGISTRY_SAVED = deepCopy(registry)
-else
-    -- Subsequent sessions: the live registry may contain stale entries left over
-    -- from the previous game. Wipe it clean and restore the pristine snapshot by
-    -- copying the saved values back in. Each value is deep copied again so the
-    -- snapshot itself stays pristine for any future restores.
-    __LJE_RESTORE_REGISTRY()
-end
-
-registry[2] = { hook = {Call = function() end} } -- hook ref GMod uses
-registry[1337153] = function() return "hello" end
-  registry[13371010] = function() return end -- Dummy Lua function
 
 -- Only a subset of necessary GMod C APIs are pulled in. We have our own versions of any base library as well.
 achievements = lje.secure.pull("achievements")
