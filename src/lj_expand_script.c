@@ -395,6 +395,19 @@ LJEScript* lje_script_load_all_scripts(size_t* out_script_count) {
                     scripts[script_count].preinit_path = NULL;
                 }
 
+                // Check for boot.lua
+                char boot_lua_path[MAX_PATH] = { 0 };
+              strcpy_s(boot_lua_path, MAX_PATH, folder_path);
+              strncat_s(boot_lua_path, MAX_PATH, LJE_SCRIPT_BOOT, _TRUNCATE);
+              attribs = GetFileAttributesA(boot_lua_path);
+              if (attribs != INVALID_FILE_ATTRIBUTES && !(attribs & FILE_ATTRIBUTE_DIRECTORY))
+              {
+                scripts[script_count].boot_path = _strdup(boot_lua_path);
+              } else
+              {
+                scripts[script_count].boot_path = NULL;
+              }
+
                 script_count++;
             }
         }

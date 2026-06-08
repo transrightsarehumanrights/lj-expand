@@ -2024,6 +2024,15 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
         lje_binary_module_run_preinit(mod, LJEG()->isolated_state);
       }
 
+      // Check if any scripts have boot.lua, if so run them now in the isolated state
+      lje_iterate_scripts()
+        if (script->info->secure && script->boot_path != NULL)
+        {
+          printf("[LJE] Running boot script for secure script %s...\n", script->info->name);
+          lje_startup_execute(LJEG()->isolated_state, script, script->boot_path);
+        }
+      lje_iterate_scripts_end()
+
     } else {
       printf("lua_shared.dll not found!\n");
     }
