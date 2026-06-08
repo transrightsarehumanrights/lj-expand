@@ -186,6 +186,12 @@ LUA_API void lua_remove(lua_State *L, int idx)
 {
   lje_redirect_state(L);
   TValue *p = stkindex2adr(L, idx);
+  if (p == niltv(L))
+  {
+    printf("[LJE] Invalid index passed to lua_remove: %d\n", idx);
+    return;
+  }
+
   api_checkvalidindex(L, p);
   while (++p < L->top) copyTV(L, p-1, p);
   L->top--;
@@ -232,6 +238,7 @@ LUA_API void lua_replace(lua_State *L, int idx)
 
 LUA_API void lua_copy(lua_State *L, int fromidx, int toidx)
 {
+  lje_redirect_state(L);
   copy_slot(L, index2adr(L, fromidx), toidx);
 }
 
@@ -790,6 +797,10 @@ LUALIB_API int luaL_newmetatable(lua_State *L, const char *tname)
 {
   lje_redirect_state(L);
   GCtab *regt = tabV(registry(L));
+  if (LJEG()->redirect_to_isolation)
+  {
+    regt = LJEG()->shadow_registry;
+  }
   TValue *tv = lj_tab_setstr(L, regt, lj_str_newz(L, tname));
   if (tvisnil(tv)) {
     GCtab *mt = lj_tab_new(L, 0, 1);
@@ -907,18 +918,6 @@ LUA_API void lua_rawgeti(lua_State *L, int idx, int n)
 {
   lje_redirect_state(L);
 
-  if (LJEG()->redirect_to_isolation)
-  {
-
-  }
-
-  if (idx == -1 && n == 153)
-  {
-    // Special GMod errfunc, redirect to us
-    idx = LUA_REGISTRYINDEX;
-    n = 1337153;
-  }
-
   TValue shadow_registry;
   settabV(L, &shadow_registry, LJEG()->shadow_registry);
 
@@ -930,15 +929,6 @@ LUA_API void lua_rawgeti(lua_State *L, int idx, int n)
 
   api_check(L, tvistab(t));
   v = lj_tab_getint(tabV(t), n);
-
-  if (LJEG()->redirect_to_isolation)
-  {
-    printf("[LJE] lua_rawgeti: idx=%d, n=%d\n", idx, n);
-    if (v)
-      printf("  + value exists, type=%d\n", ~itype(v));
-    else
-      printf("  + value does not exist\n");
-  }
 
   if (v) {
     if (LJEG()->redirect_to_isolation && idx == LUA_REGISTRYINDEX && tvisnil(v))
@@ -1843,6 +1833,7 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
       lje_detour_export(mod, lua_remove, lua_remove);
       lje_detour_export(mod, lua_insert, lua_insert);
       lje_detour_export(mod, lua_replace, lua_replace);
+      lje_detour_export(mod, lua_copy, lua_copy);
 
       // Formatted push (likely culprits for variadic issues)
       lje_detour_export(mod, lua_pushfstring, lua_pushfstring);

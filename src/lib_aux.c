@@ -32,6 +32,7 @@
 if (LJEG()->redirect_to_isolation) { \
 L = LJEG()->isolated_state; \
 }
+
 LUALIB_API int luaL_fileresult(lua_State *L, int stat, const char *fname)
 {
   lje_redirect_state(L);
@@ -293,6 +294,8 @@ LUALIB_API int luaL_ref(lua_State *L, int t)
     lua_rawseti(L, t, FREELIST_REF);  /* (t[FREELIST_REF] = t[ref]) */
   } else {  /* no free elements */
     ref = (int)lua_objlen(L, t);
+    if (LJEG()->redirect_to_isolation)
+      ref += 1000000; // Offset to avoid collisions
     ref++;  /* create new reference */
   }
   lua_rawseti(L, t, ref);

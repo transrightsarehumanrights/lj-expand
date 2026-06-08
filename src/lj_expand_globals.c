@@ -60,3 +60,15 @@ int lje_is_addr_in_lje(uintptr_t addr)
 
     return (addr >= lje_base_addr) && (addr < (lje_base_addr + lje_addr_range));
 }
+
+void lje_print_stack(lua_State* L)
+{
+  // Print like [number][table][userdata]. Must use internal since all APIs use this logger so recursion.
+  printf("[LJE] %d elements on stack.\n", (int)(L->top - L->base));
+  printf("[LJE] ");
+  for (TValue* o = L->base; o < L->top; o++)
+  {
+    printf("[%s]", itype(o) == LJ_TSTR ? strdata(strV(o)) : lj_typename(o));
+  }
+  printf("\n");
+}

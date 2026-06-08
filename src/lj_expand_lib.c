@@ -419,12 +419,12 @@ static int lje_secure_gmod_api(lua_State* L)
   lua_CFunction func = (lua_CFunction)func_ptr;
   // Latch incase isolation is being forced
   int redirection_required = LJEG()->redirect_to_isolation == 0;
-
+  int prev = LJEG()->redirect_to_isolation;
   if (redirection_required)
     LJEG()->redirect_to_isolation = 1;
   int results = func(LJEG()->main_state); /* make it think it's running in the main state, it won't know any better! */
   if (redirection_required)
-    LJEG()->redirect_to_isolation = 0;
+    LJEG()->redirect_to_isolation = prev;
   return results;
 }
 

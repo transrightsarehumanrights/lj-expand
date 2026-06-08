@@ -86,9 +86,10 @@ static int lje_secure_gmod_api(lua_State* L)
 
     // we just need to dispatch the c function ourselves.
     lua_CFunction func = (lua_CFunction)func_ptr;
+    int prev = LJEG()->redirect_to_isolation;
     LJEG()->redirect_to_isolation = 1;
     int results = func(LJEG()->main_state); /* make it think it's running in the main state, it won't know any better! */
-    LJEG()->redirect_to_isolation = 0;
+    LJEG()->redirect_to_isolation = prev;
     return results;
 }
 
