@@ -940,22 +940,30 @@ LUA_API void lua_rawgeti(lua_State *L, int idx, int n)
     if (LJEG()->redirect_to_isolation && idx == LUA_REGISTRYINDEX)
     {
 copy_to_isolated_registry:
-      lua_State* host = LJEG()->main_state;
-      cTValue* reg = registry(host);
-      v = lj_tab_getint(tabV(reg), n);
-      if (v)
+      /* Slot 0 == freelist head. Will cause collisions. */
+      if (n != 0)
       {
-        lje_copy_to_isolated_state_tv(host, L, v);
-        L->top--;
-        incr_top(L);
+        lua_State* host = LJEG()->main_state;
+        cTValue* reg = registry(host);
+        v = lj_tab_getint(tabV(reg), n);
+        if (v && !tvisnil(v))
+        {
+          lje_copy_to_isolated_state_tv(host, L, v);
+          L->top--;
+          incr_top(L);
 
-        // Copying each time isn't good though. Save it in our registry so the next lookup succeeds without copying.
-        GCtab* isolated_reg = LJEG()->shadow_registry;
-        TValue* dst = lj_tab_setint(L, isolated_reg, n);
-        TValue* src = L->top - 1; /* what we just pushed */
-        copyTV(L, dst, src);
-        lj_gc_barriert(L, isolated_reg, dst);
-        return;
+          /* Copying each time isn't good though. Save it in our registry so the
+           * next lookup succeeds without copying. No numbers since those are freelist links. */
+          if (!tvisnumber(v))
+          {
+            GCtab* isolated_reg = LJEG()->shadow_registry;
+            TValue* dst = lj_tab_setint(L, isolated_reg, n);
+            TValue* src = L->top - 1; /* what we just pushed */
+            copyTV(L, dst, src);
+            lj_gc_barriert(L, isolated_reg, dst);
+          }
+          return;
+        }
       }
     }
     setnilV(L->top);
@@ -1147,6 +1155,13 @@ LUA_API void lua_rawseti(lua_State *L, int idx, int n)
   copyTV(L, dst, src);
   lj_gc_barriert(L, t, dst);
   L->top = src;
+
+  /* LJE: Clear any host registry writes in the shadow registry so they are identical again. */
+  if (!LJEG()->redirect_to_isolation && idx == LUA_REGISTRYINDEX &&
+      L == LJEG()->main_state && LJEG()->shadow_registry && n != 0) {
+    TValue *cached = (TValue *)lj_tab_getint(LJEG()->shadow_registry, n);
+    if (cached) setnilV(cached);
+  }
 }
 
 LUA_API int lua_setmetatable(lua_State *L, int idx)

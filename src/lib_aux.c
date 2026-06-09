@@ -293,10 +293,17 @@ LUALIB_API int luaL_ref(lua_State *L, int t)
     lua_rawgeti(L, t, ref);  /* remove it from list */
     lua_rawseti(L, t, FREELIST_REF);  /* (t[FREELIST_REF] = t[ref]) */
   } else {  /* no free elements */
-    ref = (int)lua_objlen(L, t);
-    if (LJEG()->redirect_to_isolation)
-      ref += 1000000; // Offset to avoid collisions
-    ref++;  /* create new reference */
+    if (LJEG()->redirect_to_isolation && t == LUA_REGISTRYINDEX) {
+      /* Fresh shadow-registry refs come from a monotonic counter in the +1000000
+         band. lua_objlen is useless here. the shadow registry's keys live in its
+         hash part, so it reports 0 and every size-based ref would collide. The
+         offset also keeps shadow refs from ever colliding with host registry
+         slots cached into the shadow by lua_rawgeti. */
+      ref = 1000000 + ++LJEG()->isolated_ref_counter;
+    } else {
+      ref = (int)lua_objlen(L, t);
+      ref++;  /* create new reference */
+    }
   }
   lua_rawseti(L, t, ref);
   return ref;

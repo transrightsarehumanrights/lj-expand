@@ -40,6 +40,10 @@ typedef struct LJEGlobalState
     lua_State* isolated_state;
     char redirect_to_isolation;
     GCtab* shadow_registry;
+    /* Monotonic allocator for fresh shadow-registry refs (luaL_ref under redirect).
+       lua_objlen on the shadow registry returns 0 (its keys live in the hash part),
+       so size-based fresh refs would all collide on the same slot. */
+    int isolated_ref_counter;
 } LJEGlobalState;
 
 #define LJEG() (lje_get_global_state())
