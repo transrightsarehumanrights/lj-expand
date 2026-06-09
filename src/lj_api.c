@@ -1345,15 +1345,6 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     printf("[LJE] Created script watcher for startup scripts.\n");
 
     printf("[LJE] Starting up Lua...\n");
-    LJEG()->using_error_reporter = 1;
-    for (int i = 0; i < LJEG()->loaded_script_count; i++)
-    {
-      LJEScript* script = LJEG()->script_load_order[i];
-      if (script->info->secure) continue;
-
-      lje_startup_execute(L, script, NULL);
-    }
-    LJEG()->using_error_reporter = 0;
   }
 
   /* LJE: Determine if this is an engine call. */
