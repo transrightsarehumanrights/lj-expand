@@ -1447,7 +1447,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
             printf("[LJE] Error in engine call hook for secure script %s: %s\n", script->info->name, error_msg);
             lua_pop(I, 1); // pop error message
             lje_proxy_release_all();
-            lj_gc_step(I);
+            lj_gc_check(I);
 
             // If this script is a post engine call handler, an error means we cannot let the engine
             // call fall through as it already has happened. Just skip entirely.
@@ -1459,7 +1459,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 
           LJEG()->using_error_reporter = 0;
           lje_proxy_release_all();
-          lj_gc_step(I);
+          lj_gc_check(I);
 
           if (script->extra->engine_call_post)
             return status; // The engine call already happened, so we must move on.
