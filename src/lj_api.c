@@ -948,6 +948,32 @@ copy_to_isolated_registry:
         v = lj_tab_getint(tabV(reg), n);
         if (v && !tvisnil(v))
         {
+          if (tvistab(v))
+          {
+            // GMod metatables carry a MetaName. If our state already registered its own
+            // version, redirect to it instead of deep-copying the host's table.
+            cTValue* meta_name = lj_tab_getstr_lit(tabV(v), "MetaName");
+            if (meta_name && tvisstr(meta_name))
+            {
+              const char* name = strdata(strV(meta_name));
+              GCtab* to_reg = tabV(registry(L)); /* not shadow, metatables are stored in main */
+              cTValue* to_metatable = lj_tab_getstr_raw(to_reg, name, strlen(name)); // Can't use raw GCstr, comes from the host state
+              if (to_metatable && tvistab(to_metatable))
+              {
+                copyTV(L, L->top, to_metatable);
+                incr_top(L);
+
+                /* Cache it in the shadow registry under the same ref so the next
+                 * lookup hits the fast path without re-checking the host. */
+                GCtab* isolated_reg = LJEG()->shadow_registry;
+                TValue* dst = lj_tab_setint(L, isolated_reg, n);
+                copyTV(L, dst, to_metatable);
+                lj_gc_barriert(L, isolated_reg, dst);
+                return;
+              }
+            }
+          }
+
           lje_copy_to_isolated_state_tv(host, L, v);
           L->top--;
           incr_top(L);

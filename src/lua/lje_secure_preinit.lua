@@ -233,9 +233,3 @@ lje.con_printf = function(fmt, ...)
 
     lje.con_print(coloredResult .. "\x1b[0m") -- Reset color at the end
 end
-
--- TODO: Figure out why without this we don't receive the proper metatables
-Vector(0, 0, 0)
-Angle(0, 0, 0)
-Matrix()
-Entity(1)
