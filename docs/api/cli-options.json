@@ -8,10 +8,6 @@
     {
       "name": "--lje-disable-binary-modules",
       "description": "Disables loading of binary modules (`.lje/binaries`). LJE will not load any native DLL modules, even if scripts request them. Useful for isolating issues caused by binary modules, or for running in environments where loading native modules is undesirable."
-    },
-    {
-      "name": "--lje-disable-gc-stealth",
-      "description": "Disables GC stealth mode. **Only enable this if you are experiencing crashes that you suspect are caused by GC stealth mode.** LJE's GC stealth mode may cause general LuaJIT instability."
     }
   ]
 }

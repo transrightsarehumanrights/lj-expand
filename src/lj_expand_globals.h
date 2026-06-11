@@ -24,13 +24,10 @@ typedef struct LJEGlobalState
     /* Used for script execution context */
     LJEScript* current_script;
     int show_special_frames;
-    /* Used for random state rollback */
     /* Used for flagging protos */
     int flag_lje_protos;
-    /* Metatable remapping */
     lua_CFunction adv_error_reporter;
     int using_error_reporter;
-    int is_engine_call_handled;
     /* Hot reloading */
     LJEScriptWatcher* script_watcher;
     /* Loaded binary modules */

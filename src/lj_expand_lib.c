@@ -372,8 +372,6 @@ int lje_set_engine_call_hook_post(lua_State* L)
   return 0;
 }
 
-int lje_handle_engine_call(lua_State* L) { LJEG()->is_engine_call_handled = 1; return 0; }
-
 int lje_compile_string(lua_State* L)
 {
   const char* script = luaL_checkstring(L, 1);
@@ -638,7 +636,6 @@ void lje_addfuncs(lua_State* L) {
   LJE_NEW_SECTION()
     LJE_SET_FUNC("set_engine_call_hook", lje_set_engine_call_hook);
     LJE_SET_FUNC("set_engine_call_hook_post", lje_set_engine_call_hook_post);
-    LJE_SET_FUNC("handle_engine_call", lje_handle_engine_call);
   LJE_END_SECTION("vm");
 
   /* data: simple data storage API */
@@ -647,8 +644,6 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("read", lje_data_read);
   LJE_END_SECTION("data");
 
-  if (L == LJEG()->isolated_state)
-  {
     /* secure: API for secure state only tasks */
     LJE_NEW_SECTION()
       LJE_SET_FUNC("pull", lje_secure_pull);
@@ -660,7 +655,6 @@ void lje_addfuncs(lua_State* L) {
       LJE_SET_FUNC("type", lje_proxy_type);
       LJE_SET_FUNC("copy", lje_proxy_copy);
     LJE_END_SECTION("proxy");
-  }
 
   /* LJE API END */
 

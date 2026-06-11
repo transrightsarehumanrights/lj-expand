@@ -1,0 +1,24 @@
+---
+id: intro
+title: Introduction
+slug: /
+---
+
+<div style={{textAlign: 'center'}}>
+
+  ![LJE Logo](/img/lje-logo.png)
+
+  [Installation](/installation) • [API Reference](/api/base) • [Getting Started](/guides/getting-started)
+</div>
+
+LJE (lj-expand) is a powerful GMod modification tool, living within LuaJIT itself to provide unparalleled access to the internals of GMod and LuaJIT. It allows you to write typical GMod Lua code but with the ability to go much further and interact with the engine and LuaJIT in ways that were previously impossible.
+
+LJE is also hardened against adversarial scripts, making it ideal for use in environments where running Lua code is risky. LJE also can run at different moments of the GMod process, allowing you to inject code at the earliest possible moment, even before the main Lua state is created.
+
+## Disclaimer
+
+Sometimes, people get the wrong idea about what LJE is.
+
+**LJE is not a cheat.** By installing it, you don't gain some kind of cheat or exploit. If you decide to write one, that is entirely on you. The LJE community may support cheat development, but LJE itself does not provide or facilitate any built-in cheat features. Similarly, messing up in LJE and getting detected by an adversarial script is entirely on you. LJE is designed to be as secure as possible, but if you write a script that creates new attack surfaces or is easily detectable, that's on you. **LJE is just a tool**, and how you use it is up to you.
+
+Additionally, some may perceive LJE's security as circumventing anti-cheat measures. This is a misunderstanding. LJE is designed to be invisible to GMod and therefore any scripts running in the same Lua state as GMod, but it does not inherently bypass any anti-cheat measures. If an anti-cheat is designed to detect certain behaviors or signatures, and you write a script that exhibits those behaviors or signatures, then yes, you may be detected. But LJE itself does not guarantee that you will be undetectable, it just provides a highly secure environment for running Lua code.

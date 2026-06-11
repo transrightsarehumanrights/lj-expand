@@ -4,7 +4,7 @@
   "functions": [
     {
       "name": "include",
-      "description": "Loads a script file relative to the current script's directory. Optionally controls whether the script is executed immediately after loading. Defaults to executing if the second argument is omitted.",
+      "description": "Loads a script file relative to the current script's directory. Optionally controls whether the script is executed immediately after loading. Defaults to executing if the second argument is omitted. Requires an active script context. Load and runtime errors are printed to the console rather than raised, in which case nothing is returned.",
       "params": [
         {
           "name": "path",
@@ -18,7 +18,12 @@
           "description": "Whether to execute the script after loading. Defaults to `true`."
         }
       ],
-      "returns": []
+      "returns": [
+        {
+          "type": "any...",
+          "description": "If `execute` is `false`, the loaded function. Otherwise, everything the executed script returned. Nothing is returned on failure."
+        }
+      ]
     },
     {
       "name": "con_print",

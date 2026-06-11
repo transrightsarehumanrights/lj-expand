@@ -1468,7 +1468,6 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
             if (status) hook_restore(g, oldh);
           }
 
-          LJEG()->is_engine_call_handled = 0; /* reset before call, hook will set to 1 if it handles the call. */
           LJEG()->using_error_reporter = 1;
           LJEG()->redirect_to_isolation = 0;
           if (lua_pcall(I, 3 + nargs, 0, 0) != LUA_OK)

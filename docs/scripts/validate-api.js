@@ -68,7 +68,11 @@ function loadJsonDocs(apiDir) {
   for (const file of files) {
     const data = JSON.parse(fs.readFileSync(path.join(apiDir, file), 'utf8'));
     const ns = path.basename(file, '.json');
-    docs[ns] = (data.functions || []).map(f => f.name);
+    // Entries marked "defined_in": "lua" live in a C namespace but are
+    // implemented in the preinit Lua — exclude them from the C comparison.
+    docs[ns] = (data.functions || [])
+      .filter(f => f.defined_in !== 'lua')
+      .map(f => f.name);
   }
 
   return docs;
