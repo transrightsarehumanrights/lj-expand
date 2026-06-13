@@ -215,49 +215,6 @@ int lje_read_script_file(lua_State* L)
   return 0;
 }
 
-int lje_is_lua_involved(lua_State* L)
-{
-  int frame_offset = luaL_optinteger(L, 1, 1);
-  if (lje_frame_is_lua_involved(L, frame_offset))
-  {
-    lua_pushboolean(L, 1);
-  } else
-  {
-    lua_pushboolean(L, 0);
-  }
-
-  return 1;
-}
-
-int lje_is_lje_involved(lua_State* L)
-{
-  int frame_offset = luaL_optinteger(L, 1, 1);
-  int max_depth = luaL_optinteger(L, 2, -1);
-  if (lje_frame_is_lje_involved(L, frame_offset, max_depth))
-  {
-    lua_pushboolean(L, 1);
-  } else
-  {
-    lua_pushboolean(L, 0);
-  }
-
-  return 1;
-}
-
-int lje_is_lje_frame(lua_State* L)
-{
-  int frame_offset = luaL_optinteger(L, 1, 1);
-  if (lje_frame_is_lje(L, frame_offset))
-  {
-    lua_pushboolean(L, 1);
-  } else
-  {
-    lua_pushboolean(L, 0);
-  }
-
-  return 1;
-}
-
 int lje_set_script_hook_callback(lua_State* L)
 {
   GCfunc* callback = lj_lib_checkfunc(L, 1);
@@ -384,13 +341,6 @@ int lje_compile_string(lua_State* L)
     lua_pushnil(L);
 
   return 1; // Return compiled function
-}
-
-int lje_set_show_special_frames(lua_State* L)
-{
-  int show = lua_toboolean(L, 1);
-  LJEG()->show_special_frames = show;
-  return 0;
 }
 
 static int lje_create_table(lua_State* L)
@@ -608,11 +558,7 @@ void lje_addfuncs(lua_State* L) {
     LJE_SET_FUNC("current_script_path", lje_get_current_script_path);
     LJE_SET_FUNC("find_script_files", lje_find_script_files);
     LJE_SET_FUNC("read_script_file", lje_read_script_file);
-    LJE_SET_FUNC("is_lua_involved", lje_is_lua_involved);
-    LJE_SET_FUNC("is_lje_involved", lje_is_lje_involved);
-    LJE_SET_FUNC("is_lje_frame", lje_is_lje_frame);
     /* the following affect the global environment. */
-    LJE_SET_FUNC("show_special_frames", lje_set_show_special_frames); /* useful for making inter-LJE debug introspection work */
     LJE_SET_FUNC("on_cleanup", lje_set_cleanup_hook);
   LJE_END_SECTION("env");
 

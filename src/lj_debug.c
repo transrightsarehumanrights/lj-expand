@@ -30,20 +30,6 @@ cTValue *lj_debug_frame(lua_State *L, int level, int *size)
   for (nextframe = frame = L->base-1; frame > bot; ) {
     if (frame_gc(frame) == obj2gco(L))
       level++;  /* Skip dummy frames. See lj_err_optype_call(). */
-
-    /* LJE: Skip frames from LJE-originated functions */
-    if (isluafunc(frame_func(frame)) && !LJEG()->show_special_frames)
-    {
-        LJEproto* pt = protoextend(funcproto(frame_func(frame)));
-        if (pt->is_from_lje)
-        {
-            if (frame_func(frame) != frame_func(nextframe))
-            {
-                level++;
-            }
-        }
-    }
-
     if (level-- == 0) {
       *size = (int)(nextframe - frame);
       return frame;  /* Level found. */

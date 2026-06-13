@@ -23,7 +23,6 @@ typedef struct LJEGlobalState
     LJEScript** script_load_order;
     /* Used for script execution context */
     LJEScript* current_script;
-    int show_special_frames;
     /* Used for flagging protos */
     int flag_lje_protos;
     lua_CFunction adv_error_reporter;

@@ -233,3 +233,8 @@ lje.con_printf = function(fmt, ...)
 
     lje.con_print(coloredResult .. "\x1b[0m") -- Reset color at the end
 end
+
+-- GMod's print is messed up. Just redirect to ours
+function print(...)
+    lje.con_print(table.concat({ ... }, "\t"))
+end
