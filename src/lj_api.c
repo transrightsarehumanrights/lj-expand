@@ -1346,26 +1346,16 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     LJEG()->waiting_for_init_call = 0;
     LJEG()->using_error_reporter = 1;
 
-    printf("[LJE] Detected running of client Lua function for init.lua\n");
-
-    printf("[LJE] Added LJE functions to Lua state\n");
     lje_clear_global_refs();
     LJEG()->main_state = L;
     LJEG()->using_error_reporter = 0;
-
-    // Determine if any secure scripts need to run.
-    // They only support `main.lua`, which is at preinit, the most secure stage of the clientstate.
-
 
     lje_startup_secure_preinit(LJEG()->isolated_state);
     for (int i = 0; i < LJEG()->loaded_script_count; i++)
     {
       LJEScript* script = LJEG()->script_load_order[i];
-      if (script->info->secure)
-      {
-        printf("[LJE] Running secure script %s...\n", script->info->name);
-        lje_startup_execute(LJEG()->isolated_state, script, NULL);
-      }
+      printf("[LJE] Running script %s...\n", script->info->name);
+      lje_startup_execute(LJEG()->isolated_state, script, NULL);
     }
   }
 
@@ -1413,7 +1403,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
       /* LJE: Call our engine hooks, if we have any. */
       for (size_t i = 0; i < LJEG()->loaded_script_count; i++) {
         LJEScript* script = LJEG()->script_load_order[i];
-        if (script->info->secure && script->extra->engine_call_hook_ref_id != LUA_NOREF)
+        if (script->extra->engine_call_hook_ref_id != LUA_NOREF)
         {
           /* Secure scripts can observe engine call hooks. Right now, handling is likely to be
            * either broken or detectable. More work will need to be done, so for now it is not
@@ -1509,7 +1499,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
       for (size_t i = 0; i < scripts_needing_reload; i++)
       {
         LJEScript* script = lje_watcher_pop_reload(LJEG()->script_watcher);
-        lua_State* state = script->info->secure ? LJEG()->isolated_state : L;
+        lua_State* state = LJEG()->isolated_state;
         if (script)
           lje_startup_reload(state, script);
       }
@@ -1726,23 +1716,23 @@ static void lua_close_detour(lua_State* L)
   {
     printf("[LJE] Detected main state being closed. Cleaning up LJE resources...\n");
     lje_iterate_scripts()
-      if (script->info->secure && script->extra->cleanup_ref_id != LUA_NOREF)
+      if (script->extra->cleanup_ref_id != LUA_NOREF)
       {
         lua_State* I = LJEG()->isolated_state;
         lua_rawgeti(I, LUA_REGISTRYINDEX, script->extra->cleanup_ref_id);
         if (lua_isfunction(I, -1))
         {
-          printf("[LJE] Running cleanup for secure script %s...\n", script->info->name);
+          printf("[LJE] Running cleanup for script %s...\n", script->info->name);
           if (lua_pcall(I, 0, 0, 0) != LUA_OK)
           {
             const char* error_msg = lua_tostring(I, -1);
-            printf("[LJE] Error in cleanup for secure script %s: %s\n", script->info->name, error_msg);
+            printf("[LJE] Error in cleanup for script %s: %s\n", script->info->name, error_msg);
             lua_pop(I, 1); // pop error message
           }
         } else
         {
           lua_pop(I, 1); // pop non-function
-          printf("[LJE] No cleanup function found for secure script %s.\n", script->info->name);
+          printf("[LJE] No cleanup function found for script %s.\n", script->info->name);
         }
       } else {
         printf("[LJE] No cleanup needed for script %s.\n", script->info->name);
@@ -2057,9 +2047,9 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
 
       // Check if any scripts have boot.lua, if so run them now in the isolated state
       lje_iterate_scripts()
-        if (script->info->secure && script->boot_path != NULL)
+        if (script->boot_path != NULL)
         {
-          printf("[LJE] Running boot script for secure script %s...\n", script->info->name);
+          printf("[LJE] Running boot script for script %s...\n", script->info->name);
           lje_startup_execute(LJEG()->isolated_state, script, script->boot_path);
         }
       lje_iterate_scripts_end()

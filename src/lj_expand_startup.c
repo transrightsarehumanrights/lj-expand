@@ -76,7 +76,6 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
     if (script_file)
     {
         printf("[LJE] Executing script '%s'...\n", script->name);
-        printf("[LJE] Script:\n%s\n", script_file);
         LJEG()->flag_lje_protos = 1;
         if (original_loadbufferx(L, script_file, strlen(script_file), chunkname, NULL) == 0)
         {

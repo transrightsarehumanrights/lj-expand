@@ -29,14 +29,6 @@ typedef struct LJEScriptInfo
     size_t dependency_count;
     LJEBinaryModuleDependency* binary_dependencies;
     size_t binary_dependency_count;
-    /*
-     * If true, this script will use the isolated LJE state. This state is particularly limited but basically
-     * close to impossible to detect from the usual client state (close to impossible, but practically impossible).
-     *
-     * It is a late addition, so the regular state is still fully available, but deploying LJE on strict
-     * servers might want to use this to be safe and avoid detection.
-     */
-    char secure;
 } LJEScriptInfo;
 
 typedef struct LJEScriptExtraInfo
