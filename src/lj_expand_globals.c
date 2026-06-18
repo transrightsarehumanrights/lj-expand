@@ -1,4 +1,5 @@
 #include "lj_expand_globals.h"
+#include "lj_expand_log.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -63,12 +64,12 @@ int lje_is_addr_in_lje(uintptr_t addr)
 
 void lje_print_stack(lua_State* L)
 {
-  // Print like [number][table][userdata]. Must use internal since all APIs use this logger so recursion.
-  printf("[LJE] %d elements on stack.\n", (int)(L->top - L->base));
-  printf("[LJE] ");
+  // Print like [number][table][userdata].
+  LJE_INFO("%d elements on stack.", (int)(L->top - L->base));
+  LJE_INFO("Stack contents:");
   for (TValue* o = L->base; o < L->top; o++)
   {
-    printf("[%s]", itype(o) == LJ_TSTR ? strdata(strV(o)) : lj_typename(o));
+    lje_log_raw("[%s]", itype(o) == LJ_TSTR ? strdata(strV(o)) : lj_typename(o));
   }
-  printf("\n");
+  lje_log_raw("\n");
 }

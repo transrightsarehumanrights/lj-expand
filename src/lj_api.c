@@ -21,6 +21,7 @@
 #include "lj_state.h"
 #include "lj_bc.h"
 #include "lj_expand_lib.h"
+#include "lj_expand_log.h"
 #include "lj_expand_module.h"
 #include "lj_expand_detour.h"
 #include "lj_expand_signatures.h"
@@ -48,6 +49,7 @@
 #include "lj_expand_dirs.h"
 #include "lj_expand_isolation.h"
 #include "lj_expand_proxy.h"
+#include "lj_expand_log.h"
 
 
 /* -- Common helper functions --------------------------------------------- */
@@ -188,7 +190,7 @@ LUA_API void lua_remove(lua_State *L, int idx)
   TValue *p = stkindex2adr(L, idx);
   if (p == niltv(L))
   {
-    printf("[LJE] Invalid index passed to lua_remove: %d\n", idx);
+    LJE_WARN("Invalid index passed to lua_remove: %d", idx);
     return;
   }
 
@@ -1298,7 +1300,7 @@ LUA_API void lua_call(lua_State *L, int nargs, int nresults)
     GCproto* p = funcproto(funcV(L->base));
     if (proto_chunkname(p))
     {
-      printf("[LJE]: Function being called from lua_pcall: %s\n", p ? proto_chunknamestr(p) : "unknown");
+      LJE_DEBUG("Function being called from lua_pcall: %s", p ? proto_chunknamestr(p) : "unknown");
     }
   }
 
@@ -1317,19 +1319,20 @@ static void lje_dump_stack(lua_State* L)
 
   int top = lua_gettop(L);
   int chars_printed = 0;
-  printf("[LJE STACK DUMP] Stack (top=%d):", top);
+  /* Use lje_log_raw (no tag) so the alignment math below stays correct. */
+  lje_log_raw("[LJE STACK DUMP] Stack (top=%d):", top);
   chars_printed += strlen("[LJE STACK DUMP] Stack (top=XX):");
   for (int i = 1; i <= top; i++)
   {
     int t = lua_type(L, i);
     const char* tname = lua_typename(L, t);
-    printf("[%s]", tname);
+    lje_log_raw("[%s]", tname);
     chars_printed += (int)(strlen(tname) + 2); // +2 for the brackets
   }
-  printf("\n");
+  lje_log_raw("\n");
   for (int i = 0; i < chars_printed - 8; i++)
-    printf("-");
-  printf("^ = L->top\n");
+    lje_log_raw("-");
+  lje_log_raw("^ = L->top\n");
 }
 
 /* LJE: lua_pcall is essentially the Lua entrypoint for the entire game.
@@ -1354,7 +1357,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     for (int i = 0; i < LJEG()->loaded_script_count; i++)
     {
       LJEScript* script = LJEG()->script_load_order[i];
-      printf("[LJE] Running script %s...\n", script->info->name);
+      LJE_INFO("Running script %s...", script->info->name);
       lje_startup_execute(LJEG()->isolated_state, script, NULL);
     }
   }
@@ -1373,9 +1376,9 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     }
 
     lje_watcher_start(LJEG()->script_watcher);
-    printf("[LJE] Created script watcher for startup scripts.\n");
+    LJE_SUCCESS("Created script watcher for startup scripts.");
 
-    printf("[LJE] Starting up Lua...\n");
+    LJE_INFO("Starting up Lua...");
   }
 
   /* LJE: Determine if this is an engine call. */
@@ -1390,8 +1393,8 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     char is_function_null = f == LJ_GCVMASK || (uintptr_t)f == 0x0000400000000000;
     if (is_function_null)
     {
-      printf("[LJE] Warning: errfunc is set but function is null. This is unexpected, but we'll try to continue anyway.\n");
-      printf("[LJE] This often signals the stack is corrupted. Prepare for potential crash.");
+      LJE_WARN("errfunc is set but function is null. This is unexpected, but we'll try to continue anyway.");
+      LJE_WARN("This often signals the stack is corrupted. Prepare for potential crash.");
     }
 
     char is_adv_error_reporter = 0;
@@ -1465,7 +1468,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
             LJEG()->using_error_reporter = 0;
             /* If the hook errors, we just print the error and move on. */
             const char* error_msg = lua_tostring(I, -1);
-            printf("[LJE] Error in engine call hook for secure script %s: %s\n", script->info->name, error_msg);
+            LJE_ERROR("Error in engine call hook for secure script %s: %s", script->info->name, error_msg);
             lua_pop(I, 1); // pop error message
             lje_proxy_release_all();
             lj_gc_check(I);
@@ -1495,7 +1498,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     size_t scripts_needing_reload = lje_watcher_reload_count(LJEG()->script_watcher);
     if (scripts_needing_reload > 0)
     {
-      printf("[LJE] Detected %zu scripts needing reload. Reloading now...\n", scripts_needing_reload);
+      LJE_INFO("Detected %zu scripts needing reload. Reloading now...", scripts_needing_reload);
       for (size_t i = 0; i < scripts_needing_reload; i++)
       {
         LJEScript* script = lje_watcher_pop_reload(LJEG()->script_watcher);
@@ -1512,7 +1515,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     cTValue* o = stkindex2adr(L, errfunc);
     if (o && !tvisfunc(o))
     {
-      printf("[LJE] Warning: errfunc is set but not a function. This is unexpected, but we'll try to continue anyway.\n");
+      LJE_WARN("errfunc is set but not a function. This is unexpected, but we'll try to continue anyway.");
       __debugbreak();
     }
   }
@@ -1534,10 +1537,10 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
   if (status) hook_restore(g, oldh);
   if (status == LUA_ERRERR)
   {
-    printf("[LJE] ERRERR detected. state = %p\n", L);
+    LJE_ERROR("ERRERR detected. state = %p", L);
     if (L == LJEG()->isolated_state)
     {
-      printf("  + is isolated state!!!\n");
+      LJE_ERROR("  + is isolated state!!!");
     }
   }
   return status;
@@ -1714,7 +1717,7 @@ static void lua_close_detour(lua_State* L)
 {
   if (L == LJEG()->main_state)
   {
-    printf("[LJE] Detected main state being closed. Cleaning up LJE resources...\n");
+    LJE_INFO("Detected main state being closed. Cleaning up LJE resources...");
     lje_iterate_scripts()
       if (script->extra->cleanup_ref_id != LUA_NOREF)
       {
@@ -1722,20 +1725,20 @@ static void lua_close_detour(lua_State* L)
         lua_rawgeti(I, LUA_REGISTRYINDEX, script->extra->cleanup_ref_id);
         if (lua_isfunction(I, -1))
         {
-          printf("[LJE] Running cleanup for script %s...\n", script->info->name);
+          LJE_INFO("Running cleanup for script %s...", script->info->name);
           if (lua_pcall(I, 0, 0, 0) != LUA_OK)
           {
             const char* error_msg = lua_tostring(I, -1);
-            printf("[LJE] Error in cleanup for script %s: %s\n", script->info->name, error_msg);
+            LJE_ERROR("Error in cleanup for script %s: %s", script->info->name, error_msg);
             lua_pop(I, 1); // pop error message
           }
         } else
         {
           lua_pop(I, 1); // pop non-function
-          printf("[LJE] No cleanup function found for script %s.\n", script->info->name);
+          LJE_INFO("No cleanup function found for script %s.", script->info->name);
         }
       } else {
-        printf("[LJE] No cleanup needed for script %s.\n", script->info->name);
+        LJE_INFO("No cleanup needed for script %s.", script->info->name);
       }
     lje_iterate_scripts_end()
 
@@ -1775,17 +1778,20 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
 
     lje_Module* mod = lje_module_find("lua_shared.dll");
     if (mod) {
-      printf("[LJE] LJE loaded successfully!\n");
-      printf("[LJE] lua_shared.dll found at %p\n", mod->base);
+      printf("\n");
+      lje_log_banner();
+      printf("\n\n");
+      LJE_SUCCESS("LJE loaded successfully!");
+      LJE_INFO("lua_shared.dll found at %p", mod->base);
 
-      printf("[LJE] Initializing crash handler...\n");
+      LJE_INFO("Initializing crash handler...");
       lje_crash_handler_init();
-      printf("[LJE] Crash handler initialized!\n");
+      LJE_SUCCESS("Crash handler initialized!");
 
       // Try migrating
       if (!lje_migrate_legacy_dirs())
       {
-        printf("[LJE] Failed to migrate legacy directories! If you had scripts or binary modules in the old folders, please move them to the new ones manually.\n");
+        LJE_ERROR("Failed to migrate legacy directories! If you had scripts or binary modules in the old folders, please move them to the new ones manually.");
       }
 
       // Remap all the necessary functions to our own.
@@ -1932,9 +1938,9 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
       {
         int attached = lje_detour_trampoline(original_close, lua_close_detour, (void*)&lua_close_trampoline);
         if (!attached)
-          printf("[LJE] Failed to detour lua_close! This may cause resource leaks when the game closes.");
+          LJE_ERROR("Failed to detour lua_close! This may cause resource leaks when the game closes.");
         else
-          printf("[LJE] Detoured lua_close successfully!\n");
+          LJE_SUCCESS("Detoured lua_close successfully!");
       }
 
       /* LJE: This is a *tad* bit out-of-scope for LJE since we are very
@@ -1944,33 +1950,33 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
       LJEG()->adv_error_reporter = (lua_CFunction)lje_module_get_func(mod, "?AdvancedLuaErrorReporter@@YAHPEAUlua_State@@@Z");
       if (LJEG()->adv_error_reporter)
       {
-        printf("[LJE] Found AdvancedLuaErrorReporter at %p\n", LJEG()->adv_error_reporter);
+        LJE_INFO("Found AdvancedLuaErrorReporter at %p", LJEG()->adv_error_reporter);
       } else {
-        printf("[LJE] AdvancedLuaErrorReporter not found!\n");
+        LJE_WARN("AdvancedLuaErrorReporter not found!");
       }
 
       LJECommandLineOptions* options = lje_get_command_line_options();
 
       if (options->disable_binary_modules)
       {
-        printf("[LJE] Binary module loading is disabled via command line option, skipping...\n");
+        LJE_INFO("Binary module loading is disabled via command line option, skipping...");
         LJEG()->loaded_binary_module_count = 0;
         LJEG()->loaded_binary_modules = NULL;
       } else
       {
-        printf("[LJE] Loading binary modules...\n");
+        LJE_INFO("Loading binary modules...");
         lje_binary_module_ensure_folder_exists();
         lje_binary_module_load_all(&LJEG()->loaded_binary_module_count, &LJEG()->loaded_binary_modules);
         if (LJEG()->loaded_binary_module_count > 0)
         {
-          printf("[LJE] Loaded %d binary modules:\n", LJEG()->loaded_binary_module_count);
+          LJE_INFO("Loaded %d binary modules:", LJEG()->loaded_binary_module_count);
           for (int i = 0; i < LJEG()->loaded_binary_module_count; i++)
           {
             LJEBinaryModule module = LJEG()->loaded_binary_modules[i];
-            printf("[LJE] - %s\n", module.name);
+            LJE_INFO("- %s", module.name);
           }
         } else {
-          printf("[LJE] No binary modules loaded.\n");
+          LJE_INFO("No binary modules loaded.");
         }
       }
 
@@ -1979,47 +1985,47 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
         // Tell them we're creating one for them
         char path[MAX_PATH];
         lje_script_resolve_base(path, MAX_PATH);
-        printf("[LJE] %s folder not found, creating it now...\n", LJE_SCRIPT_FOLDER);
-        printf("[LJE] Creating at path: %s\n", path);
+        LJE_INFO("%s folder not found, creating it now...", LJE_SCRIPT_FOLDER);
+        LJE_INFO("Creating at path: %s", path);
         if (!lje_script_folder_create())
         {
-          printf("[LJE] Failed to create %s folder! Please create it manually.\n", LJE_SCRIPT_FOLDER);
+          LJE_ERROR("Failed to create %s folder! Please create it manually.", LJE_SCRIPT_FOLDER);
         } else {
-          printf("[LJE] Successfully created %s folder!\n", LJE_SCRIPT_FOLDER);
+          LJE_SUCCESS("Successfully created %s folder!", LJE_SCRIPT_FOLDER);
         }
       }
 
       if (options->disable_scripts)
       {
-        printf("[LJE] Script loading is disabled via command line option, skipping...\n");
+        LJE_INFO("Script loading is disabled via command line option, skipping...");
         LJEG()->loaded_script_count = 0;
         LJEG()->loaded_scripts = NULL;
         return TRUE;
       }
 
       LJEG()->loaded_scripts = lje_script_load_all_scripts(&LJEG()->loaded_script_count);
-      printf("[LJE] Loaded %llu scripts!\n", LJEG()->loaded_script_count);
+      LJE_SUCCESS("Loaded %llu scripts!", LJEG()->loaded_script_count);
       for (size_t i = 0; i < LJEG()->loaded_script_count; i++)
       {
-        printf("[LJE] - %s\n", LJEG()->loaded_scripts[i].name);
-        printf("[LJE]   Name: %s\n", LJEG()->loaded_scripts[i].info->name);
-        printf("[LJE]   Author: %s\n", LJEG()->loaded_scripts[i].info->author);
-        printf("[LJE]   Version: %s\n", LJEG()->loaded_scripts[i].info->version);
+        LJE_INFO("- %s", LJEG()->loaded_scripts[i].name);
+        LJE_INFO("  Name: %s", LJEG()->loaded_scripts[i].info->name);
+        LJE_INFO("  Author: %s", LJEG()->loaded_scripts[i].info->author);
+        LJE_INFO("  Version: %s", LJEG()->loaded_scripts[i].info->version);
         for (size_t j = 0; j < LJEG()->loaded_scripts[i].info->dependency_count; j++)
         {
-          printf("[LJE]   Dependency: %s\n", LJEG()->loaded_scripts[i].info->dependencies[j].name);
+          LJE_INFO("  Dependency: %s", LJEG()->loaded_scripts[i].info->dependencies[j].name);
         }
 
         if (LJEG()->loaded_scripts[i].info->binary_dependencies)
         {
           for (size_t j = 0; j < LJEG()->loaded_scripts[i].info->binary_dependency_count; j++)
           {
-            printf("[LJE]   Binary Dependency: %s\n", LJEG()->loaded_scripts[i].info->binary_dependencies[j].name);
+            LJE_INFO("  Binary Dependency: %s", LJEG()->loaded_scripts[i].info->binary_dependencies[j].name);
           }
         }
       }
 
-      printf("[LJE] Performing dependency resolution...\n");
+      LJE_INFO("Performing dependency resolution...");
       LJEG()->script_load_order = lje_script_compute_load_order(
         LJEG()->loaded_script_count,
         LJEG()->loaded_scripts
@@ -2028,20 +2034,20 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
       for (size_t i = 0; i < LJEG()->loaded_script_count; i++)
       {
         LJEScript* script = LJEG()->script_load_order[i];
-        printf("[LJE] - %d. %s\n", i + 1, script->name);
+        LJE_INFO("- %d. %s", i + 1, script->name);
       }
 
       lje_proxy_arena_init();
       LJEG()->isolated_state = lje_create_isolated_state();
       if (LJEG()->isolated_state)
       {
-        printf("[LJE] Created isolated Lua state for secure scripts.\n");
+        LJE_SUCCESS("Created isolated Lua state for secure scripts.");
       }
 
       for (int i = 0; i < LJEG()->loaded_binary_module_count; i++)
       {
         LJEBinaryModule* mod = &LJEG()->loaded_binary_modules[i];
-        printf("[LJE] Loading binary module %s into isolated state...\n", mod->name);
+        LJE_INFO("Loading binary module %s into isolated state...", mod->name);
         lje_binary_module_run_preinit(mod, LJEG()->isolated_state);
       }
 
@@ -2049,13 +2055,13 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
       lje_iterate_scripts()
         if (script->boot_path != NULL)
         {
-          printf("[LJE] Running boot script for script %s...\n", script->info->name);
+          LJE_INFO("Running boot script for script %s...", script->info->name);
           lje_startup_execute(LJEG()->isolated_state, script, script->boot_path);
         }
       lje_iterate_scripts_end()
 
     } else {
-      printf("lua_shared.dll not found!\n");
+      LJE_ERROR("lua_shared.dll not found!");
     }
 
     return TRUE;

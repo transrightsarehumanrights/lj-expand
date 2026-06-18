@@ -3,6 +3,7 @@
 #include "lauxlib.h"
 #include "lj_expand_globals.h"
 #include "lj_expand_lib.h"
+#include "lj_expand_log.h"
 #include "lualib.h"
 
 #include <windows.h>
@@ -21,7 +22,7 @@ lua_State* lje_create_isolated_state() {
     HMODULE gmod_lua = GetModuleHandleA("lua_shared.dll");
     if (!gmod_lua)
     {
-        printf("[LJE] Failed to locate GMod's lua_shared.dll for isolated state creation.\n");
+        LJE_ERROR("Failed to locate GMod's lua_shared.dll for isolated state creation.");
         return NULL;
     }
 
@@ -29,7 +30,7 @@ lua_State* lje_create_isolated_state() {
     luaL_openlibs_t gmod_openlibs = (luaL_openlibs_t)GetProcAddress(gmod_lua, "luaL_openlibs");
     if (!gmod_newstate || !gmod_openlibs)
     {
-        printf("[LJE] Failed to resolve GMod luaL_newstate/luaL_openlibs exports.\n");
+        LJE_ERROR("Failed to resolve GMod luaL_newstate/luaL_openlibs exports.");
         return NULL;
     }
 
@@ -41,7 +42,7 @@ lua_State* lje_create_isolated_state() {
     lua_State* L = gmod_newstate();
     if (!L)
     {
-        printf("[LJE] Failed to create isolated Lua state.\n");
+        LJE_ERROR("Failed to create isolated Lua state.");
         return NULL;
     }
 
@@ -60,7 +61,7 @@ lua_State* lje_create_isolated_state() {
   lua_setfield(L, LUA_REGISTRYINDEX, "__lje_shadow_registry");
 
 
-    printf("[LJE] Created isolated Lua state: %p\n", (void*)L);
+    LJE_SUCCESS("Created isolated Lua state: %p", (void*)L);
     return L;
 }
 
@@ -270,7 +271,7 @@ static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, 
             {
               // Print out exactly what this is
               GCproto* pt = funcproto(from_fn);
-              printf("[LJE] Encountered Lua function from %s, not copying.\n", proto_chunknamestr(pt));
+              LJE_DEBUG("Encountered Lua function from %s, not copying.", proto_chunknamestr(pt));
               // Set an empty Lua function, then.
               // Our registry has 13371010 as the empty Lua function, so we can just copy that in.
               cTValue* empty_lua_func = lj_tab_getint(LJEG()->shadow_registry, 13371010);

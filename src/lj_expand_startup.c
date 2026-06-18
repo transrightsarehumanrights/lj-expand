@@ -3,6 +3,7 @@
 #include "lauxlib.h"
 #include "lj_expand_globals.h"
 #include "lj_expand_lib.h"
+#include "lj_expand_log.h"
 #include "lj_expand_module.h"
 #include "stdio.h"
 
@@ -12,7 +13,7 @@ static char* load_lua_file(const char* path)
 {
     FILE* file = fopen(path, "rb");
     if (!file) {
-        printf("[LJE] Failed to open script file: %s\n", path);
+        LJE_ERROR("Failed to open script file: %s", path);
         return NULL;
     }
 
@@ -61,7 +62,7 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
     lua_pcall_t original_pcall = NULL;
     if (!resolve_original_functions(&original_loadbufferx, &original_pcall))
     {
-        printf("[LJE] Failed to resolve original startup functions necessary...\n");
+        LJE_ERROR("Failed to resolve original startup functions necessary...");
         return;
     }
 
@@ -75,21 +76,21 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
 
     if (script_file)
     {
-        printf("[LJE] Executing script '%s'...\n", script->name);
+        LJE_INFO("Executing script '%s'...", script->name);
         LJEG()->flag_lje_protos = 1;
         if (original_loadbufferx(L, script_file, strlen(script_file), chunkname, NULL) == 0)
         {
             LJEG()->flag_lje_protos = 0;
             if (lua_pcall(L, 0, 0, 0) != 0) /* mental note: figure out why this seems to randomly not work? */
             {
-                printf("[LJE] Error executing script: %s\n", lua_tostring(L, -1));
+                LJE_ERROR("Error executing script: %s", lua_tostring(L, -1));
                 lua_pop(L, 1); // Pop error message
             }
         }
         else
         {
             LJEG()->flag_lje_protos = 0;
-            printf("[LJE] Error loading script: %s\n", lua_tostring(L, -1));
+            LJE_ERROR("Error loading script: %s", lua_tostring(L, -1));
             lua_pop(L, 1); // Pop error message
         }
 
@@ -104,13 +105,13 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
     lua_pcall_t original_pcall = NULL;
     if (!resolve_original_functions(&original_loadbufferx, &original_pcall))
     {
-        printf("[LJE] Failed to resolve original startup functions necessary...\n");
+        LJE_ERROR("Failed to resolve original startup functions necessary...");
         return 0;
     }
 
     if (!LJEG()->current_script)
     {
-        printf("[LJE] No current script context for include!\n");
+        LJE_ERROR("No current script context for include!");
         return 0;
     }
 
@@ -137,7 +138,7 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
 
         if (original_pcall(L, 0, LUA_MULTRET, 0) != 0)
         {
-            printf("[LJE] Error executing include script: %s\n", lua_tostring(L, -1));
+            LJE_ERROR("Error executing include script: %s", lua_tostring(L, -1));
             lua_pop(L, 1); // Pop error message
         } else
         {
@@ -148,7 +149,7 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
     else
     {
         LJEG()->flag_lje_protos = 0;
-        printf("[LJE] Error loading include script: %s\n", lua_tostring(L, -1));
+        LJE_ERROR("Error loading include script: %s", lua_tostring(L, -1));
         lua_pop(L, 1); // Pop error message
     }
 
@@ -157,13 +158,13 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
 }
 
 void lje_startup_secure_preinit(lua_State* L) {
-    printf("[LJE] Running secure pre-initialization script...\n");
+    LJE_INFO("Running secure pre-initialization script...");
 
     luaL_loadbufferx_t original_loadbufferx = NULL;
     lua_pcall_t original_pcall = NULL;
     if (!resolve_original_functions(&original_loadbufferx, &original_pcall))
     {
-        printf("[LJE] Failed to resolve original startup functions necessary...\n");
+        LJE_ERROR("Failed to resolve original startup functions necessary...");
         return;
     }
 
@@ -174,17 +175,17 @@ void lje_startup_secure_preinit(lua_State* L) {
         LJEG()->flag_lje_protos = 0;
         if (original_pcall(L, 0, 0, 0) != 0)
         {
-            printf("[LJE ERROR] Error executing secure pre-initialization script: %s\n", lua_tostring(L, -1));
+            LJE_ERROR("Error executing secure pre-initialization script: %s", lua_tostring(L, -1));
             lua_pop(L, 1); // Pop error message
         } else
         {
-            printf("[LJE] Secure pre-initialization script executed successfully.\n");
+            LJE_SUCCESS("Secure pre-initialization script executed successfully.");
         }
     }
     else
     {
         LJEG()->flag_lje_protos = 0;
-        printf("[LJE ERROR] Error loading secure pre-initialization script: %s\n", lua_tostring(L, -1));
+        LJE_ERROR("Error loading secure pre-initialization script: %s", lua_tostring(L, -1));
         lua_pop(L, 1); // Pop error message
     }
 
@@ -195,7 +196,7 @@ int lje_startup_compile(lua_State* L, const char* source) {
     luaL_loadbufferx_t original_loadbufferx = NULL;
     if (!resolve_original_functions(&original_loadbufferx, NULL))
     {
-        printf("[LJE] Failed to resolve original startup functions necessary...\n");
+        LJE_ERROR("Failed to resolve original startup functions necessary...");
         return 0;
     }
 
@@ -208,7 +209,7 @@ int lje_startup_compile(lua_State* L, const char* source) {
     else
     {
         LJEG()->flag_lje_protos = 0;
-        printf("[LJE ERROR] Error compiling dynamic script: %s\n", lua_tostring(L, -1));
+        LJE_ERROR("Error compiling dynamic script: %s", lua_tostring(L, -1));
         lua_pop(L, 1); // Pop error message
     }
 
@@ -220,7 +221,7 @@ int lje_startup_run(lua_State* L, const char* source) {
     lua_pcall_t original_pcall = NULL;
     if (!resolve_original_functions(&original_loadbufferx, &original_pcall))
     {
-        printf("[LJE] Failed to resolve original startup functions necessary...\n");
+        LJE_ERROR("Failed to resolve original startup functions necessary...");
         return -1;
     }
 
@@ -230,7 +231,7 @@ int lje_startup_run(lua_State* L, const char* source) {
 
     if (status != 0)
     {
-        printf("[LJE ERROR] Error loading script: %s\n", lua_tostring(L, -1));
+        LJE_ERROR("Error loading script: %s", lua_tostring(L, -1));
         lua_pop(L, 1); // Pop error message
         return status;
     }
@@ -238,7 +239,7 @@ int lje_startup_run(lua_State* L, const char* source) {
     status = original_pcall(L, 0, 0, 0);
     if (status != 0)
     {
-        printf("[LJE ERROR] Error executing script: %s\n", lua_tostring(L, -1));
+        LJE_ERROR("Error executing script: %s", lua_tostring(L, -1));
         lua_pop(L, 1); // Pop error message
     }
 
@@ -247,7 +248,7 @@ int lje_startup_run(lua_State* L, const char* source) {
 
 LJ_FUNC void lje_startup_reload(lua_State* L, LJEScript* script)
 {
-    printf("[LJE] Reloading script '%s'...\n", script->name);
+    LJE_INFO("Reloading script '%s'...", script->name);
 
     lje_startup_execute(L, script, NULL);
 }

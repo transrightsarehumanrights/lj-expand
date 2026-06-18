@@ -1,4 +1,5 @@
 #include "lj_expand_proxy.h"
+#include "lj_expand_log.h"
 
 #include <stdio.h>
 
@@ -11,7 +12,7 @@ static void resize_arena(size_t new_size)
     LJEProxy* new_arena = (LJEProxy*)realloc(proxy_arena, sizeof(LJEProxy) * new_size);
     if (!new_arena)
     {
-        printf("[LJE] Failed to resize proxy arena to size: %zu\n", new_size);
+        LJE_ERROR("Failed to resize proxy arena to size: %zu", new_size);
         return;
     }
 
@@ -24,7 +25,7 @@ static void resize_arena(size_t new_size)
     proxy_arena = new_arena;
     proxy_arena_size = new_size;
 
-    printf("[LJE] Resized proxy arena to size: %zu\n", new_size);
+    LJE_DEBUG("Resized proxy arena to size: %zu", new_size);
 }
 
 void lje_proxy_arena_init()
@@ -33,7 +34,7 @@ void lje_proxy_arena_init()
     proxy_arena = (LJEProxy*)malloc(sizeof(LJEProxy) * proxy_arena_size);
     if (!proxy_arena)
     {
-        printf("[LJE] Failed to initialize proxy arena.\n");
+        LJE_ERROR("Failed to initialize proxy arena.");
         return;
     }
 
@@ -44,14 +45,14 @@ LJEProxy* lje_proxy(cTValue* val)
 {
     if (!proxy_arena)
     {
-        printf("[LJE] Proxy arena not initialized!\n");
+        LJE_ERROR("Proxy arena not initialized!");
         return NULL;
     }
 
     GCobj* obj = gcV(val);
     if (obj->gch.gct != ~LJ_TTAB && obj->gch.gct != ~LJ_TUDATA)
     {
-        printf("[LJE] Attempted to create proxy for unsupported type (gct: %d)\n", ~obj->gch.gct);
+        LJE_WARN("Attempted to create proxy for unsupported type (gct: %d)", ~obj->gch.gct);
         return NULL;
     }
 

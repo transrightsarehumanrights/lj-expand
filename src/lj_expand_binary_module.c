@@ -9,6 +9,7 @@
 #include "lj_expand_dirs.h"
 #include "lj_expand_frame.h"
 #include "lj_expand_globals.h"
+#include "lj_expand_log.h"
 #include "lua.h"
 
 #define VIRUS_TOTAL_FILE_URL "https://www.virustotal.com/gui/file/%s"
@@ -22,14 +23,14 @@ static LJEBinaryModule* load_module(const char* full_path, const char* name)
   char* module_hash = hash_module(full_path);
   if (!module_hash)
   {
-    printf("[LJE] Failed to hash binary module: %s\n", full_path);
+    LJE_ERROR("Failed to hash binary module: %s", full_path);
     return NULL;
   }
 
   HMODULE handle = LoadLibraryA(full_path);
   if (!handle)
   {
-    printf("[LJE] Failed to load binary module: %s\n", full_path);
+    LJE_ERROR("Failed to load binary module: %s", full_path);
     return NULL;
   }
 
@@ -54,10 +55,10 @@ static LJEBinaryModule* load_module(const char* full_path, const char* name)
     int init_result = init_func(api);
     if (init_result != LJE_RESULT_OK)
     {
-      printf("[LJE] Binary module %s failed to initialize (code %d)\n", full_path, init_result);
+      LJE_ERROR("Binary module %s failed to initialize (code %d)", full_path, init_result);
       if (init_result == LJE_RESULT_INCOMPATIBLE_SDK_VERSION)
       {
-        printf("[LJE] Incompatible module version! Expected %d\n", LJE_SDK_VERSION);
+        LJE_ERROR("Incompatible module version! Expected %d", LJE_SDK_VERSION);
       }
 
       FreeLibrary(handle);
@@ -67,9 +68,9 @@ static LJEBinaryModule* load_module(const char* full_path, const char* name)
     }
   }
 
-  printf("[LJE] Loaded binary module: %s\n", full_path);
-  printf("[LJE]    - Hash: %s\n", module->hash);
-  printf("[LJE]    - VirusTotal (may not exist): " VIRUS_TOTAL_FILE_URL "\n", module->hash);
+  LJE_SUCCESS("Loaded binary module: %s", full_path);
+  LJE_INFO("   - Hash: %s", module->hash);
+  LJE_INFO("   - VirusTotal (may not exist): " VIRUS_TOTAL_FILE_URL, module->hash);
   return module;
 }
 
@@ -262,7 +263,7 @@ static void resolve_base(char* path, size_t path_size)
 {
   if (!lje_directory_get(LJE_DIR_BINARIES, path, path_size))
   {
-    printf("[LJE] Failed to resolve binary module folder path!\n");
+    LJE_ERROR("Failed to resolve binary module folder path!");
   }
 }
 
@@ -274,14 +275,14 @@ void lje_binary_module_ensure_folder_exists()
   DWORD attrs = GetFileAttributesA(base_path);
   if (attrs == INVALID_FILE_ATTRIBUTES || !(attrs & FILE_ATTRIBUTE_DIRECTORY))
   {
-    printf("[LJE] Binary module folder not found, creating it now...\n");
+    LJE_INFO("Binary module folder not found, creating it now...");
     if (!CreateDirectoryA(base_path, NULL))
     {
-      printf("[LJE] Failed to create binary module folder at %s\n", base_path);
+      LJE_ERROR("Failed to create binary module folder at %s", base_path);
     }
     else
     {
-      printf("[LJE] Successfully created binary module folder at %s\n", base_path);
+      LJE_SUCCESS("Successfully created binary module folder at %s", base_path);
     }
   }
 }
@@ -293,18 +294,18 @@ void lje_binary_module_load_all(
 {
   if (!has_user_been_warned())
   {
-    printf("[LJE] ************* WARNING *************\n");
-    printf("[LJE] Loading binary modules from '%s'!\n", LJE_BINARY_MODULE_FOLDER);
-    printf(
-      "[LJE] Make sure you **ALWAYS** verify the integrity of any binary modules you download from third-party sources!\n");
-    printf("[LJE] Malicious modules can compromise your system security and personal data!\n");
-    printf(
-      "[LJE] Ideally, only use modules from trusted sources or those that are open-source and publicly auditable.\n");
-    printf("[LJE] You have been warned.\n");
-    printf("[LJE] ***********************************\n");
+    LJE_WARN("************* WARNING *************");
+    LJE_WARN("Loading binary modules from '%s'!", LJE_BINARY_MODULE_FOLDER);
+    LJE_WARN(
+      "Make sure you **ALWAYS** verify the integrity of any binary modules you download from third-party sources!");
+    LJE_WARN("Malicious modules can compromise your system security and personal data!");
+    LJE_WARN(
+      "Ideally, only use modules from trusted sources or those that are open-source and publicly auditable.");
+    LJE_WARN("You have been warned.");
+    LJE_WARN("***********************************");
     write_warning();
 
-    printf("\a"); /* Beep to get attention */
+    lje_log_raw("\a"); /* Beep to get attention */
     Sleep(5000); /* Give user time to read the warning */
   }
 
@@ -391,7 +392,7 @@ void lje_binary_module_run_preinit(LJEBinaryModule* module, lua_State* L)
 
   if (!preinit_func)
   {
-    printf("[LJE] Binary module %s has no preinit function.\n", module->path);
+    LJE_INFO("Binary module %s has no preinit function.", module->path);
     return;
   }
 

@@ -10,6 +10,7 @@
 #include "lj_expand_frame.h"
 #include "lj_expand_globals.h"
 #include "lj_expand_isolation.h"
+#include "lj_expand_log.h"
 #include "lj_expand_proxy.h"
 #include "lj_expand_startup.h"
 #include "lj_frame.h"
@@ -28,7 +29,7 @@ int lje_get_func_type(lua_State* L)
 int lje_con_print(lua_State* L)
 {
     const char* msg = luaL_checkstring(L, 1);
-    printf("[LJE CONSOLE] %s\n", msg);
+    LJE_INFO("%s", msg);
     return 0;
 }
 
@@ -238,20 +239,20 @@ int lje_data_write(lua_State* L)
   {
     if (!lje_script_data_folder_create())
     {
-      printf("[LJE ERROR] Failed to create .lje_script_data folder!\n");
+      LJE_ERROR("Failed to create .lje_script_data folder!");
       lua_pushboolean(L, 0);
       return 1;
     }
   }
 
   // Always print out whats going on for the user to see
-  printf("[LJE DATA]: Writing data to '%s' (%zu bytes)\n", name, data_size);
+  LJE_INFO("Writing data to '%s' (%zu bytes)", name, data_size);
   if (lje_script_data_write_file(name, data, data_size))
   {
     lua_pushboolean(L, 1);
   } else
   {
-    printf("[LJE DATA ERROR]: Failed to write data to '%s'\n", name);
+    LJE_ERROR("Failed to write data to '%s'", name);
     lua_pushboolean(L, 0);
   }
 
@@ -264,7 +265,7 @@ int lje_data_read(lua_State* L)
 
   if (!lje_script_data_folder_exists())
   {
-    printf("[LJE DATA]: .lje_script_data folder does not exist, cannot read data '%s'\n", name);
+    LJE_WARN(".lje_script_data folder does not exist, cannot read data '%s'", name);
     return 0;
   }
 
@@ -431,7 +432,7 @@ static int lje_secure_pull(lua_State* L)
     size_t segment_len = (size_t)(p - segment_start);
     if (segment_len == 0)
     {
-      printf("[LJE] Secure pull: empty path segment in '%s'\n", name);
+      LJE_WARN("Secure pull: empty path segment in '%s'", name);
       lua_pushnil(L);
       return 1;
     }
@@ -440,7 +441,7 @@ static int lje_secure_pull(lua_State* L)
 
     if (!value || tvisnil(value))
     {
-      printf("[LJE] Secure pull: '%.*s' not found in path '%s'\n",
+      LJE_WARN("Secure pull: '%.*s' not found in path '%s'",
              (int)segment_len, segment_start, name);
       lua_pushnil(L);
       return 1;
@@ -455,7 +456,7 @@ static int lje_secure_pull(lua_State* L)
     // More segments to come — current value must be a table to descend into.
     if (!tvistab(value))
     {
-      printf("[LJE] Secure pull: '%.*s' in path '%s' is not a table, cannot descend\n",
+      LJE_WARN("Secure pull: '%.*s' in path '%s' is not a table, cannot descend",
              (int)segment_len, segment_start, name);
       lua_pushnil(L);
       return 1;
@@ -466,7 +467,7 @@ static int lje_secure_pull(lua_State* L)
     segment_start = p;
   }
 
-  printf("[LJE] Secure pull for '%s': %p\n", name, (void*)value);
+  LJE_DEBUG("Secure pull for '%s': %p", name, (void*)value);
 
   // Now `value` is the final resolved value. Currently we only allow C functions through.
   if (tvisfunc(value))
@@ -474,7 +475,7 @@ static int lje_secure_pull(lua_State* L)
     GCfunc* func = funcV(value);
     if (!iscfunc(func))
     {
-      printf("[LJE] Secure pull for '%s' is not a C function, rejecting.\n", name);
+      LJE_WARN("Secure pull for '%s' is not a C function, rejecting.", name);
       lua_pushnil(L);
       return 1;
     }
