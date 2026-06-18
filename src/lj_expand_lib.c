@@ -406,6 +406,13 @@ static int lje_secure_pull(lua_State* L)
     TValue* registry = &g->registrytv;
     current_tab = tabV(registry);
     name += 3; // Skip past "_R."
+  } else if (name[0] == '_' && name[1] == 'G' && name[2] == '\0')
+  {
+    // _G is special, just push the entire global env. Recursion does not matter here cause we have a seen table.
+    TValue global_env;
+    settabV(L, &global_env, tabref(LJEG()->main_state->env));
+    lje_copy_to_isolated_state_tv(L2, L, &global_env);
+    return 1;
   }
 
   cTValue* value = NULL;

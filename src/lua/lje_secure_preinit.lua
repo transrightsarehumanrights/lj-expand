@@ -122,20 +122,12 @@ player = lje.secure.pull("player")
 vgui = lje.secure.pull("vgui")
 
 -- Globals
-HTTP = lje.secure.pull("HTTP")
-Entity = lje.secure.pull("Entity")
-Player = lje.secure.pull("Player")
-Vector = lje.secure.pull("Vector")
-Angle = lje.secure.pull("Angle")
-Matrix = lje.secure.pull("Matrix")
-LocalPlayer = lje.secure.pull("LocalPlayer")
-Material = lje.secure.pull("Material")
-GetConVar_Internal = lje.secure.pull("GetConVar_Internal")
-SysTime = lje.secure.pull("SysTime")
-CurTime = lje.secure.pull("CurTime")
-RealTime = lje.secure.pull("RealTime")
-FrameTime = lje.secure.pull("FrameTime")
-AddConsoleCommand = lje.secure.pull("AddConsoleCommand")
+local globalEnv = lje.secure.pull("_G")
+for k, v in pairs(globalEnv) do
+    if not _G[k] then
+        _G[k] = v -- Merge
+    end
+end
 
 -- Classes
 registry.Entity = lje.secure.pull("_R.Entity")
