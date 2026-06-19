@@ -8,6 +8,10 @@
     {
       "name": "--lje-disable-binary-modules",
       "description": "Disables loading of binary modules (`.lje/binaries`). LJE will not load any native DLL modules, even if scripts request them. Useful for isolating issues caused by binary modules, or for running in environments where loading native modules is undesirable."
+    },
+    {
+      "name": "--lje-enable-deubg-prints",
+      "description": "Enables certain debug prints that are normally hidden. Useful for troubleshooting LJE."
     }
   ]
 }

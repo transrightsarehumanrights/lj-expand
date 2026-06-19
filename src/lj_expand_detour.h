@@ -14,7 +14,7 @@
 #define lje_remap(mod, name) \
     void* orig_##name = lje_module_scan(mod, lje_sig(name)); \
     if (orig_##name) { \
-        LJE_INFO("Remapping " #name " from %p to %p", orig_##name, (void*)name); \
+        LJE_DEBUG("Remapping " #name " from %p to %p", orig_##name, (void*)name); \
         lje_detour(orig_##name, (void*)name); \
     } else { \
         LJE_ERROR("Failed to find " #name " for detouring!"); \

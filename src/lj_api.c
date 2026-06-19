@@ -1778,11 +1778,15 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
 
     lje_Module* mod = lje_module_find("lua_shared.dll");
     if (mod) {
+      LJECommandLineOptions* options = lje_get_command_line_options();
+      if (options->enable_debug_prints)
+        lje_log_set_min_level(LJE_LOG_DEBUG);
+
       printf("\n");
       lje_log_banner();
       printf("\n\n");
       LJE_SUCCESS("LJE loaded successfully!");
-      LJE_INFO("lua_shared.dll found at %p", mod->base);
+      LJE_DEBUG("lua_shared.dll found at %p", mod->base);
 
       LJE_INFO("Initializing crash handler...");
       lje_crash_handler_init();
@@ -1940,7 +1944,7 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
         if (!attached)
           LJE_ERROR("Failed to detour lua_close! This may cause resource leaks when the game closes.");
         else
-          LJE_SUCCESS("Detoured lua_close successfully!");
+          LJE_DEBUG("Detoured lua_close successfully!");
       }
 
       /* LJE: This is a *tad* bit out-of-scope for LJE since we are very
@@ -1950,12 +1954,12 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
       LJEG()->adv_error_reporter = (lua_CFunction)lje_module_get_func(mod, "?AdvancedLuaErrorReporter@@YAHPEAUlua_State@@@Z");
       if (LJEG()->adv_error_reporter)
       {
-        LJE_INFO("Found AdvancedLuaErrorReporter at %p", LJEG()->adv_error_reporter);
+        LJE_DEBUG("Found AdvancedLuaErrorReporter at %p", LJEG()->adv_error_reporter);
       } else {
         LJE_WARN("AdvancedLuaErrorReporter not found!");
       }
 
-      LJECommandLineOptions* options = lje_get_command_line_options();
+
 
       if (options->disable_binary_modules)
       {
@@ -2025,7 +2029,7 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
         }
       }
 
-      LJE_INFO("Performing dependency resolution...");
+      LJE_DEBUG("Performing dependency resolution...");
       LJEG()->script_load_order = lje_script_compute_load_order(
         LJEG()->loaded_script_count,
         LJEG()->loaded_scripts
@@ -2034,14 +2038,14 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
       for (size_t i = 0; i < LJEG()->loaded_script_count; i++)
       {
         LJEScript* script = LJEG()->script_load_order[i];
-        LJE_INFO("- %d. %s", i + 1, script->name);
+        LJE_DEBUG("- %d. %s", i + 1, script->name);
       }
 
       lje_proxy_arena_init();
       LJEG()->isolated_state = lje_create_isolated_state();
       if (LJEG()->isolated_state)
       {
-        LJE_SUCCESS("Created isolated Lua state for secure scripts.");
+        LJE_DEBUG("Created isolated Lua state for secure scripts.");
       }
 
       for (int i = 0; i < LJEG()->loaded_binary_module_count; i++)

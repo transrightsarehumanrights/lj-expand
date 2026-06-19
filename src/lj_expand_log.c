@@ -21,7 +21,7 @@ static LJELogLevelConfig lje_log_config[LJE_LOG_LEVEL_COUNT] = {
 };
 
 static const char* lje_log_prefix = "LJE";
-static LJELogLevel lje_log_min_level = LJE_LOG_DEBUG;
+static LJELogLevel lje_log_min_level = LJE_LOG_INFO;
 
 /*
 ** Whether ANSI color escapes are emitted.
@@ -124,38 +124,10 @@ void lje_log_banner(void)
   lje_log_autodetect_colors();
   for (i = 0; i < sizeof(banner) / sizeof(banner[0]); i++) {
     if (lje_log_colors == 1)
-      printf("\x1b[%dm%s\x1b[0m\n", lje_ansi_codes[LJE_COLOR_BRIGHT_CYAN], banner[i]);
+      printf("\x1b[%dm%s\x1b[0m\n", lje_ansi_codes[LJE_COLOR_BRIGHT_GREEN], banner[i]);
     else
       printf("%s\n", banner[i]);
   }
-}
-
-void lje_log_set_color(LJELogLevel level, LJELogColor color)
-{
-  if (level < 0 || level >= LJE_LOG_LEVEL_COUNT)
-    return;
-  if (color < 0 || color >= LJE_COLOR_COUNT)
-    return;
-  lje_log_config[level].color = color;
-}
-
-void lje_log_set_tag(LJELogLevel level, const char* tag)
-{
-  if (level < 0 || level >= LJE_LOG_LEVEL_COUNT || tag == NULL)
-    return;
-  lje_log_config[level].tag = tag;
-}
-
-void lje_log_set_prefix(const char* prefix)
-{
-  if (prefix == NULL)
-    return;
-  lje_log_prefix = prefix;
-}
-
-void lje_log_set_colors_enabled(int enabled)
-{
-  lje_log_colors = enabled ? 1 : 0;
 }
 
 void lje_log_set_min_level(LJELogLevel level)
