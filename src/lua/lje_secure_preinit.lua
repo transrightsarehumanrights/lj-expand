@@ -160,17 +160,25 @@ hook = {}
 hook._listeners = {}
 
 function hook.Add(event, identifier, func)
-  if not hook._listeners[event] then
-    hook._listeners[event] = {}
+  local script = lje.env.current_script()
+  hook._listeners[script] = hook._listeners[script] or {}
+  if not hook._listeners[script][event] then
+    hook._listeners[script][event] = {}
   end
-  hook._listeners[event][identifier] = func
+  hook._listeners[script][event][identifier] = func
 end
 
 function hook.Listen()
+  local script = lje.env.current_script()
+    if not hook._listeners[script] then
+        hook._listeners[script] = {}
+    end
+
+
   lje.vm.set_engine_call_hook(function(func, nargs, nresults, ...)
     local name = ...
-    if hook._listeners[name] then
-      for _, listener in pairs(hook._listeners[name]) do
+    if hook._listeners[script][name] then
+      for _, listener in pairs(hook._listeners[script][name]) do
         listener(...)
       end
     end
@@ -178,8 +186,6 @@ function hook.Listen()
 end
 
 function hook.Call() --[[no-op]] end
-
-
 
 lje.includeCache = {}
 lje.require = function(path)
