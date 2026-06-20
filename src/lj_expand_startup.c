@@ -249,6 +249,17 @@ int lje_startup_run(lua_State* L, const char* source) {
 LJ_FUNC void lje_startup_reload(lua_State* L, LJEScript* script)
 {
     LJE_INFO("Reloading script '%s'...", script->name);
+    // run `lje.includeCache[script] = {}`
+    char cacheInvalidationSource[512] = { 0 };
+    strncat_s(cacheInvalidationSource, 512, "lje.includeCache[\"", _TRUNCATE);
+    strncat_s(cacheInvalidationSource, 512, script->info->name, _TRUNCATE);
+    strncat_s(cacheInvalidationSource, 512, "\"] = {}", _TRUNCATE);
+
+    if (lje_startup_run(L, cacheInvalidationSource) != LUA_OK)
+    {
+      LJE_WARN("Failed to invalidate include cache for script %s. This may cause includes to not reload properly. Error: %s", script->info->name, lua_tostring(L, -1));
+      return;
+    }
 
     lje_startup_execute(L, script, NULL);
 }

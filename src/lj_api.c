@@ -1381,6 +1381,26 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     LJE_INFO("Starting up Lua...");
   }
 
+  /* LJE: Reload any scripts at this point, if needed. */
+  if (LJEG()->script_watcher && LJEG()->main_state == L) /* only reload on new engine calls */
+  {
+    size_t scripts_needing_reload = lje_watcher_reload_count(LJEG()->script_watcher);
+    if (scripts_needing_reload > 0)
+    {
+      LJE_INFO("Detected %zu scripts needing reload. Reloading now...", scripts_needing_reload);
+      for (size_t i = 0; i < scripts_needing_reload; i++)
+      {
+        LJEScript* script = lje_watcher_pop_reload(LJEG()->script_watcher);
+        lua_State* state = LJEG()->isolated_state;
+        if (script)
+        {
+
+          lje_startup_reload(state, script);
+        }
+      }
+    }
+  }
+
   /* LJE: Determine if this is an engine call. */
   /* Note: Not all engine calls start at the base of the stack.
    *
@@ -1488,23 +1508,6 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
           if (script->extra->engine_call_post)
             return status; // The engine call already happened, so we must move on.
         }
-      }
-    }
-  }
-
-  /* LJE: Reload any scripts at this point, if needed. */
-  if (LJEG()->script_watcher && LJEG()->main_state == L && errfunc == 1) /* only reload on new engine calls */
-  {
-    size_t scripts_needing_reload = lje_watcher_reload_count(LJEG()->script_watcher);
-    if (scripts_needing_reload > 0)
-    {
-      LJE_INFO("Detected %zu scripts needing reload. Reloading now...", scripts_needing_reload);
-      for (size_t i = 0; i < scripts_needing_reload; i++)
-      {
-        LJEScript* script = lje_watcher_pop_reload(LJEG()->script_watcher);
-        lua_State* state = LJEG()->isolated_state;
-        if (script)
-          lje_startup_reload(state, script);
       }
     }
   }

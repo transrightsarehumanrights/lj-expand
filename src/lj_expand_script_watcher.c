@@ -4,6 +4,8 @@
 #include <string.h>
 #include <stdio.h>
 
+#include "lj_expand_log.h"
+
 /* Lock-free circular queue for reload requests */
 #define LJE_RELOAD_QUEUE_SIZE 64  // Must be power of 2
 
@@ -262,10 +264,12 @@ static DWORD WINAPI watcher_thread(LPVOID arg)
                 if (bytes_transferred > 0) {
                     FILE_NOTIFY_INFORMATION* fni = (FILE_NOTIFY_INFORMATION*)watch->buffer;
 
+                    LJE_INFO("Change detected in script %s: %.*S", watch->script->name, fni->FileNameLength / sizeof(wchar_t), fni->FileName);
                     BOOL found_lua = FALSE;
                     do {
                         if (is_lua_file(fni)) {
                             found_lua = TRUE;
+                          LJE_INFO("  + Lua file: %.*S", fni->FileNameLength / sizeof(wchar_t), fni->FileName);
                             break;
                         }
                         if (fni->NextEntryOffset == 0) break;
@@ -279,6 +283,26 @@ static DWORD WINAPI watcher_thread(LPVOID arg)
                 }
 
                 start_watch(watch);
+            } else {
+                DWORD err = GetLastError();
+                if (err != ERROR_IO_INCOMPLETE) {
+                    /* The overlapped operation completed with an error rather than
+                     * still being pending. The common case is ERROR_NOTIFY_ENUM_DIR:
+                     * too many changes arrived at once and overflowed our buffer, so
+                     * Windows discarded the contents (bytes_transferred == 0). We
+                     * don't know which files changed, so conservatively queue a
+                     * reload. Crucially we must re-arm here too -- otherwise the
+                     * watch silently dies after the first overflow. */
+                    if (err == ERROR_NOTIFY_ENUM_DIR) {
+                        LJE_INFO("Change buffer overflowed for script %s; forcing reload", watch->script->name);
+                        watch->last_change_time = now;
+                        watch->pending_reload = TRUE;
+                    } else {
+                        LJE_WARN("Watch for script %s failed (err %lu); re-arming", watch->script->name, err);
+                    }
+
+                    start_watch(watch);
+                }
             }
         }
 
