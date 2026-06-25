@@ -50,6 +50,7 @@
 #include "lj_expand_isolation.h"
 #include "lj_expand_proxy.h"
 #include "lj_expand_log.h"
+#include "lj_expand_settings.h"
 
 
 /* -- Common helper functions --------------------------------------------- */
@@ -1354,6 +1355,8 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     LJEG()->using_error_reporter = 0;
 
     lje_startup_secure_preinit(LJEG()->isolated_state);
+    // Ensure settings are refetched as well
+    lje_settings_clear_cache(LJEG()->isolated_state);
     for (int i = 0; i < LJEG()->loaded_script_count; i++)
     {
       LJEScript* script = LJEG()->script_load_order[i];
@@ -2057,6 +2060,10 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
         LJE_INFO("Loading binary module %s into isolated state...", mod->name);
         lje_binary_module_run_preinit(mod, LJEG()->isolated_state);
       }
+
+      // Load the pure-Lua helpers into the isolated state so boot scripts have them
+      // available before they run.
+      lje_startup_secure_helpers(LJEG()->isolated_state);
 
       // Check if any scripts have boot.lua, if so run them now in the isolated state
       lje_iterate_scripts()

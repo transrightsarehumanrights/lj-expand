@@ -36,6 +36,8 @@
 @rem Convert script(s) to C headers.
 lua2c lua/lje_secure_preinit.lua generated\lje_secure_preinit.h lje_secure_preinit
 @if errorlevel 1 goto :BAD
+lua2c lua/lje_helpers.lua generated\lje_helpers.h lje_helpers
+@if errorlevel 1 goto :BAD
 
 %LJCOMPILE% host\minilua.c
 @if errorlevel 1 goto :BAD

@@ -5,6 +5,7 @@
 #define LJE_SCRIPT_MAIN "main.lua"
 #define LJE_SCRIPT_PREINIT "preinit.lua"
 #define LJE_SCRIPT_BOOT "boot.lua"
+#define LJE_SCRIPT_SETTINGS_DEFAULT "settings.default.toml"
 #define LJE_SCRIPT_FOLDER ".lje_scripts"
 #define LJE_SCRIPT_DATA ".lje_script_data"
 

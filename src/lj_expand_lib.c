@@ -12,6 +12,7 @@
 #include "lj_expand_isolation.h"
 #include "lj_expand_log.h"
 #include "lj_expand_proxy.h"
+#include "lj_expand_settings.h"
 #include "lj_expand_startup.h"
 #include "lj_frame.h"
 #include "lj_gc.h"
@@ -609,6 +610,19 @@ void lje_addfuncs(lua_State* L) {
       LJE_SET_FUNC("type", lje_proxy_type);
       LJE_SET_FUNC("copy", lje_proxy_copy);
     LJE_END_SECTION("proxy");
+
+    /* settings: per-script user settings (defaults + user overrides) */
+    LJE_NEW_SECTION()
+      LJE_SET_FUNC("all", lje_settings_all);
+      LJE_SET_FUNC("get", lje_settings_get);
+      LJE_SET_FUNC("reload", lje_settings_reload);
+      LJE_SET_FUNC("bind", lje_settings_bind);
+    LJE_END_SECTION("settings");
+
+    /* script: info about the currently running script */
+    LJE_NEW_SECTION()
+      LJE_SET_FUNC("info", lje_script_info);
+    LJE_END_SECTION("script");
 
   /* LJE API END */
 

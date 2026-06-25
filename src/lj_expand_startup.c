@@ -5,9 +5,11 @@
 #include "lj_expand_lib.h"
 #include "lj_expand_log.h"
 #include "lj_expand_module.h"
+#include "lj_expand_settings.h"
 #include "stdio.h"
 
 #include "generated/lje_secure_preinit.h"
+#include "generated/lje_helpers.h"
 
 static char* load_lua_file(const char* path)
 {
@@ -157,6 +159,31 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
     return 0;
 }
 
+// Load and execute a builtin Lua chunk using GMod's original loadbufferx/pcall.
+static void run_secure_chunk(lua_State* L, luaL_loadbufferx_t original_loadbufferx,
+                             lua_pcall_t original_pcall, const char* source, const char* name)
+{
+    LJEG()->flag_lje_protos = 1;
+    if (original_loadbufferx(L, source, strlen(source), name, NULL) == 0)
+    {
+        LJEG()->flag_lje_protos = 0;
+        if (original_pcall(L, 0, 0, 0) != 0)
+        {
+            LJE_ERROR("Error executing %s script: %s", name, lua_tostring(L, -1));
+            lua_pop(L, 1); // Pop error message
+        } else
+        {
+            LJE_SUCCESS("%s script executed successfully.", name);
+        }
+    }
+    else
+    {
+        LJEG()->flag_lje_protos = 0;
+        LJE_ERROR("Error loading %s script: %s", name, lua_tostring(L, -1));
+        lua_pop(L, 1); // Pop error message
+    }
+}
+
 void lje_startup_secure_preinit(lua_State* L) {
     LJE_INFO("Running secure pre-initialization script...");
 
@@ -168,26 +195,28 @@ void lje_startup_secure_preinit(lua_State* L) {
         return;
     }
 
-    char* script = lje_secure_preinit_data;
-    LJEG()->flag_lje_protos = 1;
-    if (original_loadbufferx(L, script, strlen(script), "@lje_secure_preinit", NULL) == 0)
+    run_secure_chunk(L, original_loadbufferx, original_pcall,
+                     lje_secure_preinit_data, "@lje_secure_preinit");
+
+    return;
+}
+
+// Loads the pure-Lua helpers chunk into the given state. Kept separate from preinit
+// so it can be loaded early (before boot scripts run); it only depends on lje.util
+// and lje.con_print, which the isolated state already provides.
+void lje_startup_secure_helpers(lua_State* L) {
+    LJE_INFO("Running secure helpers script...");
+
+    luaL_loadbufferx_t original_loadbufferx = NULL;
+    lua_pcall_t original_pcall = NULL;
+    if (!resolve_original_functions(&original_loadbufferx, &original_pcall))
     {
-        LJEG()->flag_lje_protos = 0;
-        if (original_pcall(L, 0, 0, 0) != 0)
-        {
-            LJE_ERROR("Error executing secure pre-initialization script: %s", lua_tostring(L, -1));
-            lua_pop(L, 1); // Pop error message
-        } else
-        {
-            LJE_SUCCESS("Secure pre-initialization script executed successfully.");
-        }
+        LJE_ERROR("Failed to resolve original startup functions necessary...");
+        return;
     }
-    else
-    {
-        LJEG()->flag_lje_protos = 0;
-        LJE_ERROR("Error loading secure pre-initialization script: %s", lua_tostring(L, -1));
-        lua_pop(L, 1); // Pop error message
-    }
+
+    run_secure_chunk(L, original_loadbufferx, original_pcall,
+                     lje_helpers_data, "@lje_helpers");
 
     return;
 }
@@ -260,6 +289,8 @@ LJ_FUNC void lje_startup_reload(lua_State* L, LJEScript* script)
       LJE_WARN("Failed to invalidate include cache for script %s. This may cause includes to not reload properly. Error: %s", script->info->name, lua_tostring(L, -1));
       return;
     }
+
+    lje_settings_clear_cache(L);
 
     lje_startup_execute(L, script, NULL);
 }
