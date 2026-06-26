@@ -136,7 +136,7 @@ function ConstantsSection({ constants }) {
 export default function NamespaceDocs({ data }) {
   return (
     <div>
-      <p className={styles.namespaceDescription}>{data.description}</p>
+      <Markdown className={styles.namespaceDescription}>{Array.isArray(data.description) ? data.description.join("\n") : data.description}</Markdown>
       <ConstantsSection constants={data.constants} />
       {data.functions?.length > 0 && <h2 id="functions">Functions</h2>}
       {data.functions?.map(func => (
