@@ -1,10 +1,11 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import styles from './NamespaceDocs.module.css';
+import remarkGfm from "remark-gfm";
 
 function Markdown({ children }) {
   if (!children) return null;
-  return <ReactMarkdown>{children}</ReactMarkdown>;
+  return <ReactMarkdown remarkPlugins={[remarkGfm]}>{children}</ReactMarkdown>;
 }
 
 function buildSignature(namespace, func) {

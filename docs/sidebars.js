@@ -33,6 +33,7 @@ const sidebars = {
         'api/data',
         'api/secure',
         'api/proxy',
+        'api/state',
         'api/settings',
         'api/script',
       ],

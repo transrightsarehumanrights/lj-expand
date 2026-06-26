@@ -48,6 +48,7 @@
 #include "lj_expand_crash_handler.h"
 #include "lj_expand_dirs.h"
 #include "lj_expand_isolation.h"
+#include "lj_expand_path.h"
 #include "lj_expand_proxy.h"
 #include "lj_expand_log.h"
 #include "lj_expand_settings.h"
@@ -1353,6 +1354,9 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     lje_clear_global_refs();
     LJEG()->main_state = L;
     LJEG()->using_error_reporter = 0;
+
+    /* main_state is only now known; bind LJE_CLIENT_STATE before secure scripts run. */
+    lje_path_install_state_globals(LJEG()->isolated_state);
 
     lje_startup_secure_preinit(LJEG()->isolated_state);
     // Ensure settings are refetched as well

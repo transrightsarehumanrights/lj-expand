@@ -11,6 +11,7 @@
 #include "lj_expand_globals.h"
 #include "lj_expand_isolation.h"
 #include "lj_expand_log.h"
+#include "lj_expand_path.h"
 #include "lj_expand_proxy.h"
 #include "lj_expand_settings.h"
 #include "lj_expand_startup.h"
@@ -624,10 +625,18 @@ void lje_addfuncs(lua_State* L) {
       LJE_SET_FUNC("info", lje_script_info);
     LJE_END_SECTION("script");
 
+    /* state: read values out of other Lua universes (client/menu) safely */
+    LJE_NEW_SECTION()
+      LJE_SET_FUNC("path", lje_state_path);
+    LJE_END_SECTION("state");
+
   /* LJE API END */
 
   lua_setfield(L, -2, "lje");
   lua_pop(L, 1); // Pop globals table
+
+  /* main_state may still be NULL here; re-installed once it's bound. */
+  lje_path_install_state_globals(L);
 }
 
 void lje_removefuncs(lua_State* L) {
