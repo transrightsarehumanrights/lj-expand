@@ -13,6 +13,7 @@ const sidebars = {
         'guides/info-toml',
         'guides/getting-started',
         'guides/your-first-script',
+        'guides/settings',
         'guides/detours',
         'guides/extending-functionality'
       ]
@@ -32,6 +33,8 @@ const sidebars = {
         'api/data',
         'api/secure',
         'api/proxy',
+        'api/settings',
+        'api/script',
       ],
     },
   ],
