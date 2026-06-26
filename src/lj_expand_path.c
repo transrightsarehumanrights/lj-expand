@@ -226,8 +226,11 @@ void lje_path_install_state_globals(lua_State* L)
     return;
   }
 
-  lua_pushlightuserdata(L, LJEG()->main_state);
-  lua_setglobal(L, "LJE_CLIENT_STATE");
+  lua_getfield(L, LUA_GLOBALSINDEX, "lje");
+  lua_getfield(L, -1, "state");
+  lua_pushlightuserdata(L, (void*)LJEG()->main_state);
+  lua_setfield(L, -2, "client");
+  lua_pop(L, 1);
 }
 
 bool index_path_op(lua_State* target_state, TValue* current_object, LJEPathOp* op)
