@@ -1424,6 +1424,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
   if (L == LJEG()->main_state && !LJEG()->using_error_reporter && errfunc)
   {
     GCfunc* f = funcV(stkindex2adr(L, errfunc));
+    GCfunc* called_function = funcV(stkindex2adr(L, -nargs - 1));
     char is_function_null = f == LJ_GCVMASK || (uintptr_t)f == 0x0000400000000000;
     if (is_function_null)
     {
@@ -1454,7 +1455,8 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
         }
 
         lua_rawgeti(I, LUA_REGISTRYINDEX, script->extra->engine_call_hook_ref_id);
-        lua_pushlightuserdata(I, f);
+        // Push the function that is being called as a pointer so we can do fast equality checks later
+        lua_pushnumber(I, (lua_Number)((uintptr_t)called_function));
         lua_pushinteger(I, nargs);
         lua_pushinteger(I, nresults);
         for (int arg = 0; arg < nargs; arg++)
@@ -1489,7 +1491,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
        * post hook afterwards; proxies stay alive until they have all run. */
       if (run_post_hooks)
       {
-        engine_func = f;
+        engine_func = called_function;
         post_snapshot_base = lua_gettop(I) + 1;
         for (int arg = 0; arg < nargs; arg++)
         {
@@ -1550,7 +1552,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
         continue;
 
       lua_rawgeti(I, LUA_REGISTRYINDEX, script->extra->engine_call_hook_ref_id);
-      lua_pushlightuserdata(I, engine_func);
+      lua_pushnumber(I, (lua_Number)((uintptr_t)engine_func));
       lua_pushinteger(I, nargs);
       lua_pushinteger(I, nresults);
       for (int arg = 0; arg < nargs; arg++)

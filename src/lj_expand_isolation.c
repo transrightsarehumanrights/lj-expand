@@ -280,8 +280,8 @@ static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, 
                 setfuncV(to, dst, funcV(empty_lua_func));
               } else
               {
-                LJE_DEBUG("Encountered Lua function, copying it as a lightuserdata.");
-                setlightudV(dst, (void*)from_fn);
+                LJE_DEBUG("Encountered Lua function, copying it as a number pointer.");
+                setnumV(dst, (lua_Number)(uintptr_t)from_fn);
               }
               break;
             }
