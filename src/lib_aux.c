@@ -21,15 +21,21 @@
 #include "lj_state.h"
 #include "lj_trace.h"
 #include "lj_lib.h"
+#include "lj_expand_globals.h"
 
 #if LJ_TARGET_POSIX
 #include <sys/wait.h>
 #endif
 
 /* -- I/O error handling -------------------------------------------------- */
+#define lje_redirect_state(L) \
+if (LJEG()->redirect_to_isolation) { \
+L = LJEG()->isolated_state; \
+}
 
 LUALIB_API int luaL_fileresult(lua_State *L, int stat, const char *fname)
 {
+  lje_redirect_state(L);
   if (stat) {
     setboolV(L->top++, 1);
     return 1;
@@ -48,6 +54,7 @@ LUALIB_API int luaL_fileresult(lua_State *L, int stat, const char *fname)
 
 LUALIB_API int luaL_execresult(lua_State *L, int stat)
 {
+  lje_redirect_state(L);
   if (stat != -1) {
 #if LJ_TARGET_POSIX
     if (WIFSIGNALED(stat)) {
@@ -113,6 +120,7 @@ static int libsize(const luaL_Reg *l)
 
 LUALIB_API void luaL_pushmodule(lua_State *L, const char *modname, int sizehint)
 {
+  lje_redirect_state(L);
   luaL_findtable(L, LUA_REGISTRYINDEX, "_LOADED", 16);
   lua_getfield(L, -1, modname);
   if (!lua_istable(L, -1)) {
@@ -128,6 +136,7 @@ LUALIB_API void luaL_pushmodule(lua_State *L, const char *modname, int sizehint)
 LUALIB_API void luaL_openlib(lua_State *L, const char *libname,
 			     const luaL_Reg *l, int nup)
 {
+  lje_redirect_state(L);
   lj_lib_checkfpu(L);
   if (libname) {
     luaL_pushmodule(L, libname, libsize(l));
@@ -147,6 +156,7 @@ LUALIB_API void luaL_register(lua_State *L, const char *libname,
 
 LUALIB_API void luaL_setfuncs(lua_State *L, const luaL_Reg *l, int nup)
 {
+  lje_redirect_state(L);
   luaL_checkstack(L, nup, "too many upvalues");
   for (; l->name; l++) {
     int i;
@@ -253,6 +263,7 @@ LUALIB_API void luaL_addvalue(luaL_Buffer *B)
 
 LUALIB_API void luaL_buffinit(lua_State *L, luaL_Buffer *B)
 {
+  lje_redirect_state(L);
   B->L = L;
   B->p = B->buffer;
   B->lvl = 0;
@@ -268,6 +279,7 @@ LUALIB_API void luaL_buffinit(lua_State *L, luaL_Buffer *B)
 
 LUALIB_API int luaL_ref(lua_State *L, int t)
 {
+  lje_redirect_state(L);
   int ref;
   t = abs_index(L, t);
   if (lua_isnil(L, -1)) {
@@ -281,8 +293,17 @@ LUALIB_API int luaL_ref(lua_State *L, int t)
     lua_rawgeti(L, t, ref);  /* remove it from list */
     lua_rawseti(L, t, FREELIST_REF);  /* (t[FREELIST_REF] = t[ref]) */
   } else {  /* no free elements */
-    ref = (int)lua_objlen(L, t);
-    ref++;  /* create new reference */
+    if (LJEG()->redirect_to_isolation && t == LUA_REGISTRYINDEX) {
+      /* Fresh shadow-registry refs come from a monotonic counter in the +1000000
+         band. lua_objlen is useless here. the shadow registry's keys live in its
+         hash part, so it reports 0 and every size-based ref would collide. The
+         offset also keeps shadow refs from ever colliding with host registry
+         slots cached into the shadow by lua_rawgeti. */
+      ref = 1000000 + ++LJEG()->isolated_ref_counter;
+    } else {
+      ref = (int)lua_objlen(L, t);
+      ref++;  /* create new reference */
+    }
   }
   lua_rawseti(L, t, ref);
   return ref;
@@ -290,6 +311,7 @@ LUALIB_API int luaL_ref(lua_State *L, int t)
 
 LUALIB_API void luaL_unref(lua_State *L, int t, int ref)
 {
+  lje_redirect_state(L);
   if (ref >= 0) {
     t = abs_index(L, t);
     lua_rawgeti(L, t, FREELIST_REF);

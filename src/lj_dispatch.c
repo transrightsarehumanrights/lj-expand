@@ -361,45 +361,14 @@ LUA_API int lua_gethookcount(lua_State *L)
 /* Call a hook. */
 void callhook(lua_State *L, int event, BCLine line)
 {
-  /* LJE: Absolutely no hooks are ran if skip_hooks is enabled */
-  if (LJEG()->skip_hooks)
-  {
-    return;
-  }
-
   GCfunc* fn = curr_func(L);
   if (isluafunc(fn))
   {
-    LJEfunc* ljeFn = funcextend(fn);
     LJEproto* ljePt = protoextend(funcproto(fn));
-    if (ljeFn->is_special || ljePt->is_from_lje)
+    if (ljePt->is_from_lje)
     {
       return; // Don't let anyone hook into special functions, or anything from LJE for that matter.
     }
-  }
-
-  if (iscfunc(fn))
-  {
-    // Make sure none of our metahook functions get exposed
-    lua_CFunction cfunc = fn->c.f;
-    if (cfunc == lje_enable_hooks || cfunc == lje_disable_hooks || lje_is_addr_in_lje(cfunc))
-    {
-      return;
-    }
-
-    // Also don't run if this is a LJE-created C-closure
-    if (funcextendc(fn)->is_special)
-    {
-      return;
-    }
-  }
-
-  // Next, check if this is a function that *should* be ignored once if it was hooked
-  if (gcrefp(LJEG()->ignore_fn_on_hook, GCfunc) == fn)
-  {
-    // Clear the ignore function so it only ignores once
-    setgcrefnull(LJEG()->ignore_fn_on_hook);
-    return;
   }
 
   // Sometimes, call debug hooks might trigger in a LJE function.
@@ -413,11 +382,10 @@ void callhook(lua_State *L, int event, BCLine line)
     GCfunc* caller_fn = frame_func(caller);
     if (isluafunc(caller_fn))
     {
-      LJEfunc* ljeFn = funcextend(caller_fn);
       LJEproto* ljePt = protoextend(funcproto(caller_fn));
-      if (ljeFn->is_special || ljePt->is_from_lje)
+      if (ljePt->is_from_lje)
       {
-        return; // Don't let anyone hook into transitive calls from special functions, or anything from LJE for that matter.
+        return; // Don't let any hooks fire when called from LJE code.
       }
     }
   }
@@ -437,9 +405,7 @@ void callhook(lua_State *L, int event, BCLine line)
 #else
     hook_enter(g);
 #endif
-    LJEG()->in_hook = 1;
       hookf(L, &ar);
-    LJEG()->in_hook = 0;
 
     lua_assert(hook_active(g));
     setgcref(g->cur_L, obj2gco(L));

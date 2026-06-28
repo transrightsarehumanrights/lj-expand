@@ -390,24 +390,9 @@ GCstr * LJ_FASTCALL lj_strfmt_obj(lua_State *L, cTValue *o)
     p = lj_buf_wmem(p, lj_typename(o), (MSize)strlen(lj_typename(o)));
     *p++ = ':'; *p++ = ' ';
 
-    /* LJE: Use spoofed function, if it exists */
-    GCfunc* fn = NULL;
-    if (tvisfunc(o)) {
-      fn = funcV(o);
-      if (isluafunc(fn))
-      {
-        LJEfunc* ljeFn = funcextend(fn);
-        GCfunc* target = gcrefp(ljeFn->spoof, GCfunc);
-        if (target != NULL)
-        {
-          fn = target;
-        }
-      }
-    }
-
-    if (tvisfunc(o) && isffunc(fn)) {
+    if (tvisfunc(o) && isffunc(funcV(o))) {
       p = lj_buf_wmem(p, "builtin#", 8);
-      p = lj_strfmt_wint(p, fn->c.ffid);
+      p = lj_strfmt_wint(p, funcV(o)->c.ffid);
     } else {
       p = lj_strfmt_wptr(p, lj_obj_ptr(o));
     }

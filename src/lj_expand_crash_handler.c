@@ -191,7 +191,7 @@ static void lje_write_dump_state(const struct _EXCEPTION_POINTERS* exception_poi
 
     fprintf(f, "\nLJE dump\n================\n\n");
 
-    lua_State* L = LJEG()->main_state;
+    lua_State* L = LJEG()->isolated_state;
     if (!L)
     {
         fprintf(f, "Lua state not available. LJE was not active at the time of crash.\n");
@@ -251,9 +251,7 @@ static void lje_write_dump_state(const struct _EXCEPTION_POINTERS* exception_poi
     {
         int size = 0;
 
-        LJEG()->show_special_frames = 1;
         cTValue* frame = lj_debug_frame(L, level, &size);
-        LJEG()->show_special_frames = 0;
 
         if (!frame)
         {
@@ -295,7 +293,7 @@ static void lje_write_dump_state(const struct _EXCEPTION_POINTERS* exception_poi
         }
         else
         {
-            fprintf(f, "  [%d] Unknown function type: %p\n", level, fn);
+            fprintf(f, "  [%d] Unknown function type (ffid=%d): %p\n", level, fn->c.ffid, fn);
         }
     }
 

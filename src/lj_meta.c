@@ -69,50 +69,6 @@ cTValue *lj_meta_lookup(lua_State *L, cTValue *o, MMS mm)
   else
     mt = tabref(basemt_obj(G(L), o));
   if (mt) {
-    /* LJE: Check if any LJE code has caused this lookup, and if so, remap the metatable if needed.
-     * If there is no remap, we just want to cancel and block the metamethod lookup.
-     */
-    if (LJEG()->main_state == L)
-    {
-      GCfunc* curr_func = curr_func(L);
-      if (!isluafunc(curr_func(L)))
-      {
-        /* LJE: Sometimes, a C function can be doing the metamethod lookup on behalf of a Lua function (usually tostring).
-         * In that case, we need to get the caller function.
-         */
-        cTValue* bottom = tvref(L->stack)+LJ_FR2;
-        TValue* caller_frame = frame_prev(L->base - 1);
-        if (caller_frame && caller_frame > bottom)
-          curr_func = frame_func(caller_frame);
-      }
-
-      if (isluafunc(curr_func))
-      {
-        LJEproto* pt = protoextend(funcproto(curr_func));
-        if (pt->is_from_lje)
-        {
-          cTValue* metaName = lj_tab_getstr(mt, lj_str_newlit(L, "MetaName"));
-          if (metaName && tvisstr(metaName))
-          {
-            const char* typeName = strdata(strV(metaName));
-            LJEMetatableRemap* remap = lje_get_metatable_remap(typeName);
-            if (remap)
-            {
-              mt = remap->replacement;
-              // No print here since it might lag the metamethod lookup too much, this is the expected case.
-            } else
-            {
-              /* LJE: Block metamethod lookup if no remap is found. */
-              return niltv(L);
-            }
-          } else if (!lje_is_metatable_authorized(mt))
-          {
-            return niltv(L);
-          }
-        }
-      }
-    }
-
     cTValue *mo = lj_tab_getstr(mt, mmname_str(G(L), mm));
     if (mo)
       return mo;
@@ -178,21 +134,9 @@ static TValue *mmcall(lua_State *L, ASMFunction cont, cTValue *mo,
 
 /* -- C helpers for some instructions, called from assembler VM ----------- */
 
-static void* gmod_lj_cont_ra = NULL;
 /* Helper for TGET*. __index chain and metamethod. */
 cTValue *lj_meta_tget(lua_State *L, cTValue *o, cTValue *k)
 {
-  /* Check if we need to initialize gmod_lj_cont_ra */
-  if (!gmod_lj_cont_ra)
-  {
-    /* 0f b6 4e fd 48 8b 28 48 89 2c ca 8b 06 0f b6 cc 0f b6 e8 48 83 c6 04 */
-    lje_Module* mod = lje_module_find("lua_shared.dll");
-    if (mod)
-    {
-      gmod_lj_cont_ra = lje_module_scan(mod, "0f b6 4e fd 48 8b 28 48 89 2c ca 8b 06 0f b6 cc 0f b6 e8 48 83 c6 04");
-    }
-  }
-
   int loop;
   for (loop = 0; loop < LJ_MAX_IDXCHAIN; loop++) {
     cTValue *mo;
@@ -202,21 +146,8 @@ cTValue *lj_meta_tget(lua_State *L, cTValue *o, cTValue *k)
       /* LJE: Handle the fast-path __index chain. Unfortunately... this
        * kind of does slow down things a *tad* amount, but it's necessary for LJE.
        */
-      GCtab* mt = tabref(t->metatable);
-      GCfunc* func = curr_func(L);
-      if (mt && isljefunc(func))
-      {
-        /* LJE: Remaps don't exist for table-based objects, so no need to check for that. All we need to do is the
-         * authentication check.
-         */
-        if (!lje_is_metatable_authorized(mt))
-        {
-          /* LJE: Block metamethod lookup if not authorized. */
-          return NULL;
-        }
-      }
       if (!tvisnil(tv) ||
-	  !(mo = lj_meta_fast(L, mt, MM_index)))
+	  !(mo = lj_meta_fast(L, tabref(t->metatable), MM_index)))
 	return tv;
     } else if (tvisnil(mo = lj_meta_lookup(L, o, MM_index))) {
       lj_err_optype(L, o, LJ_ERR_OPINDEX);
@@ -232,7 +163,7 @@ cTValue *lj_meta_tget(lua_State *L, cTValue *o, cTValue *k)
        * So any patched function that makes a continuation frame MUST use GMod's lj_cont_* function, not LJE's, or it will
        * crash very randomly in any place that does metamethod lookups.
        */
-      L->top = mmcall(L, (ASMFunction)gmod_lj_cont_ra, mo, o, k);
+      L->top = mmcall(L, lj_cont_ra, mo, o, k);
       return NULL;  /* Trigger metamethod call. */
     }
     o = mo;
@@ -559,31 +490,3 @@ void LJ_FASTCALL lj_meta_for(lua_State *L, TValue *o)
   }
 }
 
-/* LJE: Special assembler VM routine to check if functions are spoofed and if they're equal. */
-int LJ_FASTCALL lje_spoofed_function_equality(TValue o1v, TValue o2v)
-{
-  /* LJE: Routine is specialized to functions, so no tvisfunc checks are needed. */
-  /* Also, TValues are passed as raw bits to avoid a secondary memory load here. */
-  /* Should be fast as possible as this is called in tight interpreter and potential JIT loops. */
-
-  TValue* o1 = (TValue*)&o1v;
-  TValue* o2 = (TValue*)&o2v;
-  GCRef ref1 = o1->gcr;
-  GCRef ref2 = o2->gcr;
-
-  if (tvisspoofedfunc(o1))
-  {
-    ref1.gcptr64 = funcextend(funcV(o1))->spoof.gcptr64;
-  }
-
-  if (tvisspoofedfunc(o2))
-  {
-    ref2.gcptr64 = funcextend(funcV(o2))->spoof.gcptr64;
-  }
-
-  // Mask each with GCV to ignore lower bits
-  ref1.gcptr64 &= LJ_GCVMASK;
-  ref2.gcptr64 &= LJ_GCVMASK;
-
-  return gcrefeq(ref1, ref2);
-}

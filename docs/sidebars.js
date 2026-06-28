@@ -11,9 +11,11 @@ const sidebars = {
       collapsed: false,
       items: [
         'guides/info-toml',
-        'guides/scripts',
+        'guides/getting-started',
+        'guides/your-first-script',
+        'guides/settings',
         'guides/detours',
-        'guides/hooks'
+        'guides/extending-functionality'
       ]
     },
     {
@@ -24,12 +26,16 @@ const sidebars = {
         'api/base',
         'api/lua',
         'api/func',
-        'api/hooks',
         'api/env',
         'api/util',
         'api/gc',
         'api/vm',
         'api/data',
+        'api/secure',
+        'api/proxy',
+        'api/state',
+        'api/settings',
+        'api/script',
       ],
     },
   ],

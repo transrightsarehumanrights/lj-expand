@@ -4,6 +4,8 @@
 
 #define LJE_SCRIPT_MAIN "main.lua"
 #define LJE_SCRIPT_PREINIT "preinit.lua"
+#define LJE_SCRIPT_BOOT "boot.lua"
+#define LJE_SCRIPT_SETTINGS_DEFAULT "settings.default.toml"
 #define LJE_SCRIPT_FOLDER ".lje_scripts"
 #define LJE_SCRIPT_DATA ".lje_script_data"
 
@@ -33,6 +35,11 @@ typedef struct LJEScriptInfo
 typedef struct LJEScriptExtraInfo
 {
     int engine_call_hook_ref_id;
+    int cleanup_ref_id;
+    /* If script would like to receive engine calls *after* they have happened,
+     * i.e. 'post' hooks.
+     */
+    int engine_call_post;
 } LJEScriptExtraInfo;
 
 /* LJEScripts represent a folder containing Lua scripts to be loaded by LJE.
@@ -44,6 +51,7 @@ typedef struct LJEScript
     const char* folder;
     const char* main_path;
     const char* preinit_path;
+    const char* boot_path;
     const char* name;
     LJEScriptInfo* info;
     LJEScriptExtraInfo* extra;
@@ -68,5 +76,7 @@ LJEScript* lje_script_load_all_scripts(size_t* out_script_count);
 LJEScript** lje_script_compute_load_order(size_t script_count, LJEScript* scripts);
 void lje_script_free_scripts(LJEScript* scripts, size_t script_count);
 char** lje_script_find(LJEScript* script, const char* relative_path, size_t* out_path_count);
+/* Reads a script file relatively. */
+char* lje_script_read(LJEScript* script, const char* relative_path, size_t* out_size);
 
 #endif

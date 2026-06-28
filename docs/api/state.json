@@ -1,0 +1,71 @@
+{
+  "namespace": "state",
+  "description": [
+    "Read values out of another Lua universe — the game client (and, later, the menu) — from inside the secure state, **without ever holding a reference into it**.",
+    "",
+    "Holding a live reference to a foreign object is detectable by adversarial scripts in that state, and a bare pointer into it can dangle if the foreign garbage collector runs. `lje.state.path` avoids both: you describe a traversal up front as a chain of inert operations, and only the terminal `:copy()` touches the foreign state. The whole walk runs in a single C call using raw lookups (no metamethods, no allocation in the foreign state), so the foreign GC cannot step mid-walk and no foreign pointer survives the call. The value you get back is a deep copy living entirely in the secure state.",
+    "",
+    "Because of this, you can hold onto the **result** of `:copy()` freely — it is yours. What you must never do is try to keep a path pointed at something long-term and treat it as a live handle; a path is a recipe, evaluated fresh each time you call `:copy()`."
+  ],
+  "constants": [
+    {
+      "name": "client",
+      "type": "lightuserdata",
+      "description": "A handle to the game client's Lua state, for use as the first argument to `lje.state.path`. This is the state your scripts would normally run in. It is installed as a global in the secure state once the client state is known (at startup, before secure scripts run). A `LJE_MENU_STATE` handle is planned for the future."
+    }
+  ],
+  "functions": [
+    {
+      "name": "path",
+      "description": [
+        "Begins a path into `target`, rooted at the global named `root`. Returns a **path object** — an inert builder. Each builder method appends one operation and returns the same object, so calls chain. Nothing reads from `target` until you call `:copy()`.",
+        "",
+        "`root` is looked up by raw key in the target state's global environment (no metamethods). It is a single global name, **not** a dotted path — use `:index` to descend further.",
+        "",
+        "### Path methods",
+        "",
+        "Each returns the path object for chaining, except `:copy()`, which evaluates the chain.",
+        "",
+        "| Method | Effect |",
+        "| --- | --- |",
+        "| `:index(key)` | Raw-indexes the current value (which must be a table) by the string `key`. |",
+        "| `:upvalue(n)` | Reads the `n`-th upvalue (1-based) of the current value, which must be a Lua or C function. Fast/builtin functions have no accessible upvalues and fail. |",
+        "| `:expect(type)` | Asserts the current value's type and fails the path otherwise. Accepts Lua type names (`\"table\"`, `\"function\"`, `\"userdata\"`, …) and GMod metatypes by `MetaName` (`\"Player\"`, `\"Vector\"`, …), resolved from the object's metatable. GMod metatype takes priority over the bare Lua type. Opt-in — only add it where you want the guard. |",
+        "| `:copy()` | Evaluates the whole chain against `target` and deep-copies the final value into the secure state. Returns the copy, or `nil` if any step fails (each failure is logged to the console). See `lje.proxy.copy` for the copy semantics. |",
+        "",
+        "If the root is missing or `nil`, or any operation fails — indexing a non-table, a missing key, taking an upvalue of a non-function or an out-of-range index, or a failed `:expect` — `:copy()` logs the reason and returns `nil`.",
+        "",
+        "### Example",
+        "",
+        "```lua",
+        "-- Pull the `teams` table that team.GetName closes over, without ever",
+        "-- holding a reference into the client state.",
+        "local teams = lje.state.path(lje.state.client, \"team\")",
+        "  :index(\"GetName\")  -- team.GetName (a function)",
+        "  :upvalue(1)        -- its first upvalue",
+        "  :expect(\"table\")   -- guard: make sure it really is a table",
+        "  :copy()            -- deep-copy it into the secure state",
+        "```"
+      ],
+      "note": "A path is capped at 16 operations; index keys are limited to 127 characters and `:expect` type names to 63. `target` must be a valid state handle such as `LJE_CLIENT_STATE`.",
+      "params": [
+        {
+          "name": "target",
+          "type": "lightuserdata",
+          "description": "The state to read from, e.g. `LJE_CLIENT_STATE`."
+        },
+        {
+          "name": "root",
+          "type": "string",
+          "description": "A single global name in `target` to root the path at, e.g. `\"team\"`. Not a dotted path — chain `:index` to go deeper."
+        }
+      ],
+      "returns": [
+        {
+          "type": "userdata",
+          "description": "A path object. Chain `:index`, `:upvalue`, `:expect`, then `:copy()`."
+        }
+      ]
+    }
+  ]
+}

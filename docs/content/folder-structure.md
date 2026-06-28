@@ -18,4 +18,4 @@ The folder structure of LJE is relatively simple; all binaries, scripts, and rel
     - `/.lje_bin_warned` - File that lets LJE know you have already been warned in console, deleting will trigger the warning again.
 - `/crashes/` - Created when a crash dump is generated.
 - `/data/` - Simple persistent blob storage for scripts. See [`lje.data`](/api/data).
-- `/scripts/` - Where LJE scripts should go. See [`Scripts`](/guides/scripts).
+- `/scripts/` - Where LJE [scripts](/guides/your-first-script) should go.

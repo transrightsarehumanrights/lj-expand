@@ -123,12 +123,6 @@ static int writer_buf(lua_State *L, const void *p, size_t size, void *sb)
 LJLIB_CF(string_dump)
 {
   GCfunc *fn = lj_lib_checkfunc(L, 1);
-  /* LJE: Use spoofed function if it exists */
-  if (isluafunc(fn) && funcspoof(fn))
-  {
-    fn = funcspoof(fn);
-  }
-
   int strip = L->base+1 < L->top && tvistruecond(L->base+1);
   SBuf *sb = lj_buf_tmp_(L);  /* Assumes lj_bcwrite() doesn't use tmpbuf. */
   L->top = L->base+1;

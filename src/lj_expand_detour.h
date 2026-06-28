@@ -14,13 +14,15 @@
 #define lje_remap(mod, name) \
     void* orig_##name = lje_module_scan(mod, lje_sig(name)); \
     if (orig_##name) { \
-        printf("[LJE] Remapping " #name " from %p to %p\n", orig_##name, (void*)name); \
+        LJE_DEBUG("Remapping " #name " from %p to %p", orig_##name, (void*)name); \
         lje_detour(orig_##name, (void*)name); \
     } else { \
-        printf("[LJE ]Failed to find " #name " for detouring!\n"); \
+        LJE_ERROR("Failed to find " #name " for detouring!"); \
     } \
 
 // Dead simple detours. No original function is provided.
 LJ_FUNC int lje_detour(void* target, void* detour);
+// Detour, but the ability to trampoline back to it. Useful basically only for state-related functions
+int lje_detour_trampoline(void* target, void* detour, void** out_trampoline);
 
 #endif

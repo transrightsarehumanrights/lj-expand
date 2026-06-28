@@ -1,0 +1,70 @@
+{
+  "namespace": "settings",
+  "description": [
+    "Per-script user settings. Each script ships its defaults in a `settings.default.toml` file in its own folder; users override them in `%USERPROFILE%\\.lje\\settings\\<author>.<name>.toml`, which lives outside the script's folder so it survives a `git pull`. At read time the two are merged (user overrides win) and the result is cached per script.",
+    "",
+    "The namespace functions (`get`, `all`, `reload`) operate on the *currently executing* script, so they only work while your script is running — typically at load time. In deferred callbacks (hooks, render, timers) there is no current script; call `lje.settings.open()` once at load and use the returned settings object instead. See the [Settings guide](../guides/settings) for the full picture."
+  ],
+  "functions": [
+    {
+      "name": "get",
+      "description": [
+        "Reads a single setting from the current script's merged settings, by dotted path.",
+        "",
+        "The key is traversed through nested tables, so `get(\"render.color\")` returns `settings.render.color`. If any segment along the path is missing (or is not a table), `default` is returned when provided, otherwise `nil`."
+      ],
+      "note": "Resolves the *current* script. If called with no active script context (e.g. from a hook or render callback) it logs a warning and behaves as if the script has no settings. Use `lje.settings.open()` for those cases.",
+      "params": [
+        { "name": "key", "type": "string", "description": "A setting key. Use dots to traverse nested tables, e.g. `\"section.option\"`." },
+        { "name": "default", "type": "any", "optional": true, "description": "Returned when the key is not present after merging." }
+      ],
+      "returns": [
+        { "type": "any", "description": "The setting value, or `default` (or `nil`) if absent." }
+      ]
+    },
+    {
+      "name": "all",
+      "description": "Returns the current script's full merged settings table (defaults overlaid with user overrides). The table is cached; treat it as read-only.",
+      "note": "Resolves the *current* script; returns an empty table with a warning if there is no active script context.",
+      "params": [],
+      "returns": [
+        { "type": "table", "description": "The merged settings. Empty if the script has no settings files." }
+      ]
+    },
+    {
+      "name": "reload",
+      "description": "Drops the cached settings for the current script so the next `get`/`all` re-reads `settings.default.toml` and the user override file from disk.",
+      "note": "Resolves the *current* script; no-op with a warning if there is no active script context. LJE already clears the settings cache automatically when a script is hot-reloaded, so you rarely need this.",
+      "params": [],
+      "returns": []
+    },
+    {
+      "name": "open",
+      "defined_in": "lua",
+      "description": [
+        "Binds a settings object to the **calling** script and returns it. Call this once at load time (while your script has an active context) and reuse the returned object anywhere — including deferred callbacks such as hooks, render, and timers, where the bare `get`/`all`/`reload` would not know which script is asking.",
+        "",
+        "The object exposes `:get(key, default)`, `:all()`, and `:reload()`, which behave like the namespace functions but always resolve to the script that opened them."
+      ],
+      "params": [],
+      "returns": [
+        { "type": "userdata | nil", "description": "A settings object bound to the calling script, or `nil` (with a console message) if there is no active script context." }
+      ]
+    },
+    {
+      "name": "bind",
+      "description": [
+        "Lower-level primitive behind `lje.settings.open()`. Returns a settings object bound to the script with the given name (its folder name, as returned by `lje.env.current_script()`).",
+        "",
+        "Most scripts should use `lje.settings.open()` instead, which captures the calling script's name for you."
+      ],
+      "note": "The returned object stores the script *name* and re-resolves it on every call, so it keeps working across hot-reloads. Its methods are `:get(key, default)`, `:all()`, and `:reload()`.",
+      "params": [
+        { "name": "name", "type": "string", "description": "The script (folder) name to bind to." }
+      ],
+      "returns": [
+        { "type": "userdata", "description": "A settings object bound to the named script." }
+      ]
+    }
+  ]
+}

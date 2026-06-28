@@ -4,6 +4,8 @@
 #include <windows.h>
 #endif
 
+#include <MinHook.h>
+
 enum
 {
     PAGE_RW,
@@ -85,4 +87,27 @@ static int detour_func(void* target, void* detour)
 int lje_detour(void* target, void* detour)
 {
     return detour_func(target, detour);
+}
+
+static int minhook_initialized = 0;
+
+int lje_detour_trampoline(void* target, void* detour, void** original)
+{
+    if (!minhook_initialized) {
+        if (MH_Initialize() != MH_OK) {
+            return 0; // Failed to initialize MinHook
+        }
+        minhook_initialized = 1;
+    }
+
+    if (MH_CreateHook(target, detour, original) != MH_OK) {
+        return 0; // Failed to create hook
+    }
+
+    if (MH_EnableHook(target) != MH_OK) {
+        MH_RemoveHook(target); // Clean up on failure
+        return 0; // Failed to enable hook
+    }
+
+    return 1; // Success
 }

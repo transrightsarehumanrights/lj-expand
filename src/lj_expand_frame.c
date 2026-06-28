@@ -33,9 +33,7 @@ int lje_frame_is_lje_involved(lua_State* L, int frame_offset, int max_level)
     for (int i = frame_offset; i < frame_offset + max_level; i++)
     {
         int size = 0;
-        LJEG()->show_special_frames = 1;
         cTValue* frame = lj_debug_frame(L, i, &size);
-        LJEG()->show_special_frames = 0;
         if (frame == NULL)
         {
             break;
@@ -55,7 +53,7 @@ int lje_frame_is_lje_involved(lua_State* L, int frame_offset, int max_level)
         // which indicates this is a special C-closure made by LJE and not anything else.
         if (iscfunc(fn))
         {
-            if (funcextendc(fn)->is_special)
+            if (lje_is_addr_in_lje((uintptr_t)fn->c.f))
             {
                 return 1;
             }
@@ -68,9 +66,7 @@ int lje_frame_is_lje_involved(lua_State* L, int frame_offset, int max_level)
 int lje_frame_is_lje(lua_State* L, int frame_offset)
 {
     int size = 0;
-    LJEG()->show_special_frames = 1;
     cTValue* frame = lj_debug_frame(L, frame_offset, &size); // Caller is frame 1
-    LJEG()->show_special_frames = 0;
     if (frame == NULL)
     {
         return 0;
@@ -86,7 +82,7 @@ int lje_frame_is_lje(lua_State* L, int frame_offset)
 
     if (iscfunc(fn))
     {
-        if (funcextendc(fn)->is_special)
+        if (lje_is_addr_in_lje((uintptr_t)fn->c.f))
         {
             return 1;
         }
@@ -100,9 +96,7 @@ int lje_frame_walk(lua_State* L, int frame_offset, LJEFrameCheckFunc check_func)
     for (int i = frame_offset; ; i++)
     {
         int size = 0;
-        LJEG()->show_special_frames = 1;
         cTValue* frame = lj_debug_frame(L, i, &size);
-        LJEG()->show_special_frames = 0;
         if (frame == NULL)
         {
             break;

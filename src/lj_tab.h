@@ -54,6 +54,9 @@ LJ_FUNCA void lj_tab_reasize(lua_State *L, GCtab *t, uint32_t nasize);
 
 LJ_FUNCA cTValue * LJ_FASTCALL lj_tab_getinth(GCtab *t, int32_t key);
 LJ_FUNC cTValue *lj_tab_getstr(GCtab *t, GCstr *key);
+// LJE: Raw version to avoid allocations.
+#define lj_tab_getstr_lit(t, lit) lj_tab_getstr_raw((t), "" lit, sizeof(lit) - 1)
+LJ_FUNC cTValue *lj_tab_getstr_raw(GCtab *t, const char *str, size_t lenx);
 LJ_FUNCA cTValue *lj_tab_get(lua_State *L, GCtab *t, cTValue *key);
 
 /* Caveat: all setters require a write barrier for the stored value. */

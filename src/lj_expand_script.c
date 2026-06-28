@@ -6,6 +6,7 @@
 #include "lauxlib.h"
 #include "lj_expand_dirs.h"
 #include "lj_expand_globals.h"
+#include "lj_expand_log.h"
 #ifdef _WIN64
 #include <windows.h>
 #endif
@@ -13,7 +14,7 @@
 void lje_script_resolve_base(char* out_buffer, size_t buffer_size) {
     if (!lje_directory_get(LJE_DIR_SCRIPTS, out_buffer, buffer_size))
     {
-        printf("[LJE] Failed to resolve script directory path.\n");
+        LJE_ERROR("Failed to resolve script directory path.");
     }
 }
 
@@ -21,7 +22,7 @@ void lje_script_data_resolve_base(char* out_buffer, size_t buffer_size)
 {
     if (!lje_directory_get(LJE_DIR_SCRIPT_DATA, out_buffer, buffer_size))
     {
-        printf("[LJE] Failed to resolve script data directory path.\n");
+        LJE_ERROR("Failed to resolve script data directory path.");
     }
 }
 
@@ -184,7 +185,7 @@ char* lje_script_data_read_file(const char* relative_path, size_t* out_data_size
 
 static void script_info_parse_error(const char* property, const char* details)
 {
-    printf("[LJE] Error parsing script info file: '%s' - %s\n", property, details);
+    LJE_ERROR("Error parsing script info file: '%s' - %s", property, details);
 }
 
 static LJEScriptDependency* script_info_parse_dep(const char* dep_str)
@@ -295,7 +296,7 @@ LJEScript* lje_script_load_all_scripts(size_t* out_script_count) {
     HANDLE hFind = FindFirstFileA(search_path, &find_data);
 
     if (hFind == INVALID_HANDLE_VALUE) {
-        printf("[LJE] No scripts found in %s\n", search_path);
+        LJE_INFO("No scripts found in %s", search_path);
         *out_script_count = 0;
         return NULL; // No scripts found
     }
@@ -311,7 +312,7 @@ LJEScript* lje_script_load_all_scripts(size_t* out_script_count) {
             if (strcmp(find_data.cFileName, ".") == 0 || strcmp(find_data.cFileName, "..") == 0)
                 continue;
 
-            printf("[LJE] Found script folder: %s\n", find_data.cFileName);
+            LJE_INFO("Found script folder: %s", find_data.cFileName);
             // Check if main.lua exists in this directory
             char main_lua_path[MAX_PATH] = { 0 };
             lje_script_resolve_base(main_lua_path, MAX_PATH);
@@ -332,7 +333,7 @@ LJEScript* lje_script_load_all_scripts(size_t* out_script_count) {
                 LJEScriptInfo* info = lje_script_parse_info(info_path);
                 if (!info)
                 {
-                    printf("[LJE] Warning: Script '%s' is missing a valid info.toml file. Skipping.\n", find_data.cFileName);
+                    LJE_WARN("Script '%s' is missing a valid info.toml file. Skipping.", find_data.cFileName);
                     continue;
                 }
 
@@ -355,7 +356,7 @@ LJEScript* lje_script_load_all_scripts(size_t* out_script_count) {
 
                     if (found_binaries != info->binary_dependency_count)
                     {
-                        printf("[LJE] Warning: Script '%s' is missing required binary dependencies. Skipping.\n", find_data.cFileName);
+                        LJE_WARN("Script '%s' is missing required binary dependencies. Skipping.", find_data.cFileName);
                         continue;
                     }
                 }
@@ -368,6 +369,8 @@ LJEScript* lje_script_load_all_scripts(size_t* out_script_count) {
 
                 LJEScriptExtraInfo* extra = (LJEScriptExtraInfo*)malloc(sizeof(LJEScriptExtraInfo));
                 extra->engine_call_hook_ref_id = LUA_NOREF;
+                extra->engine_call_post = 0;
+                extra->cleanup_ref_id = LUA_NOREF;
                 scripts[script_count].extra = extra;
 
                 // Check for preinit.lua
@@ -383,6 +386,19 @@ LJEScript* lje_script_load_all_scripts(size_t* out_script_count) {
                 {
                     scripts[script_count].preinit_path = NULL;
                 }
+
+                // Check for boot.lua
+                char boot_lua_path[MAX_PATH] = { 0 };
+              strcpy_s(boot_lua_path, MAX_PATH, folder_path);
+              strncat_s(boot_lua_path, MAX_PATH, LJE_SCRIPT_BOOT, _TRUNCATE);
+              attribs = GetFileAttributesA(boot_lua_path);
+              if (attribs != INVALID_FILE_ATTRIBUTES && !(attribs & FILE_ATTRIBUTE_DIRECTORY))
+              {
+                scripts[script_count].boot_path = _strdup(boot_lua_path);
+              } else
+              {
+                scripts[script_count].boot_path = NULL;
+              }
 
                 script_count++;
             }
@@ -410,7 +426,7 @@ static char is_script_in_load_order(LJEScript** load_order, size_t load_order_co
 
 LJEScript** lje_script_compute_load_order(size_t script_count, LJEScript* scripts)
 {
-    printf("[LJE] Computing script load order for %llu scripts...\n", script_count);
+    LJE_INFO("Computing script load order for %llu scripts...", script_count);
     // Simple dependency resolution, we traverse scripts on some random, undefined order
     // and for each newly encountered dependency, we insert it before the script that depends on it.
     // It is not necessarily the best algorithm, but it works for now. And of course, if a dependency has already
@@ -425,7 +441,7 @@ LJEScript** lje_script_compute_load_order(size_t script_count, LJEScript* script
     // Script traversal
     for (size_t i = 0; i < script_count; i++)
     {
-        printf("[LJE] Processing script for load order: %s by %s\n",
+        LJE_DEBUG("Processing script for load order: %s by %s",
             scripts[i].info->name,
             scripts[i].info->author);
         if (is_script_in_load_order(load_order, script_count, &scripts[i]))
@@ -435,7 +451,7 @@ LJEScript** lje_script_compute_load_order(size_t script_count, LJEScript* script
         LJEScript* current_script = &scripts[i];
         for (size_t j = 0; j < current_script->info->dependency_count; j++)
         {
-            printf("[LJE] - Checking dependency: %s by %s\n",
+            LJE_DEBUG("- Checking dependency: %s by %s",
                 current_script->info->dependencies[j].name,
                 current_script->info->dependencies[j].author);
             LJEScriptDependency* dep = &current_script->info->dependencies[j];
@@ -443,19 +459,19 @@ LJEScript** lje_script_compute_load_order(size_t script_count, LJEScript* script
             // Find the script that matches this dependency
             for (size_t k = 0; k < script_count; k++)
             {
-                printf("[LJE]   - Comparing against script: %s by %s\n",
+                LJE_DEBUG("  - Comparing against script: %s by %s",
                     scripts[k].info->name,
                     scripts[k].info->author);
                 if (strcmp(scripts[k].info->name, dep->name) == 0 &&
                     strcmp(scripts[k].info->author, dep->author) == 0)
                 {
-                    printf("[LJE]   - Found matching dependency script: %s by %s\n",
+                    LJE_DEBUG("  - Found matching dependency script: %s by %s",
                         scripts[k].info->name,
                         scripts[k].info->author);
                     // Found the dependency script
                     if (!is_script_in_load_order(load_order, script_count, &scripts[k]))
                     {
-                        printf("[LJE]   - Inserting dependency script into load order: %s by %s\n",
+                        LJE_DEBUG("  - Inserting dependency script into load order: %s by %s",
                             scripts[k].info->name,
                             scripts[k].info->author);
                         // Insert dependency first
@@ -470,7 +486,7 @@ LJEScript** lje_script_compute_load_order(size_t script_count, LJEScript* script
             if (!found_dep)
             {
                 // Warn user they are missing a dependency
-                printf("[LJE] Warning: Script '%s' by '%s' is missing dependency '%s' by '%s'\n",
+                LJE_WARN("Script '%s' by '%s' is missing dependency '%s' by '%s'",
                     current_script->info->name,
                     current_script->info->author,
                     dep->name,
@@ -479,7 +495,7 @@ LJEScript** lje_script_compute_load_order(size_t script_count, LJEScript* script
         }
 
         // Insert this script
-        printf("[LJE] load_order_index = %llu, inserting script: %s by %s\n",
+        LJE_DEBUG("load_order_index = %llu, inserting script: %s by %s",
             load_order_index,
             current_script->info->name,
             current_script->info->author);
@@ -494,7 +510,7 @@ char** lje_script_find(LJEScript* script, const char* relative_path, size_t* out
     if (strstr(relative_path, ".."))
     {
         // Forbid path weaseling
-        printf("[LJE] lje_script_find: Forbidding path weaseling in path '%s'\n", relative_path);
+        LJE_WARN("lje_script_find: Forbidding path weaseling in path '%s'", relative_path);
         *out_path_count = 0;
         return NULL;
     }
@@ -552,6 +568,32 @@ char** lje_script_find(LJEScript* script, const char* relative_path, size_t* out
 #else
 #error "lje_script_find not implemented for this platform"
 #endif
+}
+
+char* lje_script_read(LJEScript* script, const char* relative_path, size_t* out_size)
+{
+  // Literally just read from the script folder
+  char path[MAX_PATH] = { 0 };
+  strcpy_s(path, MAX_PATH, script->folder);
+  strncat_s(path, MAX_PATH, "\\", _TRUNCATE);
+  strncat_s(path, MAX_PATH, relative_path, _TRUNCATE);
+
+  FILE* file = NULL;
+  file = fopen(path, "rb");
+  if (file == NULL)
+    return NULL;
+
+  fseek(file, 0, SEEK_END);
+  size_t file_size = ftell(file);
+  fseek(file, 0, SEEK_SET);
+
+  char* buffer = (char*)malloc(file_size + 1);
+  fread(buffer, 1, file_size, file);
+  buffer[file_size] = '\0';
+  fclose(file);
+
+  *out_size = file_size; // For binary data, incase the file isn't null-terminated.
+  return buffer;
 }
 
 void lje_script_get_path(LJEScript* script, char* out_buffer, size_t buffer_size)

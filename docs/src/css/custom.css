@@ -10,12 +10,18 @@
 }
 
 :root {
-  --ifm-color-primary: #c084fc;
-  --ifm-color-primary-dark: #a855f7;
-  --ifm-color-primary-darker: #9333ea;
-  --ifm-color-primary-darkest: #7e22ce;
-  --ifm-color-primary-light: #d8b4fe;
-  --ifm-color-primary-lighter: #e9d5ff;
-  --ifm-color-primary-lightest: #f5f3ff;
+  --ifm-color-primary: #ffac72;
+  --ifm-color-primary-dark: #ff9346;
+  --ifm-color-primary-darker: #ea7c47;
+  --ifm-color-primary-darkest: #9d501b;
+  --ifm-color-primary-light: #ffbc71;
+  --ifm-color-primary-lighter: #ffca8d;
+  --ifm-color-primary-lightest: #ffcfa0;
   --ifm-code-font-size: 90%;
+}
+img[alt="LJE Logo"] {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 20%;
 }

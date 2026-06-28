@@ -3,16 +3,19 @@
 #include "lauxlib.h"
 #include "lj_expand_globals.h"
 #include "lj_expand_lib.h"
+#include "lj_expand_log.h"
 #include "lj_expand_module.h"
+#include "lj_expand_settings.h"
 #include "stdio.h"
 
-#include "generated/lje_preinit.h"
+#include "generated/lje_secure_preinit.h"
+#include "generated/lje_helpers.h"
 
 static char* load_lua_file(const char* path)
 {
     FILE* file = fopen(path, "rb");
     if (!file) {
-        printf("[LJE] Failed to open script file: %s\n", path);
+        LJE_ERROR("Failed to open script file: %s", path);
         return NULL;
     }
 
@@ -54,14 +57,14 @@ static int resolve_original_functions(luaL_loadbufferx_t* out_loadbufferx, lua_p
 }
 
 void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
-    LJEG()->main_state = L;
+
     LJEG()->current_script = script;
 
     luaL_loadbufferx_t original_loadbufferx = NULL;
     lua_pcall_t original_pcall = NULL;
     if (!resolve_original_functions(&original_loadbufferx, &original_pcall))
     {
-        printf("[LJE] Failed to resolve original startup functions necessary...\n");
+        LJE_ERROR("Failed to resolve original startup functions necessary...");
         return;
     }
 
@@ -75,43 +78,21 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
 
     if (script_file)
     {
-        printf("[LJE] Executing script '%s'...\n", script->name);
+        LJE_INFO("Executing script '%s'...", script->name);
         LJEG()->flag_lje_protos = 1;
         if (original_loadbufferx(L, script_file, strlen(script_file), chunkname, NULL) == 0)
         {
             LJEG()->flag_lje_protos = 0;
-            // Mark it as a special function first
-            GCfunc* func = funcV(L->top-1);
-            LJEfunc* ljeFn = funcextend(func); // guaranteed to exist since it's a Lua function
-            ljeFn->is_special = 1;
-
-            if (LJEG()->env_ref_id != LUA_NOREF)
-            {
-                // Set the environment if it exists
-                lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
-                lua_setfenv(L, -2);
-            } else
-            {
-                printf("[LJE WARNING] No custom environment set for script? Probably not intentional.\n");
-            }
-
-            // Disable hooks during execution
-            LJEG()->skip_hooks = 1;
             if (lua_pcall(L, 0, 0, 0) != 0) /* mental note: figure out why this seems to randomly not work? */
             {
-                LJEG()->skip_hooks = 0;
-
-                printf("[LJE] Error executing script: %s\n", lua_tostring(L, -1));
+                LJE_ERROR("Error executing script: %s", lua_tostring(L, -1));
                 lua_pop(L, 1); // Pop error message
-            } else
-            {
-                LJEG()->skip_hooks = 0;
             }
         }
         else
         {
             LJEG()->flag_lje_protos = 0;
-            printf("[LJE] Error loading script: %s\n", lua_tostring(L, -1));
+            LJE_ERROR("Error loading script: %s", lua_tostring(L, -1));
             lua_pop(L, 1); // Pop error message
         }
 
@@ -126,13 +107,13 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
     lua_pcall_t original_pcall = NULL;
     if (!resolve_original_functions(&original_loadbufferx, &original_pcall))
     {
-        printf("[LJE] Failed to resolve original startup functions necessary...\n");
+        LJE_ERROR("Failed to resolve original startup functions necessary...");
         return 0;
     }
 
     if (!LJEG()->current_script)
     {
-        printf("[LJE] No current script context for include!\n");
+        LJE_ERROR("No current script context for include!");
         return 0;
     }
 
@@ -150,13 +131,6 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
     if (original_loadbufferx(L, buffer, strlen(buffer), chunkname, NULL) == 0)
     {
         LJEG()->flag_lje_protos = 0;
-        if (LJEG()->env_ref_id != LUA_NOREF)
-        {
-            // Set the environment if it exists
-            lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
-            lua_setfenv(L, -2);
-        }
-
         if (!execute)
         {
             // Just return the loaded function
@@ -166,7 +140,7 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
 
         if (original_pcall(L, 0, LUA_MULTRET, 0) != 0)
         {
-            printf("[LJE] Error executing include script: %s\n", lua_tostring(L, -1));
+            LJE_ERROR("Error executing include script: %s", lua_tostring(L, -1));
             lua_pop(L, 1); // Pop error message
         } else
         {
@@ -177,7 +151,7 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
     else
     {
         LJEG()->flag_lje_protos = 0;
-        printf("[LJE] Error loading include script: %s\n", lua_tostring(L, -1));
+        LJE_ERROR("Error loading include script: %s", lua_tostring(L, -1));
         lua_pop(L, 1); // Pop error message
     }
 
@@ -185,40 +159,64 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
     return 0;
 }
 
-void lje_startup_preinit(lua_State* L) {
-    printf("[LJE] Running pre-initialization script...\n");
-    LJEG()->main_state = L;
-
-    luaL_loadbufferx_t original_loadbufferx = NULL;
-    lua_pcall_t original_pcall = NULL;
-    if (!resolve_original_functions(&original_loadbufferx, &original_pcall))
-    {
-        printf("[LJE] Failed to resolve original startup functions necessary...\n");
-        return;
-    }
-
-    char* script = lje_preinit_data;
+// Load and execute a builtin Lua chunk using GMod's original loadbufferx/pcall.
+static void run_secure_chunk(lua_State* L, luaL_loadbufferx_t original_loadbufferx,
+                             lua_pcall_t original_pcall, const char* source, const char* name)
+{
     LJEG()->flag_lje_protos = 1;
-    if (original_loadbufferx(L, script, strlen(script), "@lje_preinit", NULL) == 0)
+    if (original_loadbufferx(L, source, strlen(source), name, NULL) == 0)
     {
         LJEG()->flag_lje_protos = 0;
         if (original_pcall(L, 0, 0, 0) != 0)
         {
-            printf("[LJE ERROR] Error executing pre-initialization script: %s\n", lua_tostring(L, -1));
+            LJE_ERROR("Error executing %s script: %s", name, lua_tostring(L, -1));
             lua_pop(L, 1); // Pop error message
         } else
         {
-            printf("[LJE] Pre-initialization script executed successfully.\n");
-            lje_removefuncs(L); // Remove our global functions after preinit, as it is not secure to leave them there
-            printf("[LJE] Removed LJE global functions after pre-initialization.\n");
+            LJE_SUCCESS("%s script executed successfully.", name);
         }
     }
     else
     {
         LJEG()->flag_lje_protos = 0;
-        printf("[LJE ERROR] Error loading pre-initialization script: %s\n", lua_tostring(L, -1));
+        LJE_ERROR("Error loading %s script: %s", name, lua_tostring(L, -1));
         lua_pop(L, 1); // Pop error message
     }
+}
+
+void lje_startup_secure_preinit(lua_State* L) {
+    LJE_INFO("Running secure pre-initialization script...");
+
+    luaL_loadbufferx_t original_loadbufferx = NULL;
+    lua_pcall_t original_pcall = NULL;
+    if (!resolve_original_functions(&original_loadbufferx, &original_pcall))
+    {
+        LJE_ERROR("Failed to resolve original startup functions necessary...");
+        return;
+    }
+
+    run_secure_chunk(L, original_loadbufferx, original_pcall,
+                     lje_secure_preinit_data, "@lje_secure_preinit");
+
+    return;
+}
+
+// Loads the pure-Lua helpers chunk into the given state. Kept separate from preinit
+// so it can be loaded early (before boot scripts run); it only depends on lje.util
+// and lje.con_print, which the isolated state already provides.
+void lje_startup_secure_helpers(lua_State* L) {
+    LJE_INFO("Running secure helpers script...");
+
+    luaL_loadbufferx_t original_loadbufferx = NULL;
+    lua_pcall_t original_pcall = NULL;
+    if (!resolve_original_functions(&original_loadbufferx, &original_pcall))
+    {
+        LJE_ERROR("Failed to resolve original startup functions necessary...");
+        return;
+    }
+
+    run_secure_chunk(L, original_loadbufferx, original_pcall,
+                     lje_helpers_data, "@lje_helpers");
 
     return;
 }
@@ -227,7 +225,7 @@ int lje_startup_compile(lua_State* L, const char* source) {
     luaL_loadbufferx_t original_loadbufferx = NULL;
     if (!resolve_original_functions(&original_loadbufferx, NULL))
     {
-        printf("[LJE] Failed to resolve original startup functions necessary...\n");
+        LJE_ERROR("Failed to resolve original startup functions necessary...");
         return 0;
     }
 
@@ -235,39 +233,64 @@ int lje_startup_compile(lua_State* L, const char* source) {
     if (original_loadbufferx(L, source, strlen(source), "@lje_dynamic_compile", NULL) == 0)
     {
         LJEG()->flag_lje_protos = 0;
-        // Mark it as a special function first
-        GCfunc* func = funcV(L->top-1);
-        LJEfunc* ljeFn = funcextend(func); // guaranteed to exist since it's a Lua function
-        ljeFn->is_special = 1;
-
         return 1; // success, function is on top of stack
     }
     else
     {
         LJEG()->flag_lje_protos = 0;
-        printf("[LJE ERROR] Error compiling dynamic script: %s\n", lua_tostring(L, -1));
+        LJE_ERROR("Error compiling dynamic script: %s", lua_tostring(L, -1));
         lua_pop(L, 1); // Pop error message
     }
 
     return 0;
 }
 
-LJ_FUNC void lje_startup_reload(lua_State* L, LJEScript* script)
-{
-    printf("[LJE] Reloading script '%s'...\n", script->name);
-    /* We need to clear its require cache before reloading. */
-    if (LJEG()->env_ref_id == LUA_NOREF)
+int lje_startup_run(lua_State* L, const char* source) {
+    luaL_loadbufferx_t original_loadbufferx = NULL;
+    lua_pcall_t original_pcall = NULL;
+    if (!resolve_original_functions(&original_loadbufferx, &original_pcall))
     {
-        printf("[LJE] No custom environment set for script? Probably not intentional. Can't reload.\n");
-        return;
+        LJE_ERROR("Failed to resolve original startup functions necessary...");
+        return -1;
     }
 
-    lua_rawgeti(L, LUA_REGISTRYINDEX, LJEG()->env_ref_id);
-    lua_getfield(L, -1, "lje");
-    lua_getfield(L, -1, "includeCache");
-    lua_pushnil(L);
-    lua_setfield(L, -2, script->name); // includeCache[script->name] = nil
-    lua_pop(L, 3); // Pop includeCache, lje, env
+    LJEG()->flag_lje_protos = 1;
+    int status = original_loadbufferx(L, source, strlen(source), "@lje_run", NULL);
+    LJEG()->flag_lje_protos = 0;
+
+    if (status != 0)
+    {
+        LJE_ERROR("Error loading script: %s", lua_tostring(L, -1));
+        lua_pop(L, 1); // Pop error message
+        return status;
+    }
+
+    status = original_pcall(L, 0, 0, 0);
+    if (status != 0)
+    {
+        LJE_ERROR("Error executing script: %s", lua_tostring(L, -1));
+        lua_pop(L, 1); // Pop error message
+    }
+
+    return status;
+}
+
+LJ_FUNC void lje_startup_reload(lua_State* L, LJEScript* script)
+{
+    LJE_INFO("Reloading script '%s'...", script->name);
+    // run `lje.includeCache[script] = {}`
+    char cacheInvalidationSource[512] = { 0 };
+    strncat_s(cacheInvalidationSource, 512, "lje.includeCache[\"", _TRUNCATE);
+    strncat_s(cacheInvalidationSource, 512, script->info->name, _TRUNCATE);
+    strncat_s(cacheInvalidationSource, 512, "\"] = {}", _TRUNCATE);
+
+    if (lje_startup_run(L, cacheInvalidationSource) != LUA_OK)
+    {
+      LJE_WARN("Failed to invalidate include cache for script %s. This may cause includes to not reload properly. Error: %s", script->info->name, lua_tostring(L, -1));
+      return;
+    }
+
+    lje_settings_clear_cache(L);
 
     lje_startup_execute(L, script, NULL);
 }

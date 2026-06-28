@@ -1,18 +1,11 @@
 {
   "namespace": "vm",
-  "description": "LuaJIT virtual machine manipulation, including bytecode patching and engine call interception.",
+  "description": "LuaJIT virtual machine manipulation, primarily engine call interception.",
   "functions": [
     {
-      "name": "patch_bytecodes",
-      "description": "Patches several LuaJIT bytecode handlers for this VM state to LJE-aware versions. Specifically:\n\n- `ISEQV` / `ISNEV` — patched to use spoof-aware equality comparisons, since the default fast-path breaks for spoofed functions.\n- `TGETS` — patched to block or remap metatable lookups when LJE remaps are active.\n- `CALLT` / `CALLMT` — patched to support tail-call interception.\n\nAlso flushes all JIT traces before patching. Should be called once during initialization.",
-      "note": "You do not need to ever call this. LJE automatically calls it at preinit.",
-      "params": [],
-      "returns": []
-    },
-    {
       "name": "set_engine_call_hook",
-      "description": "Registers a Lua function to be called when the engine invokes a hooked function. The callback is automatically marked as special and stored per-script. Requires an active script context. Only one hook can be active per script at a time.",
-      "note": "Any engine call hook that handles the call first will suppress it from reaching any other engine call hook.",
+      "description": "Registers a per-script engine call hook. Whenever the engine invokes a Lua function in the host (game) state, the callback is invoked in the secure state as `fn(func, nargs, nresults, ...)`:\n\n- `func` — a light userdata pointer identifying the called function. Useful for identity comparisons without copying a full function object across states.\n- `nargs` / `nresults` — the argument and result counts of the engine call.\n- `...` — the call arguments. Tables and userdata arrive as proxy handles (see `lje.proxy`); other values are copied into the secure state.\n\nThe hook's return values are ignored — handling/suppressing engine calls is not currently supported. Errors thrown by the hook are caught and printed to the console. Requires an active script context, and hooks only fire for secure scripts. Only one hook can be active per script at a time.",
+      "note": "Proxy handles passed to the hook are only valid for the duration of the hook call — do not store them.",
       "params": [
         {
           "name": "fn",
@@ -27,10 +20,19 @@
       ]
     },
     {
-      "name": "handle_engine_call",
-      "description": "Marks the current engine call as handled. Call this from within an engine call hook to signal that LJE should not perform its default handling for this call.\n\nAfter calling this function, return any values that should be returned to the engine. If you don't, the engine may get confused and explode.\n```lua\nlje.vm.handle_engine_call()\nreturn value1, value2, ...\n```",
-      "params": [],
-      "returns": []
+      "name": "set_engine_call_hook_post",
+      "description": "Controls when this script's engine call hook runs relative to the engine call itself.\n\n- `false` (default) — the hook runs *before* the engine call proceeds normally.\n- `true` — LJE performs the engine call first, then invokes the hook afterwards, so the hook observes a call that has already happened. Since the call is consumed in the process, any remaining scripts' hooks are skipped for that call, and if the hook itself errors, the call's status is returned to the engine as-is.\n\nRequires an active script context.",
+      "params": [
+        {
+          "name": "post",
+          "type": "boolean",
+          "description": "`true` to run the hook after the engine call, `false` to run it before."
+        }
+      ],
+      "returns": [],
+      "errors": [
+        "No active script context."
+      ]
     }
   ]
 }

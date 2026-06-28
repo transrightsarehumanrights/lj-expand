@@ -47,15 +47,6 @@ int setjitmode(lua_State *L, int mode)
     mode |= LUAJIT_MODE_ENGINE;
   } else {
     /* jit.on/off/flush(func|proto, nil|true|false) */
-    if (tvisfunc(L->base)) /* LJE: Use spoof if it exists */
-    {
-      GCfunc* fn = funcV(L->base);
-      if (isluafunc(fn) && funcspoof(fn))
-      {
-        setfuncV(L, L->base, funcspoof(fn));
-      }
-    }
-
     if (tvisfunc(L->base) || tvisproto(L->base))
       idx = 1;
     else if (!tvistrue(L->base))  /* jit.on/off/flush(true, nil|true|false) */
@@ -173,23 +164,7 @@ static GCproto *check_Lproto(lua_State *L, int nolua)
     } else if (tvisfunc(o)) {
       if (isluafunc(funcV(o)))
       {
-        /* LJE: Use spoof if it exists */
-        GCfunc* fn = funcV(o);
-        LJEfunc* ljeFn = funcextend(fn);
-        if (gcref(ljeFn->spoof) != NULL)
-        {
-          fn = gcrefp(ljeFn->spoof, GCfunc);
-          /* If the spoofed function is *not* a Lua function, return NULL to avoid memory corruption */
-          if (!isluafunc(fn))
-          {
-            /* If nolua is false, we want to raise an error */
-            if (!nolua)
-              goto type_error;
-            return NULL;
-          }
-        }
-
-        return funcproto(fn);
+        return funcproto(funcV(o));
       }
 
       if (nolua)
@@ -242,20 +217,6 @@ LJLIB_CF(jit_util_funcinfo)
     setprotoV(L, lj_tab_setstr(L, t, lj_str_newlit(L, "proto")), pt);
   } else {
     GCfunc *fn = funcV(L->base);
-    /* LJE: check_Lproto can return NULL if a spoofed function is not a Lua function, so we need to handle that case accordingly */
-    if (isluafunc(fn))
-    {
-      LJEfunc* ljeFn = funcextend(fn);
-      if (gcref(ljeFn->spoof) != NULL)
-      {
-        GCfunc* spoof = gcrefp(ljeFn->spoof, GCfunc);
-        if (!isluafunc(spoof)) /* iscfunc won't work here if it's a fast-function. */
-        {
-          /* Use the spoofed function only if the original function is a C function */
-          fn = spoof;
-        }
-      }
-    }
 
     GCtab *t;
     lua_createtable(L, 0, 4);  /* Increment hash size if fields are added. */

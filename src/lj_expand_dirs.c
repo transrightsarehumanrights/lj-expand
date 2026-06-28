@@ -1,4 +1,5 @@
 #include "lj_expand_dirs.h"
+#include "lj_expand_log.h"
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <shellapi.h>
@@ -125,7 +126,7 @@ int lje_migrate_legacy_dirs()
 {
     if (get_migration_flag())
     {
-        printf("[LJE INFO] Migration already completed or not needed.\n");
+        LJE_INFO("Migration already completed or not needed.");
         return 1;  // Migration already done or not needed
     }
 
@@ -137,30 +138,30 @@ int lje_migrate_legacy_dirs()
         char old_resolved[MAX_PATH];
         int result = ExpandEnvironmentStringsA(_lje_legacy_mappings[i], old_resolved, MAX_PATH);
         if (result == 0 || result > MAX_PATH) {
-            printf("[LJE WARNING] Failed to resolve legacy path for migration: %s\n", _lje_legacy_mappings[i]);
+            LJE_WARN("Failed to resolve legacy path for migration: %s", _lje_legacy_mappings[i]);
             continue;  // Failed to resolve environment variable, skip migration for this directory
         }
 
         // Has to exist
         if (GetFileAttributesA(old_resolved) == INVALID_FILE_ATTRIBUTES) {
-            printf("[LJE INFO] Legacy directory does not exist, skipping migration: %s\n", old_resolved);
+            LJE_INFO("Legacy directory does not exist, skipping migration: %s", old_resolved);
             continue;  // Legacy directory does not exist, skip migration for this directory
         }
 
         char new_resolved[MAX_PATH];
         if (!lje_directory_get((LJEDirectory)i, new_resolved, MAX_PATH)) {
-            printf("[LJE WARNING] Failed to resolve new path for migration: %s\n", _lje_dir_mappings[i]);
+            LJE_WARN("Failed to resolve new path for migration: %s", _lje_dir_mappings[i]);
             continue;  // Failed to resolve new path, skip migration for this directory
         }
 
-        printf("[LJE INFO] Migrating data from %s to %s\n", old_resolved, new_resolved);
+        LJE_INFO("Migrating data from %s to %s", old_resolved, new_resolved);
         if (copy_recursive(old_resolved, new_resolved))
         {
-            printf("[LJE INFO] Successfully migrated data from %s to %s\n", old_resolved, new_resolved);
+            LJE_SUCCESS("Successfully migrated data from %s to %s", old_resolved, new_resolved);
         }
         else
         {
-            printf("[LJE WARNING] Failed to migrate data from %s to %s\n", old_resolved, new_resolved);
+            LJE_WARN("Failed to migrate data from %s to %s", old_resolved, new_resolved);
         }
     }
 

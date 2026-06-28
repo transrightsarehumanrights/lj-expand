@@ -1,0 +1,42 @@
+{
+  "namespace": "proxy",
+  "description": "Functions for working with proxy objects in the secure state. When an engine call hook fires, table and userdata arguments are not copied — they are passed as lightweight proxy handles (light userdata) pointing at the host object. Proxies are arena-allocated and do not pin their referent, so they are only valid for the duration of the engine call that produced them. Do not store proxy handles.",
+  "functions": [
+    {
+      "name": "type",
+      "description": "Returns the type of the host object a proxy refers to.",
+      "note": "For performance, no argument validation is performed — passing anything other than a proxy handle is undefined behavior and will likely crash.",
+      "params": [
+        {
+          "name": "proxy",
+          "type": "lightuserdata",
+          "description": "A proxy handle, as received in an engine call hook."
+        }
+      ],
+      "returns": [
+        {
+          "type": "string",
+          "description": "`\"table\"`, `\"userdata\"`, or `\"unknown\"`."
+        }
+      ]
+    },
+    {
+      "name": "copy",
+      "description": "Materializes the proxied host object into the secure state and returns it. Tables are deep-copied (including metatables, with cycles preserved); userdata contents are copied byte-for-byte and the metatable is remapped to the secure state's own version by its `MetaName`, if one exists. C functions encountered during the copy become secure wrappers; Lua functions are replaced with an empty stub function.",
+      "note": "For performance, no argument validation is performed — passing anything other than a proxy handle is undefined behavior and will likely crash.",
+      "params": [
+        {
+          "name": "proxy",
+          "type": "lightuserdata",
+          "description": "A proxy handle, as received in an engine call hook."
+        }
+      ],
+      "returns": [
+        {
+          "type": "any",
+          "description": "The materialized copy of the host object."
+        }
+      ]
+    }
+  ]
+}

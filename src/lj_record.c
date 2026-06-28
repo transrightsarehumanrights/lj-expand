@@ -195,12 +195,6 @@ static TRef getcurrf(jit_State *J)
 */
 int lj_record_objcmp(jit_State *J, TRef a, TRef b, cTValue *av, cTValue *bv)
 {
-  /* LJE: Force trace abort if we are comparing functions.
-   * This is to avoid any attacks that bypass our spoof equality.
-   */
-  if (tref_isfunc(a) || tref_isfunc(b))
-    lj_trace_err(J, LJ_TRERR_NYIBC);
-
   int diff = !lj_obj_equal(av, bv);
   if (!tref_isk2(a, b)) {  /* Shortcut, also handles primitives. */
     IRType ta = tref_isinteger(a) ? IRT_INT : tref_type(a);
@@ -950,35 +944,8 @@ int lj_record_mm_lookup(jit_State *J, RecordIndex *ix, MMS mm)
     mix.tab = emitir(IRT(IR_FLOAD, IRT_TAB), ix->tab, IRFL_TAB_META);
   } else if (tref_isudata(ix->tab)) {
     int udtype = udataV(&ix->tabv)->udtype;
-    /* LJE: Specialize mt in this trace if from LJE context, and if anything has remapped a metatable */
-    char is_lje = 0;
-    if (J->L == LJEG()->main_state)
-    {
-      GCproto* pt = &gcref(J->cur.startpt)->pt;
-      if (pt)
-      {
-        // TODO: Is startpt really the right place to look for LJE context? What about side traces or trace stitches?
-        LJEproto* lje_pt = protoextend(pt);
-        is_lje = lje_pt->is_from_lje;
-      }
-    }
 
     mt = tabref(udataV(&ix->tabv)->metatable);
-    /* LJE: Determine if this requires a remapping */
-    if (is_lje)
-    {
-      cTValue* metaName = lj_tab_getstr(mt, lj_str_newlit(J->L, "MetaName"));
-      if (metaName && tvisstr(metaName))
-      {
-        const char* typeName = strdata(strV(metaName));
-        LJEMetatableRemap* remap = lje_get_metatable_remap(typeName);
-        if (remap)
-        {
-          mt = remap->replacement;
-        }
-      }
-    }
-
     /* The metatables of special userdata objects are treated as immutable. */
     if (udtype != UDTYPE_USERDATA) {
       cTValue *mo;

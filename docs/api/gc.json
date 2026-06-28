@@ -30,24 +30,6 @@
       "description": "Immediately triggers a full GC collection cycle.",
       "params": [],
       "returns": []
-    },
-    {
-      "name": "begin_track",
-      "description": "Begins a GC tracking window. Records sentinels for the current GC root list and userdata list, saves the current GC total and threshold, then freezes the GC threshold to prevent any collection during the window. Must be paired with `lje.gc.end_track`. Nesting is not supported — calling this while a window is already active is an error.",
-      "params": [],
-      "returns": [],
-      "errors": [
-        "gc tracking already active"
-      ]
-    },
-    {
-      "name": "end_track",
-      "description": "Ends a tracking window started by `lje.gc.begin_track`. Tags all objects allocated during the window with an internal LJE marker, then restores the original GC totals and threshold. Applies compensating GC pressure proportional to the hidden allocation size so that external observers see normal GC behavior. Calling this without an active tracking window is an error.",
-      "params": [],
-      "returns": [],
-      "errors": [
-        "gc tracking not active"
-      ]
     }
   ]
 }

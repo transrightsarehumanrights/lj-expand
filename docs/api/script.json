@@ -1,0 +1,15 @@
+{
+  "namespace": "script",
+  "description": "Introspection for the currently running LJE script.",
+  "functions": [
+    {
+      "name": "info",
+      "description": "Returns the parsed `info.toml` metadata for the currently executing script. See the [info.toml reference](../guides/info-toml) for what each field means.",
+      "note": "Resolves the *current* script, so it returns `nil` if there is no active script context (e.g. from a deferred callback).",
+      "params": [],
+      "returns": [
+        { "type": "table | nil", "description": "A table with `name`, `version`, `author` (strings) and `dependencies` (an array of `\"author.name\"` strings), or `nil` if there is no active script context." }
+      ]
+    }
+  ]
+}

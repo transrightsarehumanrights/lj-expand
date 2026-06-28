@@ -45,28 +45,13 @@
       ]
     },
     {
-      "name": "set_push_string_callback",
-      "description": "Registers a Lua function to be called whenever LJE pushes a string value. The function is automatically marked as special. Only one callback can be active at a time.",
-      "params": [
-        {
-          "name": "fn",
-          "type": "function",
-          "description": "Must be a Lua function, not a C function."
-        }
-      ],
-      "returns": [],
-      "errors": [
-        "Argument 1 must be a Lua function (not a C function)."
-      ]
-    },
-    {
       "name": "set_script_hook_callback",
-      "description": "Registers a Lua function to be called on script hook events. The function is automatically marked as special. Only one callback can be active at a time.",
+      "description": "Registers a Lua function that intercepts every Lua chunk the host (game) state loads. The callback runs in the secure state and receives the chunkname and the source code; it must return a string, which replaces the source that actually gets loaded. If the callback errors or returns a non-string, the original source is used unmodified. Only one callback can be active at a time — registering a new one replaces the previous.",
       "params": [
         {
           "name": "fn",
           "type": "function",
-          "description": "Must be a Lua function, not a C function."
+          "description": "A function of the form `fn(chunkname, source) -> string`. Must be a Lua function, not a C function."
         }
       ],
       "returns": [],
@@ -97,6 +82,19 @@
           "description": "A new empty table with the requested pre-allocated capacity."
         }
       ]
+    },
+    {
+      "name": "inspect",
+      "defined_in": "lua",
+      "description": "Pretty-prints any value to the console using `lje.con_print`. Tables are printed recursively with indentation, and cyclic references are detected and printed as `<recursion: ...>` instead of looping forever.",
+      "params": [
+        {
+          "name": "value",
+          "type": "any",
+          "description": "The value to print."
+        }
+      ],
+      "returns": []
     }
   ]
 }
