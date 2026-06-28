@@ -978,7 +978,7 @@ copy_to_isolated_registry:
             }
           }
 
-          lje_copy_to_isolated_state_tv(host, L, v);
+          lje_copy_to_isolated_state_tv(host, L, v, 0);
           L->top--;
           incr_top(L);
 
@@ -1408,6 +1408,13 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     }
   }
 
+  /* LJE: Post engine call hooks run *after* the real call below. We snapshot the
+   * arguments onto the isolated state before the call consumes them, then replay a
+   * copy of that snapshot to each post hook. */
+  int run_post_hooks = 0;
+  int post_snapshot_base = 0;
+  GCfunc* engine_func = NULL;
+
   /* LJE: Determine if this is an engine call. */
   /* Note: Not all engine calls start at the base of the stack.
    *
@@ -1430,90 +1437,67 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 
     if (is_adv_error_reporter)
     {
-      /* LJE: Call our engine hooks, if we have any. */
+      /* Secure scripts can observe engine call hooks. We copy the stack to the isolated
+       * state and call the hook there. Functions are passed as simple lightud pointers so
+       * scripts can do comparisons without copying a full function object across states. */
+      lua_State* I = LJEG()->isolated_state;
+
+      /* Pre-call engine call hooks run first. */
       for (size_t i = 0; i < LJEG()->loaded_script_count; i++) {
         LJEScript* script = LJEG()->script_load_order[i];
-        if (script->extra->engine_call_hook_ref_id != LUA_NOREF)
+        if (script->extra->engine_call_hook_ref_id == LUA_NOREF)
+          continue;
+        if (script->extra->engine_call_post)
         {
-          /* Secure scripts can observe engine call hooks. Right now, handling is likely to be
-           * either broken or detectable. More work will need to be done, so for now it is not
-           * supported. This is pretty good as it makes it much simpler, we just copy the stack
-           * to the isolated state and call it there.
-           *
-           * However, functions are passed as simple lightud pointers so scripts can do comparisons without
-           * actually copying a full function object to the isolated state.
-           */
+          run_post_hooks = 1; /* defer this one until after the real call */
+          continue;
+        }
 
-          lua_State* I = LJEG()->isolated_state;
-          lua_rawgeti(I, LUA_REGISTRYINDEX, script->extra->engine_call_hook_ref_id);
-          // Push function as lightud
-          lua_pushlightuserdata(I, f);
-          lua_pushinteger(I, nargs);
-          lua_pushinteger(I, nresults);
-          // Copy over the real arguments
-          for (int arg = 0; arg < nargs; arg++)
-          {
-            cTValue* arg_val = stkindex2adr(L, -nargs + arg);
+        lua_rawgeti(I, LUA_REGISTRYINDEX, script->extra->engine_call_hook_ref_id);
+        lua_pushlightuserdata(I, f);
+        lua_pushinteger(I, nargs);
+        lua_pushinteger(I, nresults);
+        for (int arg = 0; arg < nargs; arg++)
+        {
+          cTValue* arg_val = stkindex2adr(L, -nargs + arg);
+          if (tvistab(arg_val) || tvisudata(arg_val))
+            lua_pushlightuserdata(I, lje_proxy(arg_val));
+          else
+            lje_copy_to_isolated_state(L, I, -nargs + arg, 0);
+        }
 
-            // Proxy anything which is a table or udata.
-            if (tvistab(arg_val) || tvisudata(arg_val))
-            {
-              lua_pushlightuserdata(I, lje_proxy(arg_val));
-            } else
-            {
-              // copy it, usually a simple primitive like numbers, strings or C functions
-              lje_copy_to_isolated_state(L, I, -nargs + arg);
-            }
-          }
-
-          // Run the pcall right here for the engine if the script has requested post engine call hooks, meaning
-          // this script wants to run their work *after* it was called.
-          int status = 0;
-          if (script->extra->engine_call_post)
-          {
-            ptrdiff_t ef = 0;
-            global_State *g = G(L);
-            uint8_t oldh = hook_save(g);
-            if (errfunc == 0)
-            {
-              ef = 0;
-            } else
-            {
-              cTValue *o = stkindex2adr(L, errfunc);
-              api_checkvalidindex(L, o);
-              ef = savestack(L, o);
-            }
-
-            status = lj_vm_pcall(L, api_call_base(L, nargs), nresults+1, ef);
-            if (status) hook_restore(g, oldh);
-          }
-
-          LJEG()->using_error_reporter = 1;
-          LJEG()->redirect_to_isolation = 0;
-          if (lua_pcall(I, 3 + nargs, 0, 0) != LUA_OK)
-          {
-            LJEG()->using_error_reporter = 0;
-            /* If the hook errors, we just print the error and move on. */
-            const char* error_msg = lua_tostring(I, -1);
-            LJE_ERROR("Error in engine call hook for secure script %s: %s", script->info->name, error_msg);
-            lua_pop(I, 1); // pop error message
-            lje_proxy_release_all();
-            lj_gc_check(I);
-
-            // If this script is a post engine call handler, an error means we cannot let the engine
-            // call fall through as it already has happened. Just skip entirely.
-            if (script->extra->engine_call_post)
-              return status; /* return the error status from the pcall, which will propagate the error up to the game. */
-
-            continue;
-          }
-
+        LJEG()->using_error_reporter = 1;
+        LJEG()->redirect_to_isolation = 0;
+        if (lua_pcall(I, 3 + nargs, 0, 0) != LUA_OK)
+        {
           LJEG()->using_error_reporter = 0;
+          const char* error_msg = lua_tostring(I, -1);
+          LJE_ERROR("Error in engine call hook for secure script %s: %s", script->info->name, error_msg);
+          lua_pop(I, 1);
           lje_proxy_release_all();
           lj_gc_check(I);
+          continue;
+        }
 
-          if (script->extra->engine_call_post)
-            return status; // The engine call already happened, so we must move on.
+        LJEG()->using_error_reporter = 0;
+        lje_proxy_release_all();
+        lj_gc_check(I);
+      }
+
+      /* LJE: Snapshot the args for post hooks before the real call consumes them. The
+       * snapshot sits at the base of the isolated stack and we replay a copy to each
+       * post hook afterwards; proxies stay alive until they have all run. */
+      if (run_post_hooks)
+      {
+        engine_func = f;
+        post_snapshot_base = lua_gettop(I) + 1;
+        for (int arg = 0; arg < nargs; arg++)
+        {
+          cTValue* arg_val = stkindex2adr(L, -nargs + arg);
+          if (tvistab(arg_val) || tvisudata(arg_val))
+            lua_pushlightuserdata(I, lje_proxy(arg_val));
+          else
+            lje_copy_to_isolated_state(L, I, -nargs + arg, 0);
         }
       }
     }
@@ -1553,6 +1537,44 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
       LJE_ERROR("  + is isolated state!!!");
     }
   }
+
+  /* Run all post engine call hooks now that the real call has completed. */
+  if (run_post_hooks)
+  {
+    lua_State* I = LJEG()->isolated_state;
+    for (size_t i = 0; i < LJEG()->loaded_script_count; i++) {
+      LJEScript* script = LJEG()->script_load_order[i];
+      if (script->extra->engine_call_hook_ref_id == LUA_NOREF)
+        continue;
+      if (!script->extra->engine_call_post)
+        continue;
+
+      lua_rawgeti(I, LUA_REGISTRYINDEX, script->extra->engine_call_hook_ref_id);
+      lua_pushlightuserdata(I, engine_func);
+      lua_pushinteger(I, nargs);
+      lua_pushinteger(I, nresults);
+      for (int arg = 0; arg < nargs; arg++)
+        lua_pushvalue(I, post_snapshot_base + arg);
+
+      LJEG()->using_error_reporter = 1;
+      LJEG()->redirect_to_isolation = 0;
+      if (lua_pcall(I, 3 + nargs, 0, 0) != LUA_OK)
+      {
+        LJEG()->using_error_reporter = 0;
+        const char* error_msg = lua_tostring(I, -1);
+        LJE_ERROR("Error in post engine call hook for secure script %s: %s", script->info->name, error_msg);
+        lua_pop(I, 1);
+        continue;
+      }
+      LJEG()->using_error_reporter = 0;
+    }
+
+    /* Drop the snapshot and release the proxies now that every post hook has run. */
+    lua_settop(I, post_snapshot_base - 1);
+    lje_proxy_release_all();
+    lj_gc_check(I);
+  }
+
   return status;
 }
 

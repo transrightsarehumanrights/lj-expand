@@ -103,7 +103,7 @@ int lje_push_safe_cfunction(lua_State* L, lua_CFunction func)
 }
 
 
-static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, TValue* dst, GCtab* seen);
+static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, TValue* dst, GCtab* seen, int allow_lua_functions);
 /* Recover hbits from hmask. hmask is always (1<<hbits)-1 or 0 for the empty sentinel. */
 static uint32_t hmask_to_hbits(uint32_t hmask)
 {
@@ -114,7 +114,7 @@ static uint32_t hmask_to_hbits(uint32_t hmask)
     return hbits;
 }
 
-static GCtab* deep_copy_table(lua_State* from, lua_State* to, GCtab* from_table, GCtab* seen)
+static GCtab* deep_copy_table(lua_State* from, lua_State* to, GCtab* from_table, GCtab* seen, int allow_lua_functions)
 {
     TValue key;
     setlightudV(&key, from_table);
@@ -153,7 +153,7 @@ static GCtab* deep_copy_table(lua_State* from, lua_State* to, GCtab* from_table,
         TValue* to_array = tvref(new->array);
         for (uint32_t i = 0; i < from_table->asize; i++)
         {
-            copy_to_isolated_state(from, to, &from_array[i], &to_array[i], seen);
+            copy_to_isolated_state(from, to, &from_array[i], &to_array[i], seen, allow_lua_functions);
         }
     }
 
@@ -166,20 +166,20 @@ static GCtab* deep_copy_table(lua_State* from, lua_State* to, GCtab* from_table,
 
             /* Build the key in a temp TValue first */
             TValue newkey;
-            copy_to_isolated_state(from, to, &from_nodes[i].key, &newkey, seen);
+            copy_to_isolated_state(from, to, &from_nodes[i].key, &newkey, seen, allow_lua_functions);
 
             /* Let LuaJIT place it in the correct main position */
             TValue* slot = lj_tab_set(to, new, &newkey);
 
             /* Now copy the value into the slot LuaJIT chose */
-            copy_to_isolated_state(from, to, &from_nodes[i].val, slot, seen);
+            copy_to_isolated_state(from, to, &from_nodes[i].val, slot, seen, allow_lua_functions);
         }
     }
 
     if (gcref(from_table->metatable))
     {
         GCtab* mt_src = tabref(from_table->metatable);
-        GCtab* mt_dst = deep_copy_table(from, to, mt_src, seen);
+        GCtab* mt_dst = deep_copy_table(from, to, mt_src, seen, allow_lua_functions);
         setgcref(new->metatable, obj2gco(mt_dst));
     }
 
@@ -188,7 +188,7 @@ static GCtab* deep_copy_table(lua_State* from, lua_State* to, GCtab* from_table,
     return new;
 }
 
-static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, TValue* dst, GCtab* seen)
+static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, TValue* dst, GCtab* seen, int allow_lua_functions)
 {
     /* LJE: Fast routine to copy a value from one state to the other. Functions
        are (mostly) not supported — C functions are wrapped, Lua functions become nil.
@@ -226,7 +226,7 @@ static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, 
             break;
         }
         case LJ_TTAB:
-            settabV(to, dst, deep_copy_table(from, to, tabV(val), seen));
+            settabV(to, dst, deep_copy_table(from, to, tabV(val), seen, allow_lua_functions));
             lj_gc_barriert(to, tabV(dst), dst);
             break;
         case LJ_TUDATA:
@@ -270,12 +270,19 @@ static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, 
             } else if (isluafunc(from_fn))
             {
               // Print out exactly what this is
-              GCproto* pt = funcproto(from_fn);
-              LJE_DEBUG("Encountered Lua function from %s, not copying.", proto_chunknamestr(pt));
-              // Set an empty Lua function, then.
-              // Our registry has 13371010 as the empty Lua function, so we can just copy that in.
-              cTValue* empty_lua_func = lj_tab_getint(LJEG()->shadow_registry, 13371010);
-              setfuncV(to, dst, funcV(empty_lua_func));
+              if (!allow_lua_functions)
+              {
+                GCproto* pt = funcproto(from_fn);
+                LJE_DEBUG("Encountered Lua function from %s, not copying.", proto_chunknamestr(pt));
+                // Set an empty Lua function, then.
+                // Our registry has 13371010 as the empty Lua function, so we can just copy that in.
+                cTValue* empty_lua_func = lj_tab_getint(LJEG()->shadow_registry, 13371010);
+                setfuncV(to, dst, funcV(empty_lua_func));
+              } else
+              {
+                LJE_DEBUG("Encountered Lua function, copying it as a lightuserdata.");
+                setlightudV(dst, (void*)from_fn);
+              }
               break;
             }
             unsupported = 1;
@@ -295,7 +302,7 @@ static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, 
     return 1;
 }
 
-static int lje_copy_with_seen(lua_State* from, lua_State* to, cTValue* val)
+static int lje_copy_with_seen(lua_State* from, lua_State* to, cTValue* val, int allow_lua_functions)
 {
     GCtab* seen = lj_tab_new(to, 0, 4);
     settabV(to, to->top, seen);
@@ -307,7 +314,7 @@ static int lje_copy_with_seen(lua_State* from, lua_State* to, cTValue* val)
         setnilV(to->top);
         r = 0;
     } else {
-        r = copy_to_isolated_state(from, to, val, to->top, seen);
+        r = copy_to_isolated_state(from, to, val, to->top, seen, allow_lua_functions);
     }
     to->top++;
 
@@ -318,13 +325,13 @@ static int lje_copy_with_seen(lua_State* from, lua_State* to, cTValue* val)
     return r;
 }
 
-int lje_copy_to_isolated_state(lua_State* from, lua_State* to, int idx)
+int lje_copy_to_isolated_state(lua_State* from, lua_State* to, int idx, int allow_lua_functions)
 {
     cTValue* val = stkindex2adr(from, idx);
-    return lje_copy_with_seen(from, to, val);
+    return lje_copy_with_seen(from, to, val, allow_lua_functions);
 }
 
-int lje_copy_to_isolated_state_tv(lua_State* from, lua_State* to, cTValue* val)
+int lje_copy_to_isolated_state_tv(lua_State* from, lua_State* to, cTValue* val, int allow_lua_functions)
 {
-    return lje_copy_with_seen(from, to, val);
+    return lje_copy_with_seen(from, to, val, allow_lua_functions);
 }

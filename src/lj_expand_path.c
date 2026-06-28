@@ -174,7 +174,7 @@ static int method_copy(lua_State* L)
   }
 
   // The final result is still in foreign-state, bring it back.
-  lje_copy_to_isolated_state_tv(T, L, &current_object);
+  lje_copy_to_isolated_state_tv(T, L, &current_object, 1); // Allow Lua functions to be copied as lightuserdatas
   return 1;
 }
 

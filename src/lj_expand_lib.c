@@ -414,7 +414,7 @@ static int lje_secure_pull(lua_State* L)
     // _G is special, just push the entire global env. Recursion does not matter here cause we have a seen table.
     TValue global_env;
     settabV(L, &global_env, tabref(LJEG()->main_state->env));
-    lje_copy_to_isolated_state_tv(L2, L, &global_env);
+    lje_copy_to_isolated_state_tv(L2, L, &global_env, 0);
     return 1;
   }
 
@@ -488,7 +488,7 @@ static int lje_secure_pull(lua_State* L)
   }
 
   // Not a function, so just copy it.
-  lje_copy_to_isolated_state_tv(L2, L, value);
+  lje_copy_to_isolated_state_tv(L2, L, value, 0);
   return 1;
 }
 
@@ -528,7 +528,7 @@ static int lje_proxy_copy(lua_State* L)
   TValue proxy_object;
   setgcV(L, &proxy_object, proxy->host_obj, ~proxy->host_type);
 
-  lje_copy_to_isolated_state_tv(LJEG()->main_state, L, &proxy_object);
+  lje_copy_to_isolated_state_tv(LJEG()->main_state, L, &proxy_object, 0);
   return 1;
 }
 
