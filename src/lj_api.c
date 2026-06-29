@@ -2033,46 +2033,46 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
         }
       }
 
-      if (options->disable_scripts)
+      if (!options->disable_scripts)
+      {
+        LJEG()->loaded_scripts = lje_script_load_all_scripts(&LJEG()->loaded_script_count);
+        LJE_SUCCESS("Loaded %llu scripts!", LJEG()->loaded_script_count);
+        for (size_t i = 0; i < LJEG()->loaded_script_count; i++)
+        {
+          LJE_INFO("- %s", LJEG()->loaded_scripts[i].name);
+          LJE_INFO("  Name: %s", LJEG()->loaded_scripts[i].info->name);
+          LJE_INFO("  Author: %s", LJEG()->loaded_scripts[i].info->author);
+          LJE_INFO("  Version: %s", LJEG()->loaded_scripts[i].info->version);
+          for (size_t j = 0; j < LJEG()->loaded_scripts[i].info->dependency_count; j++)
+          {
+            LJE_INFO("  Dependency: %s", LJEG()->loaded_scripts[i].info->dependencies[j].name);
+          }
+
+          if (LJEG()->loaded_scripts[i].info->binary_dependencies)
+          {
+            for (size_t j = 0; j < LJEG()->loaded_scripts[i].info->binary_dependency_count; j++)
+            {
+              LJE_INFO("  Binary Dependency: %s", LJEG()->loaded_scripts[i].info->binary_dependencies[j].name);
+            }
+          }
+        }
+
+        LJE_DEBUG("Performing dependency resolution...");
+        LJEG()->script_load_order = lje_script_compute_load_order(
+          LJEG()->loaded_script_count,
+          LJEG()->loaded_scripts
+        );
+
+        for (size_t i = 0; i < LJEG()->loaded_script_count; i++)
+        {
+          LJEScript* script = LJEG()->script_load_order[i];
+          LJE_DEBUG("- %d. %s", i + 1, script->name);
+        }
+      } else
       {
         LJE_INFO("Script loading is disabled via command line option, skipping...");
         LJEG()->loaded_script_count = 0;
         LJEG()->loaded_scripts = NULL;
-        return TRUE;
-      }
-
-      LJEG()->loaded_scripts = lje_script_load_all_scripts(&LJEG()->loaded_script_count);
-      LJE_SUCCESS("Loaded %llu scripts!", LJEG()->loaded_script_count);
-      for (size_t i = 0; i < LJEG()->loaded_script_count; i++)
-      {
-        LJE_INFO("- %s", LJEG()->loaded_scripts[i].name);
-        LJE_INFO("  Name: %s", LJEG()->loaded_scripts[i].info->name);
-        LJE_INFO("  Author: %s", LJEG()->loaded_scripts[i].info->author);
-        LJE_INFO("  Version: %s", LJEG()->loaded_scripts[i].info->version);
-        for (size_t j = 0; j < LJEG()->loaded_scripts[i].info->dependency_count; j++)
-        {
-          LJE_INFO("  Dependency: %s", LJEG()->loaded_scripts[i].info->dependencies[j].name);
-        }
-
-        if (LJEG()->loaded_scripts[i].info->binary_dependencies)
-        {
-          for (size_t j = 0; j < LJEG()->loaded_scripts[i].info->binary_dependency_count; j++)
-          {
-            LJE_INFO("  Binary Dependency: %s", LJEG()->loaded_scripts[i].info->binary_dependencies[j].name);
-          }
-        }
-      }
-
-      LJE_DEBUG("Performing dependency resolution...");
-      LJEG()->script_load_order = lje_script_compute_load_order(
-        LJEG()->loaded_script_count,
-        LJEG()->loaded_scripts
-      );
-
-      for (size_t i = 0; i < LJEG()->loaded_script_count; i++)
-      {
-        LJEScript* script = LJEG()->script_load_order[i];
-        LJE_DEBUG("- %d. %s", i + 1, script->name);
       }
 
       lje_proxy_arena_init();
