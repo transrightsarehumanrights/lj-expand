@@ -829,18 +829,25 @@ LUA_API int lua_error(lua_State *L)
 
 LUALIB_API int luaL_argerror(lua_State *L, int narg, const char *msg)
 {
+  if (LJEG()->redirect_to_isolation)
+    L = LJEG()->isolated_state;
+
   err_argmsg(L, narg, msg);
   return 0;  /* unreachable */
 }
 
 LUALIB_API int luaL_typerror(lua_State *L, int narg, const char *xname)
 {
+  if (LJEG()->redirect_to_isolation)
+    L = LJEG()->isolated_state;
   lj_err_argtype(L, narg, xname);
   return 0;  /* unreachable */
 }
 
 LUALIB_API void luaL_where(lua_State *L, int level)
 {
+  if (LJEG()->redirect_to_isolation)
+    L = LJEG()->isolated_state;
   int size;
   cTValue *frame = lj_debug_frame(L, level, &size);
   lj_debug_addloc(L, "", frame, size ? frame+size : NULL);
@@ -848,6 +855,9 @@ LUALIB_API void luaL_where(lua_State *L, int level)
 
 LUALIB_API int luaL_error(lua_State *L, const char *fmt, ...)
 {
+  if (LJEG()->redirect_to_isolation)
+    L = LJEG()->isolated_state;
+
   const char *msg;
   va_list argp;
   va_start(argp, fmt);
