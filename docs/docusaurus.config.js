@@ -24,6 +24,29 @@ const config = {
         hashed: true,
       },
     ],
+    [
+      'docusaurus-plugin-llms',
+      {
+        logLevel: 'quiet',
+        generateLLMsTxt: true,
+        generateLLMsFullTxt: true,
+        docsDir: 'content',
+        title: 'lj-expand',
+        description: 'Heavily modified LuaJIT for 64-bit GMod',
+        excludeImports: true,
+        removeDuplicateHeadings: true,
+        generateMarkdownFiles: true,
+
+        includeOrder: [
+          'intro.mdx',
+          'installation.md',
+          'folder-structure.md',
+          'cli-options.mdx',
+          'guides/*',
+          'api/*',
+        ],
+      },
+    ]
   ],
 
   presets: [
