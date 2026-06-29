@@ -18,7 +18,7 @@ Settings are layered from two TOML files:
 
 The author ships `settings.default.toml` alongside `main.lua`. Because the user's overrides live in a separate directory, updating a cloned script never clobbers their settings, and their settings never show up as local changes in the script's repo.
 
-The override filename is a **slug** built from the script's identity (`author.name` from [`info.toml`](info-toml)): it is lowercased, and any character outside `a-z`, `0-9`, `_`, or `-` becomes `-`. If LJE has to sanitize anything it prints a warning showing the resulting slug.
+The override filename is a **slug** built from the script's identity (`author.name` from [`info.toml`](info-toml)): it is lowercased, and any character outside `a-z`, `0-9`, `_`, or `-` becomes `-`. If LJE has to sanitize anything, it prints a warning showing the resulting slug.
 
 The first time a script's settings are read, LJE auto-creates an empty override file with a short header comment. It is intentionally empty — anything you don't set falls back to the defaults (see merging below), so an empty override means "use all defaults".
 

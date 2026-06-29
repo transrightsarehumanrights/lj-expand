@@ -21,7 +21,7 @@ LJE works as follows:
 3. LJE gains a **shadow** of the GMod API in its own Lua state.
 4. LJE runs scripts in its own Lua state, giving them access to the shadow API but not the main Lua state or its globals.
 5. LJE uses Magic™️ (luajit) to allow LJE scripts to call into GMod without any clones or proxies, giving them the illusion of running in the same Lua state as GMod while still being completely separate and secure.
-6. LJE also provides proxied engine call hooks to observe, but not alter, engine behavior. This allows you to use hooks like `PostRender` and `Think` without actually being in the same Lua state as GMod, and all proxies are cheap as possible to avoid performance issues.
+6. LJE also provides proxied engine call hooks to observe, but not alter, engine behavior. This allows you to use hooks like `PostRender` and `Think` without actually being in the same Lua state as GMod, and all proxies are as cheap as possible to avoid performance issues.
 
 Essentially, it clones the main GMod API into its own Lua state and then runs scripts in that state, while still allowing them to call into GMod as if they were running in the same state. This gives you the best of both worlds: access to the GMod API without any of the risks of running in the same Lua state as GMod. It also means you can safely expose dangerous binary modules to your scripts without worrying about adversarial scripts detecting them or tampering with them, since they can't even see them.
 

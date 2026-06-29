@@ -17,7 +17,7 @@ LJE may make detours very complicated compared to other tools, but do know that 
 
 Let's analyze a working detour in LJE that is both safe and effective. This detour hooks deep into cURL (the library GMod uses to create HTTP requests) to silently kill any request and log the URL. This is something impossible to achieve without detours, but also something that could be detected easily if done with Lua-based detours.
 
-**NOTE:** You must make detour objects exist for the entire time you want the detour to be active. If they get garbage collected, the detour will be removed and the original function will be called again. This is because the detour object is what holds the trampoline and the original function pointer, so if it gets collected, there is nothing keeping the detour in place. Use a global declaration for the easiest way to ensure this, or make sure to manage the lifetime of the detour object in some other way.
+**NOTE:** You must make detour objects exist for the entire time you want the detour to be active. If they get garbage collected, the detour will be removed and the original function will be called again. This is because the detour object is what holds the trampoline, and the original function pointer, so if it gets collected, there is nothing keeping the detour in place. Use a global declaration for the easiest way to ensure this, or make sure to manage the lifetime of the detour object in some other way.
 
 ```c
 // http detour - just logs URLs and blackholes them to a local IP which times out.
@@ -187,4 +187,4 @@ rawset(_G, "HTTP", lje.detour(origHttp, httpHk))
 
 There are many mitigations performed, resulting in less functionality and more complexity, but it is still easily detectable by adversarial scripts due to the overhead of the detour and the fact that it triggers GC. This is just one example of how Lua-based detours can create new attack surfaces and be easily detected, which is why they are not allowed in safe LJE.
 
-Additionally, printing in the detour creates an I/O operation, which is very expensive since an adversarial script could call `HTTP` in a loop and cause a lot of overhead, measure it and determine that LJE is present. Even if we didn't print, the overhead of the detour itself and the fact that it triggers GC would still be easily detectable. This is why Lua-based detours are not allowed in safe LJE, and why you should use unsafe LJE with C-based detours if you need that kind of functionality.
+Additionally, printing in the detour creates an I/O operation, which is very expensive since an adversarial script could call `HTTP` in a loop and cause a lot of overhead, measure it, and determine that LJE is present. Even if we didn't print, the overhead of the detour itself and the fact that it triggers GC would still be easily detectable. This is why Lua-based detours are not allowed in safe LJE, and why you should use unsafe LJE with C-based detours if you need that kind of functionality.

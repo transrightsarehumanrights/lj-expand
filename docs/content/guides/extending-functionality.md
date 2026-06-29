@@ -8,7 +8,7 @@ title: Extending Functionality
 Unsafe LJE allows you to, literally, extend your scripts functionality to virtually any capability you can imagine.
 
 The [`lje-ffi`](https://github.com/lj-expand/lje-ffi) module is a massive FFI library to give you the tools to do anything you want in your script.
-The main features is that you can call any function you want, yes **any.** You can call functions in GMod, in LuaJIT, in Windows API, in any loaded DLL, etc. The point is to make it so that nobody needs to write their own custom binary module for anything, they can just use the FFI to call whatever they want to maintain a simple, single-source script.
+The main feature is that you can call any function you want, yes **any.** You can call functions in GMod, in LuaJIT, in Windows API, in any loaded DLL, etc. The point is to make it so that nobody needs to write their own custom binary module for anything, they can just use the FFI to call whatever they want to maintain a simple, single-source script.
 
 ## Sending Mouse Inputs
 

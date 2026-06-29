@@ -59,7 +59,7 @@ local detour_code = lje.env.read_script_file("detours/mydetour.c")
 my_detour = ffi.detour.create(address, detour_code)
 ```
 
-This way, you do not have to mix any languages in one source file and you can use a LSP for C in your IDE.
+This way, you do not have to mix any languages in one source file, and you can use an LSP for C in your IDE.
 
 ## Examples
 
