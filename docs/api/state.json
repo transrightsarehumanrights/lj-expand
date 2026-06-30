@@ -62,8 +62,80 @@
       ],
       "returns": [
         {
-          "type": "userdata",
+          "type": "LJEPath",
           "description": "A path object. Chain `:index`, `:upvalue`, `:expect`, then `:copy()`."
+        }
+      ]
+    }
+  ],
+  "classes": [
+    {
+      "name": "LJEPath",
+      "receiver": "ljepath",
+      "description": "A path object. Chain `:index`, `:upvalue`, `:expect`, then `:copy()`.",
+      "methods": [
+        {
+          "name": "index",
+          "description": "Raw-indexes the current value (which must be a table) by the string `key`.",
+          "params": [
+            {
+              "name": "key",
+              "type": "string",
+              "description": "The key used to index the current value."
+            }
+          ],
+          "returns": [
+            {
+              "type": "LJEPath",
+              "description": "The LJEPath object which this function was called on. Useful for daisy-chaining."
+            }
+          ]
+        },
+        {
+          "name": "upvalue",
+          "description": "Reads the `n`-th upvalue (1-based) of the current value, which must be a Lua or C function. Fast/builtin functions have no accessible upvalues and fail.",
+          "params": [
+            {
+              "name": "n",
+              "type": "integer",
+              "description": "The n-th upvalue of the current value."
+            }
+          ],
+          "returns": [
+            {
+              "type": "LJEPath",
+              "description": "The LJEPath object which this function was called on. Useful for daisy-chaining."
+            }
+          ]
+        },
+        {
+          "name": "expect",
+          "description": "Asserts the current value's type and fails the path otherwise. Accepts Lua type names (`\"table\"`, `\"function\"`, `\"userdata\"`, …) and GMod metatypes by `MetaName` (`\"Player\"`, `\"Vector\"`, …), resolved from the object's metatable. GMod metatype takes priority over the bare Lua type. Opt-in — only add it where you want the guard",
+          "params": [
+            {
+              "name": "typename",
+              "type": "string",
+              "description": "The type to expect for the current value."
+            }
+          ],
+          "returns": [
+            {
+              "type": "LJEPath",
+              "description": "The LJEPath object which this function was called on. Useful for daisy-chaining."
+            }
+          ]
+        },
+        {
+          "name": "copy",
+          "description": "Evaluates the whole chain against `target` and deep-copies the final value into the secure state. Returns the copy, or `nil` if any step fails (each failure is logged to the console). See `lje.proxy.copy` for the copy semantics.",
+          "params": [],
+          "returns": [
+            {
+              "type": "any",
+              "optional": true,
+              "description": "The copied value, or nil."
+            }
+          ]
         }
       ]
     }

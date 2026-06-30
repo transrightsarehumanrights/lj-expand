@@ -48,7 +48,7 @@
       ],
       "params": [],
       "returns": [
-        { "type": "userdata | nil", "description": "A settings object bound to the calling script, or `nil` (with a console message) if there is no active script context." }
+        { "type": "LJESettings | nil", "description": "A settings object bound to the calling script, or `nil` (with a console message) if there is no active script context." }
       ]
     },
     {
@@ -63,7 +63,60 @@
         { "name": "name", "type": "string", "description": "The script (folder) name to bind to." }
       ],
       "returns": [
-        { "type": "userdata", "description": "A settings object bound to the named script." }
+        { "type": "LJESettings", "description": "A settings object bound to the named script." }
+      ]
+    }
+  ],
+  "classes": [
+    {
+      "name": "LJESettings",
+      "receiver": "ljesettings",
+      "description": "A settings object bound to the calling script, or `nil` (with a console message) if there is no active script context.",
+      "methods": [
+        {
+          "name": "get",
+          "description": [
+            "Reads a single setting from the current script's merged settings, by dotted path.",
+            "",
+            "The key is traversed through nested tables, so `get(\"render.color\")` returns `settings.render.color`. If any segment along the path is missing (or is not a table), `default` is returned when provided, otherwise `nil`."
+          ],
+          "params": [
+            {
+              "name": "key",
+              "type": "string",
+              "description": "A setting key. Use dots to traverse nested tables, e.g. `\"section.option\"`."
+            },
+            {
+              "name": "default",
+              "type": "any",
+              "optional": true,
+              "description": "Returned when the key is not present after merging."
+            }
+          ],
+          "returns": [
+            {
+              "type": "any",
+              "description": "The setting value, or `default` (or `nil`) if absent."
+            }
+          ]
+        },
+        {
+          "name": "all",
+          "description": "Returns the current script's full merged settings table (defaults overlaid with user overrides). The table is cached; treat it as read-only.",
+          "params": [],
+          "returns": [
+            {
+              "type": "table",
+              "description": "The merged settings. Empty if the script has no settings files."
+            }
+          ]
+        },
+        {
+          "name": "reload",
+          "description": "Drops the cached settings for the current script so the next `get`/`all` re-reads `settings.default.toml` and the user override file from disk.",
+          "params": [],
+        "returns": []
+        }
       ]
     }
   ]
