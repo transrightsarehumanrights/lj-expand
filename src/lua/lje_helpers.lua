@@ -132,3 +132,17 @@ function lje.settings.open()
     end
     return lje.settings.bind(name)
 end
+
+-- Easy helpers for adding engine call hooks based on order.
+function lje.vm.add_pre_engine_call_hook(hook)
+    lje.vm.add_engine_call_hook(hook, false)
+end
+
+function lje.vm.add_post_engine_call_hook(hook)
+    lje.vm.add_engine_call_hook(hook, true)
+end
+
+-- Legacy helper, assumes pre-engine call hook. Use add_pre_engine_call_hook or add_post_engine_call_hook instead.
+function lje.vm.set_engine_call_hook(hook)
+    lje.vm.add_engine_call_hook(hook, false)
+end

@@ -7,9 +7,9 @@ lje.con_print("Running secure preinit script...")
 
 local registry = lje.util.get_registry()
 
-registry["__lje_shadow_registry"][2] = { hook = {Call = function() end} } -- hook ref GMod uses
+registry["__lje_shadow_registry"][2] = { hook = { Call = function() end } } -- hook ref GMod uses
 registry["__lje_shadow_registry"][1337153] = function() return "hello" end
-  registry["__lje_shadow_registry"][13371010] = function() return end -- Dummy Lua function
+registry["__lje_shadow_registry"][13371010] = function() return end       -- Dummy Lua function
 
 
 -- Only a subset of necessary GMod C APIs are pulled in. We have our own versions of any base library as well.
@@ -39,9 +39,9 @@ vgui = lje.secure.pull("vgui")
 -- Globals
 local globalEnv = lje.secure.pull("_G")
 for k, v in pairs(globalEnv) do
-    if not _G[k] then
-        _G[k] = v -- Merge
-    end
+  if not _G[k] then
+    _G[k] = v     -- Merge
+  end
 end
 
 -- Classes
@@ -62,12 +62,17 @@ registry.Panel = lje.secure.pull("_R.Panel")
 registry.CSEnt = lje.secure.pull("_R.CSEnt")
 registry.NPC = lje.secure.pull("_R.NPC")
 
+function registry.Player:__eq(other)
+  -- Temporary hack for identical Player objects with different userdata.
+  return self:EntIndex() == other:EntIndex()
+end
+
 NULL = lje.secure.pull("NULL") -- For some reason, the null entity is a special userdata..?
 
 -- Polyfills for common things
 local cam2D = { type = "2D" }
 cam.Start2D = function()
-    cam.Start(cam2D)
+  cam.Start(cam2D)
 end
 
 -- Small hook library replacement, no returns for now.
@@ -83,40 +88,40 @@ function hook.Add(event, identifier, func)
   hook._listeners[script][event][identifier] = func
 end
 
-function hook.Listen()
+function hook.Listen(post)
+  post = post or false
   local script = lje.env.current_script()
-    if not hook._listeners[script] then
-        hook._listeners[script] = {}
-    end
+  if not hook._listeners[script] then
+    hook._listeners[script] = {}
+  end
 
-
-  lje.vm.set_engine_call_hook(function(func, nargs, nresults, ...)
+  lje.vm.add_engine_call_hook(function(func, nargs, nresults, ...)
     local name = ...
     if hook._listeners[script][name] then
       for _, listener in pairs(hook._listeners[script][name]) do
         listener(...)
       end
     end
-  end)
+  end, post)
 end
 
 function hook.Call() --[[no-op]] end
 
 lje.includeCache = {}
 lje.require = function(path)
-    local currentScript = lje.env.current_script()
-    if not currentScript then
-        lje.con_print("Error: lje.require called outside of a script context!")
-        return
-    end
+  local currentScript = lje.env.current_script()
+  if not currentScript then
+    lje.con_print("Error: lje.require called outside of a script context!")
+    return
+  end
 
-    lje.includeCache[currentScript] = lje.includeCache[currentScript] or {}
-    local scriptCache = lje.includeCache[currentScript]
-    if scriptCache[path] then
-        return scriptCache[path]
-    end
+  lje.includeCache[currentScript] = lje.includeCache[currentScript] or {}
+  local scriptCache = lje.includeCache[currentScript]
+  if scriptCache[path] then
+    return scriptCache[path]
+  end
 
-    local result = lje.include(path)
-    scriptCache[path] = result
-    return result
+  local result = lje.include(path)
+  scriptCache[path] = result
+  return result
 end

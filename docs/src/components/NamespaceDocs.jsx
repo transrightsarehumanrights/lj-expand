@@ -40,6 +40,9 @@ function FunctionDoc({ func, namespace }) {
     <div className={styles.functionDoc}>
       <h3 id={func.name}>
         <code>{buildSignature(namespace, func)}</code>
+        {func.defined_in === 'lua' && (
+          <span className={styles.luaBadge} title="Implemented in Lua (a helper on top of the core API)">Lua</span>
+        )}
       </h3>
 
       <DeprecatedBanner deprecated={func.deprecated} />

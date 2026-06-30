@@ -1446,44 +1446,48 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
       /* Pre-call engine call hooks run first. */
       for (size_t i = 0; i < LJEG()->loaded_script_count; i++) {
         LJEScript* script = LJEG()->script_load_order[i];
-        if (script->extra->engine_call_hook_ref_id == LUA_NOREF)
-          continue;
-        if (script->extra->engine_call_post)
+        for (size_t j = 0; j < script->extra->engine_call_hook_count; j++)
         {
-          run_post_hooks = 1; /* defer this one until after the real call */
-          continue;
-        }
+          LJEEngineCallHook hook = script->extra->engine_call_hooks[j];
+          if (hook.ref == LUA_NOREF)
+            continue;
+          if (hook.is_post)
+          {
+            run_post_hooks = 1; /* defer this one until after the real call */
+            continue;
+          }
 
-        lua_rawgeti(I, LUA_REGISTRYINDEX, script->extra->engine_call_hook_ref_id);
-        // Push the function that is being called as a pointer so we can do fast equality checks later
-        lua_pushnumber(I, (lua_Number)((uintptr_t)called_function));
-        lua_pushinteger(I, nargs);
-        lua_pushinteger(I, nresults);
-        for (int arg = 0; arg < nargs; arg++)
-        {
-          cTValue* arg_val = stkindex2adr(L, -nargs + arg);
-          if (tvistab(arg_val) || tvisudata(arg_val))
-            lua_pushlightuserdata(I, lje_proxy(arg_val));
-          else
-            lje_copy_to_isolated_state(L, I, -nargs + arg, 0);
-        }
+          lua_rawgeti(I, LUA_REGISTRYINDEX, hook.ref);
+          // Push the function that is being called as a pointer so we can do fast equality checks later
+          lua_pushnumber(I, (lua_Number)((uintptr_t)called_function));
+          lua_pushinteger(I, nargs);
+          lua_pushinteger(I, nresults);
+          for (int arg = 0; arg < nargs; arg++)
+          {
+            cTValue* arg_val = stkindex2adr(L, -nargs + arg);
+            if (tvistab(arg_val) || tvisudata(arg_val))
+              lua_pushlightuserdata(I, lje_proxy(arg_val));
+            else
+              lje_copy_to_isolated_state(L, I, -nargs + arg, 0);
+          }
 
-        LJEG()->using_error_reporter = 1;
-        LJEG()->redirect_to_isolation = 0;
-        if (lua_pcall(I, 3 + nargs, 0, 0) != LUA_OK)
-        {
+          LJEG()->using_error_reporter = 1;
+          LJEG()->redirect_to_isolation = 0;
+          if (lua_pcall(I, 3 + nargs, 0, 0) != LUA_OK)
+          {
+            LJEG()->using_error_reporter = 0;
+            const char* error_msg = lua_tostring(I, -1);
+            LJE_ERROR("Error in engine call hook for secure script %s: %s", script->info->name, error_msg);
+            lua_pop(I, 1);
+            lje_proxy_release_all();
+            lj_gc_check(I);
+            continue;
+          }
+
           LJEG()->using_error_reporter = 0;
-          const char* error_msg = lua_tostring(I, -1);
-          LJE_ERROR("Error in engine call hook for secure script %s: %s", script->info->name, error_msg);
-          lua_pop(I, 1);
           lje_proxy_release_all();
           lj_gc_check(I);
-          continue;
         }
-
-        LJEG()->using_error_reporter = 0;
-        lje_proxy_release_all();
-        lj_gc_check(I);
       }
 
       /* LJE: Snapshot the args for post hooks before the real call consumes them. The
@@ -1546,29 +1550,33 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     lua_State* I = LJEG()->isolated_state;
     for (size_t i = 0; i < LJEG()->loaded_script_count; i++) {
       LJEScript* script = LJEG()->script_load_order[i];
-      if (script->extra->engine_call_hook_ref_id == LUA_NOREF)
-        continue;
-      if (!script->extra->engine_call_post)
-        continue;
-
-      lua_rawgeti(I, LUA_REGISTRYINDEX, script->extra->engine_call_hook_ref_id);
-      lua_pushnumber(I, (lua_Number)((uintptr_t)engine_func));
-      lua_pushinteger(I, nargs);
-      lua_pushinteger(I, nresults);
-      for (int arg = 0; arg < nargs; arg++)
-        lua_pushvalue(I, post_snapshot_base + arg);
-
-      LJEG()->using_error_reporter = 1;
-      LJEG()->redirect_to_isolation = 0;
-      if (lua_pcall(I, 3 + nargs, 0, 0) != LUA_OK)
+      for (size_t j = 0; j < script->extra->engine_call_hook_count; j++)
       {
+        LJEEngineCallHook hook = script->extra->engine_call_hooks[j];
+        if (hook.ref == LUA_NOREF)
+          continue;
+        if (!hook.is_post)
+          continue;
+
+        lua_rawgeti(I, LUA_REGISTRYINDEX, hook.ref);
+        lua_pushnumber(I, (lua_Number)((uintptr_t)engine_func));
+        lua_pushinteger(I, nargs);
+        lua_pushinteger(I, nresults);
+        for (int arg = 0; arg < nargs; arg++)
+          lua_pushvalue(I, post_snapshot_base + arg);
+
+        LJEG()->using_error_reporter = 1;
+        LJEG()->redirect_to_isolation = 0;
+        if (lua_pcall(I, 3 + nargs, 0, 0) != LUA_OK)
+        {
+          LJEG()->using_error_reporter = 0;
+          const char* error_msg = lua_tostring(I, -1);
+          LJE_ERROR("Error in post engine call hook for secure script %s: %s", script->info->name, error_msg);
+          lua_pop(I, 1);
+          continue;
+        }
         LJEG()->using_error_reporter = 0;
-        const char* error_msg = lua_tostring(I, -1);
-        LJE_ERROR("Error in post engine call hook for secure script %s: %s", script->info->name, error_msg);
-        lua_pop(I, 1);
-        continue;
       }
-      LJEG()->using_error_reporter = 0;
     }
 
     /* Drop the snapshot and release the proxies now that every post hook has run. */

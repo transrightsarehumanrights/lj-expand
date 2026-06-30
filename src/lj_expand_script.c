@@ -368,9 +368,9 @@ LJEScript* lje_script_load_all_scripts(size_t* out_script_count) {
                 scripts[script_count].info = info;
 
                 LJEScriptExtraInfo* extra = (LJEScriptExtraInfo*)malloc(sizeof(LJEScriptExtraInfo));
-                extra->engine_call_hook_ref_id = LUA_NOREF;
-                extra->engine_call_post = 0;
                 extra->cleanup_ref_id = LUA_NOREF;
+                extra->engine_call_hook_count = 0;
+                memset(extra->engine_call_hooks, 0, sizeof(LJEEngineCallHook) * LJE_SCRIPT_MAX_ENGINE_CALL_HOOKS);
                 scripts[script_count].extra = extra;
 
                 // Check for preinit.lua

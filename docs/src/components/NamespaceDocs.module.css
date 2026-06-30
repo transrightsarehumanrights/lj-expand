@@ -18,6 +18,27 @@
   font-size: 1rem;
 }
 
+.luaBadge {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 0.6rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  background: #eef2ff;
+  border: 1px solid #a5b4fc;
+  color: #3730a3;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+[data-theme='dark'] .luaBadge {
+  background: #14122b;
+  border-color: #4338ca;
+  color: #c7d2fe;
+}
+
 .deprecated {
   display: flex;
   align-items: flex-start;

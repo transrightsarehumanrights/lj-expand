@@ -8,6 +8,7 @@
 #define LJE_SCRIPT_SETTINGS_DEFAULT "settings.default.toml"
 #define LJE_SCRIPT_FOLDER ".lje_scripts"
 #define LJE_SCRIPT_DATA ".lje_script_data"
+#define LJE_SCRIPT_MAX_ENGINE_CALL_HOOKS 16
 
 typedef struct LJEScriptDependency
 {
@@ -32,14 +33,17 @@ typedef struct LJEScriptInfo
     size_t binary_dependency_count;
 } LJEScriptInfo;
 
+typedef struct LJEEngineCallHook
+{
+  int is_post;
+  int ref;
+} LJEEngineCallHook;
+
 typedef struct LJEScriptExtraInfo
 {
-    int engine_call_hook_ref_id;
     int cleanup_ref_id;
-    /* If script would like to receive engine calls *after* they have happened,
-     * i.e. 'post' hooks.
-     */
-    int engine_call_post;
+    LJEEngineCallHook engine_call_hooks[LJE_SCRIPT_MAX_ENGINE_CALL_HOOKS];
+    size_t engine_call_hook_count;
 } LJEScriptExtraInfo;
 
 /* LJEScripts represent a folder containing Lua scripts to be loaded by LJE.

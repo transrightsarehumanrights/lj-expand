@@ -28,7 +28,8 @@ void lje_clear_global_refs() {
     for (size_t i = 0; i < LJEG()->loaded_script_count; i++)
     {
         LJEScript* script = LJEG()->script_load_order[i];
-        script->extra->engine_call_hook_ref_id = LUA_NOREF;
+        script->extra->engine_call_hook_count = 0;
+        memset(script->extra->engine_call_hooks, 0, sizeof(LJEEngineCallHook) * LJE_SCRIPT_MAX_ENGINE_CALL_HOOKS);
         script->extra->cleanup_ref_id = LUA_NOREF;
     }
 

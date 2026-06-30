@@ -21,6 +21,7 @@
   "functions": [
     {
       "name": "require",
+      "defined_in": "lua",
       "description": "A cached version of `lje.include`. The first call for a given `path` within a script context executes the file and caches the result. Subsequent calls return the cached value immediately. Must be called within an active script context.",
       "params": [
         {
@@ -38,6 +39,7 @@
     },
     {
       "name": "con_printf",
+      "defined_in": "lua",
       "description": "A `string.format`-style console print with inline ANSI color support. Wrap text in `$colorName{...}` to colorize it.\n\nSupported colors: `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, `default`.\n\nExample:\n```lua\nlje.con_printf(\"$red{Error}: %s\", message)\n```",
       "params": [
         {

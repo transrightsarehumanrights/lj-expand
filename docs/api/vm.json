@@ -3,36 +3,82 @@
   "description": "LuaJIT virtual machine manipulation, primarily engine call interception.",
   "functions": [
     {
-      "name": "set_engine_call_hook",
-      "description": "Registers a per-script engine call hook. Whenever the engine invokes a Lua function in the host (game) state, the callback is invoked in the secure state as `fn(func, nargs, nresults, ...)`:\n\n- `func` — a light userdata pointer identifying the called function. Useful for identity comparisons without copying a full function object across states.\n- `nargs` / `nresults` — the argument and result counts of the engine call.\n- `...` — the call arguments. Tables and userdata arrive as proxy handles (see `lje.proxy`); other values are copied into the secure state.\n\nThe hook's return values are ignored — handling/suppressing engine calls is not currently supported. Errors thrown by the hook are caught and printed to the console. Requires an active script context, and hooks only fire for secure scripts. Only one hook can be active per script at a time.",
-      "note": "Proxy handles passed to the hook are only valid for the duration of the hook call — do not store them.",
+      "name": "add_engine_call_hook",
+      "description": [
+        "Registers an engine call hook for the current script. Whenever the engine invokes a Lua function in the host (game) state, every registered hook is invoked in the secure state as `fn(func, nargs, nresults, ...)`:",
+        "",
+        "- `func` — a number holding the called function's pointer (its address cast to a `lua_Number`). Useful for identity comparisons without copying a full function object across states.",
+        "- `nargs` / `nresults` — the argument and result counts of the engine call.",
+        "- `...` — the call arguments. Tables and userdata arrive as proxy handles (see `lje.proxy`); other values are copied into the secure state.",
+        "",
+        "The `is_post` flag controls when the hook runs relative to the engine call itself:",
+        "",
+        "- `false` (default) — the hook is a *pre* hook and runs *before* the engine call proceeds.",
+        "- `true` — the hook is a *post* hook: LJE performs the engine call first, then invokes the hook afterwards against a snapshot of the original arguments, so it observes a call that has already happened.",
+        "",
+        "Hooks fire in script load order; within a script they fire in registration order. All pre hooks across every script run before the real call, then all post hooks run after it. A script may register up to 16 hooks, and may freely mix pre and post hooks.",
+        "",
+        "The hook's return values are ignored — handling/suppressing engine calls is not currently supported. Errors thrown by a hook are caught and printed to the console; the remaining hooks still run. Requires an active script context, and hooks only fire for secure scripts."
+      ],
+      "note": "Proxy handles passed to the hook are only valid for the duration of the hook call — do not store them. Post hooks receive a snapshot of the arguments captured before the engine call ran.",
       "params": [
         {
           "name": "fn",
           "type": "function",
           "description": "Must be a Lua function, not a C function."
+        },
+        {
+          "name": "is_post",
+          "type": "boolean",
+          "optional": true,
+          "description": "`true` to run the hook after the engine call, `false` (default) to run it before."
         }
       ],
       "returns": [],
       "errors": [
         "No active script context.",
-        "Argument 1 must be a Lua function (not a C function)."
+        "Argument 1 must be a Lua function (not a C function).",
+        "Maximum number of engine call hooks (16) reached for the script."
       ]
     },
     {
-      "name": "set_engine_call_hook_post",
-      "description": "Controls when this script's engine call hook runs relative to the engine call itself.\n\n- `false` (default) — the hook runs *before* the engine call proceeds normally.\n- `true` — LJE performs the engine call first, then invokes the hook afterwards, so the hook observes a call that has already happened. Since the call is consumed in the process, any remaining scripts' hooks are skipped for that call, and if the hook itself errors, the call's status is returned to the engine as-is.\n\nRequires an active script context.",
+      "name": "add_pre_engine_call_hook",
+      "defined_in": "lua",
+      "description": "Convenience wrapper around `lje.vm.add_engine_call_hook(hook, false)` that registers `hook` as a pre hook (runs before the engine call). See `add_engine_call_hook` for the hook signature and semantics.",
       "params": [
         {
-          "name": "post",
-          "type": "boolean",
-          "description": "`true` to run the hook after the engine call, `false` to run it before."
+          "name": "hook",
+          "type": "function",
+          "description": "The hook function, called as `fn(func, nargs, nresults, ...)`."
         }
       ],
-      "returns": [],
-      "errors": [
-        "No active script context."
-      ]
+      "returns": []
+    },
+    {
+      "name": "add_post_engine_call_hook",
+      "defined_in": "lua",
+      "description": "Convenience wrapper around `lje.vm.add_engine_call_hook(hook, true)` that registers `hook` as a post hook (runs after the engine call, against a snapshot of the original arguments). See `add_engine_call_hook` for the hook signature and semantics.",
+      "params": [
+        {
+          "name": "hook",
+          "type": "function",
+          "description": "The hook function, called as `fn(func, nargs, nresults, ...)`."
+        }
+      ],
+      "returns": []
+    },
+    {
+      "name": "set_engine_call_hook",
+      "defined_in": "lua",
+      "description": "Legacy helper kept for backwards compatibility; equivalent to `lje.vm.add_pre_engine_call_hook(hook)`. Despite the `set_` name it *adds* a hook rather than replacing existing ones. Prefer `add_pre_engine_call_hook` or `add_post_engine_call_hook` in new code.",
+      "params": [
+        {
+          "name": "hook",
+          "type": "function",
+          "description": "The hook function, called as `fn(func, nargs, nresults, ...)`."
+        }
+      ],
+      "returns": []
     }
   ]
 }

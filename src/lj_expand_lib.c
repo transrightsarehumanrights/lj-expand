@@ -283,9 +283,11 @@ int lje_data_read(lua_State* L)
   return 0;
 }
 
-int lje_set_engine_call_hook(lua_State* L)
+int lje_add_engine_call_hook(lua_State* L)
 {
   GCfunc* callback = lj_lib_checkfunc(L, 1);
+  int is_post = lua_gettop(L) >= 2 && lua_toboolean(L, 2);
+
   LJEScript* current_script = LJEG()->current_script;
   if (!current_script)
   {
@@ -297,7 +299,22 @@ int lje_set_engine_call_hook(lua_State* L)
     lj_err_arg(L, 1, LJ_ERR_NOLFUNC);
   }
 
-  current_script->extra->engine_call_hook_ref_id = luaL_ref(L, LUA_REGISTRYINDEX);
+  if (current_script->extra->engine_call_hook_count >= LJE_SCRIPT_MAX_ENGINE_CALL_HOOKS)
+  {
+    luaL_error(L, "maximum number of engine call hooks reached for script '%s'", current_script->name);
+  }
+
+  // Ensure the boolean is popped first if it was passed so we don't ref that
+  if (lua_gettop(L) >= 2)
+  {
+    lua_pop(L, 1);
+  }
+
+  int ref_id = luaL_ref(L, LUA_REGISTRYINDEX);
+  LJEEngineCallHook hook;
+  hook.is_post = is_post;
+  hook.ref = ref_id;
+  current_script->extra->engine_call_hooks[current_script->extra->engine_call_hook_count++] = hook;
   return 0;
 }
 
@@ -316,19 +333,6 @@ int lje_set_cleanup_hook(lua_State* L)
   }
 
   current_script->extra->cleanup_ref_id = luaL_ref(L, LUA_REGISTRYINDEX);
-  return 0;
-}
-
-int lje_set_engine_call_hook_post(lua_State* L)
-{
-  int post = lua_toboolean(L, 1);
-  LJEScript* current_script = LJEG()->current_script;
-  if (!current_script)
-  {
-    lj_err_msg(L, LJ_ERR_LJE_NOSCRIPT);
-  }
-
-  current_script->extra->engine_call_post = post;
   return 0;
 }
 
@@ -590,8 +594,7 @@ void lje_addfuncs(lua_State* L) {
 
   /* vm: virtual machine manipulation */
   LJE_NEW_SECTION()
-    LJE_SET_FUNC("set_engine_call_hook", lje_set_engine_call_hook);
-    LJE_SET_FUNC("set_engine_call_hook_post", lje_set_engine_call_hook_post);
+    LJE_SET_FUNC("add_engine_call_hook", lje_add_engine_call_hook);
   LJE_END_SECTION("vm");
 
   /* data: simple data storage API */
