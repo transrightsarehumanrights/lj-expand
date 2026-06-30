@@ -232,9 +232,6 @@ static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, 
         case LJ_TUDATA:
         {
             GCudata* from_ud = udataV(val);
-            void** from_ud_engine_ptr = (void**)uddata(from_ud);
-            LJE_INFO("Copying an engine userdata, ptr: %p", (*from_ud_engine_ptr));
-
             GCudata* to_ud = lj_udata_new(to, from_ud->len, tabref(to->env));
             memcpy(uddata(to_ud), uddata(from_ud), from_ud->len);
             if (gcref(from_ud->metatable))
