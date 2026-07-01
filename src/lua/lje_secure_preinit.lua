@@ -95,9 +95,8 @@ function hook.Listen(post)
     hook._listeners[script] = {}
   end
 
-  lje.vm.add_engine_call_hook(function(func, nargs, nresults, ...)
-    local name = ...
-    if hook._listeners[script][name] then
+  lje.vm.add_engine_call_hook(function(func, nargs, nresults, name, gm, ...)
+    if name and hook._listeners[script][name] then
       for _, listener in pairs(hook._listeners[script][name]) do
         listener(...)
       end
