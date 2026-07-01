@@ -18,6 +18,20 @@
   font-size: 1rem;
 }
 
+.classDoc {
+  border-left: 3px solid var(--ifm-color-emphasis-400);
+  padding-left: 1.25rem;
+  margin-bottom: 3rem;
+}
+
+.classDoc > h3 {
+  margin-top: 0;
+}
+
+.classDoc > h3 code {
+  font-size: 1.05rem;
+}
+
 .luaBadge {
   display: inline-block;
   vertical-align: middle;

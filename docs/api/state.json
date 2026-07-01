@@ -71,7 +71,7 @@
   "classes": [
     {
       "name": "LJEPath",
-      "receiver": "ljepath",
+      "receiver": "path",
       "description": "A path object. Chain `:index`, `:upvalue`, `:expect`, then `:copy()`.",
       "methods": [
         {

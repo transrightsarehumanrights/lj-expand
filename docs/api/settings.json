@@ -70,7 +70,7 @@
   "classes": [
     {
       "name": "LJESettings",
-      "receiver": "ljesettings",
+      "receiver": "settings",
       "description": "A settings object bound to the calling script, or `nil` (with a console message) if there is no active script context.",
       "methods": [
         {
