@@ -506,7 +506,11 @@ static int lje_secure_isolate(lua_State* L)
 static int lje_proxy_type(lua_State* L)
 {
   LJEProxy* proxy = lua_touserdata(L, 1);
-  // We need as much performance as possible, so no type checking here.
+  if (!proxy)
+  {
+    lua_pushnil(L);
+    return 1;
+  }
 
   switch (proxy->host_type)
   {
@@ -527,7 +531,44 @@ static int lje_proxy_type(lua_State* L)
 static int lje_proxy_copy(lua_State* L)
 {
   LJEProxy* proxy = lua_touserdata(L, 1);
-  // Copies the given proxied object into the secure state.
+  if (!proxy)
+  {
+    lua_pushnil(L);
+    return 1;
+  }
+
+  /* Registry-backed userdata (e.g. GMod entities) carry their host registry ref in
+   * align1. The tag can be stale or garbage, so only trust it if the host registry
+   * still holds this exact userdata at that index; then reuse/cache the isolated
+   * copy under the same index in the shadow registry instead of copying each time. */
+  if (proxy->host_type == ~LJ_TUDATA && LJEG()->main_state)
+  {
+    GCudata* ud = (GCudata*)proxy->host_obj;
+    int32_t n = (int32_t)ud->align1;
+    if (n != 0)
+    {
+      cTValue* hv = lj_tab_getint(tabV(registry(LJEG()->main_state)), n);
+      if (hv && tvisudata(hv) && udataV(hv) == ud)
+      {
+        cTValue* cached = lj_tab_getint(LJEG()->shadow_registry, n);
+        if (cached && tvisudata(cached))
+        {
+          copyTV(L, L->top, cached);
+          L->top++;
+          return 1;
+        }
+
+        TValue host_tv;
+        setgcV(L, &host_tv, proxy->host_obj, ~proxy->host_type);
+        lje_copy_to_isolated_state_tv(LJEG()->main_state, L, &host_tv, 0);
+
+        TValue* slot = lj_tab_setint(L, LJEG()->shadow_registry, n);
+        copyTV(L, slot, L->top - 1);
+        lj_gc_barriert(L, LJEG()->shadow_registry, slot);
+        return 1;
+      }
+    }
+  }
 
   TValue proxy_object;
   setgcV(L, &proxy_object, proxy->host_obj, ~proxy->host_type);

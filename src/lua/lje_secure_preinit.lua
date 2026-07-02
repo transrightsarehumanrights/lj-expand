@@ -39,7 +39,7 @@ vgui = lje.secure.pull("vgui")
 -- Globals
 local globalEnv = lje.secure.pull("_G")
 for k, v in pairs(globalEnv) do
-  if not _G[k] then
+  if _G[k] == nil then
     _G[k] = v     -- Merge
   end
 end
@@ -61,11 +61,6 @@ registry.Vehicle = lje.secure.pull("_R.Vehicle")
 registry.Panel = lje.secure.pull("_R.Panel")
 registry.CSEnt = lje.secure.pull("_R.CSEnt")
 registry.NPC = lje.secure.pull("_R.NPC")
-
-function registry.Player:__eq(other)
-  -- Temporary hack for identical Player objects with different userdata.
-  return self:EntIndex() == other:EntIndex()
-end
 
 NULL = lje.secure.pull("NULL") -- For some reason, the null entity is a special userdata..?
 

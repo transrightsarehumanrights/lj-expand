@@ -939,6 +939,11 @@ LUA_API void lua_rawgeti(lua_State *L, int idx, int n)
     {
       goto copy_to_isolated_registry; /* Means we invalidated this from the preinit Lua script. Fetch it again from host. */
     }
+    /* LJE: Tag registry-backed host userdata with its ref index (align1 is dead
+     * padding) so engine call hooks can reuse the shadow registry copy later. */
+    if (!LJEG()->redirect_to_isolation && idx == LUA_REGISTRYINDEX &&
+        L == LJEG()->main_state && n != 0 && tvisudata(v))
+      udataV(v)->align1 = (uint32_t)n;
     copyTV(L, L->top, v);
   } else {
     if (LJEG()->redirect_to_isolation && idx == LUA_REGISTRYINDEX)
@@ -1191,6 +1196,10 @@ LUA_API void lua_rawseti(lua_State *L, int idx, int n)
       L == LJEG()->main_state && LJEG()->shadow_registry && n != 0) {
     TValue *cached = (TValue *)lj_tab_getint(LJEG()->shadow_registry, n);
     if (cached) setnilV(cached);
+    if (tvisudata(dst)) {
+      // Tag this userdata with its registry index for caching
+      udataV(dst)->align1 = (uint32_t)n;
+    }
   }
 }
 
