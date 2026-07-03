@@ -18,6 +18,7 @@ typedef struct LJEGlobalState
     lua_State* main_state;
     int waiting_for_init_call;
     int waiting_for_startup_call;
+    int waiting_for_menu_call;
     LJEScript* loaded_scripts;
     size_t loaded_script_count;
     LJEScript** script_load_order;

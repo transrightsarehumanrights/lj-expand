@@ -17,6 +17,7 @@
 #include "lj_expand_frame.h"
 
 #include "lj_expand_globals.h"
+#include "lj_expand_log.h"
 #include "lj_tab.h"
 #include "lj_str.h"
 #include "stdio.h"
@@ -181,6 +182,14 @@ GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
     /* LJE: Wait for startup call next... */
     LJEG()->waiting_for_startup_call = 1;
   }
+
+  if (check_proto_chunkname(pt, "@lua/includes/init_menu.lua") && !lje_frame_is_lua_involved(L, 0))
+  {
+    /* LJE: Wait for startup call next... */
+    LJE_WARN("Detected menu state at %p", L);
+    LJEG()->waiting_for_menu_call = 1;
+  }
+
 
   GCfunc *fn = func_newL(L, pt, env);
   MSize i, nuv = pt->sizeuv;

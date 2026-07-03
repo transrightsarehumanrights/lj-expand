@@ -258,6 +258,7 @@ LUA_API void lua_pushvalue(lua_State *L, int idx)
 LUA_API int lua_type(lua_State *L, int idx)
 {
   lje_redirect_state(L);
+
   cTValue *o = index2adr(L, idx);
   if (tvisnumber(o)) {
     return LUA_TNUMBER;
@@ -894,6 +895,7 @@ LUA_API void lua_gettable(lua_State *L, int idx)
 LUA_API void lua_getfield(lua_State *L, int idx, const char *k)
 {
   lje_redirect_state(L);
+
   cTValue *v, *t = index2adr(L, idx);
   TValue key;
   api_checkvalidindex(L, t);
@@ -1396,6 +1398,25 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 
     LJE_INFO("Starting up Lua...");
   }
+
+  /* LJE: Run all boot.lua entrypoints */
+  if (tvisfunc(L->base) && LJEG()->waiting_for_menu_call)
+  {
+    LJEG()->waiting_for_menu_call = 0;
+    LJE_INFO("Running boot entrypoint for all scripts...");
+    // Load the pure-Lua helpers into the isolated state so boot scripts have them
+    // available before they run.
+    lje_startup_secure_helpers(LJEG()->isolated_state);
+
+    // Check if any scripts have boot.lua, if so run them now in the isolated state
+    lje_iterate_scripts()
+      if (script->boot_path != NULL)
+      {
+        LJE_INFO("Running boot script for script %s...", script->info->name);
+        lje_startup_execute(LJEG()->isolated_state, script, script->boot_path);
+      }
+    lje_iterate_scripts_end()
+}
 
   /* LJE: Reload any scripts at this point, if needed. */
   if (LJEG()->script_watcher && LJEG()->main_state == L) /* only reload on new engine calls */
@@ -2105,20 +2126,6 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
         LJE_INFO("Loading binary module %s into isolated state...", mod->name);
         lje_binary_module_run_preinit(mod, LJEG()->isolated_state);
       }
-
-      // Load the pure-Lua helpers into the isolated state so boot scripts have them
-      // available before they run.
-      lje_startup_secure_helpers(LJEG()->isolated_state);
-
-      // Check if any scripts have boot.lua, if so run them now in the isolated state
-      lje_iterate_scripts()
-        if (script->boot_path != NULL)
-        {
-          LJE_INFO("Running boot script for script %s...", script->info->name);
-          lje_startup_execute(LJEG()->isolated_state, script, script->boot_path);
-        }
-      lje_iterate_scripts_end()
-
     } else {
       LJE_ERROR("lua_shared.dll not found!");
     }

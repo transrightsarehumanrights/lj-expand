@@ -63,7 +63,7 @@ registry.CSEnt = lje.secure.pull("_R.CSEnt")
 registry.NPC = lje.secure.pull("_R.NPC")
 
 NULL = lje.secure.pull("NULL") -- For some reason, the null entity is a special userdata..?
-
+registry.NULL = NULL
 -- Polyfills for common things
 local cam2D = { type = "2D" }
 cam.Start2D = function()
