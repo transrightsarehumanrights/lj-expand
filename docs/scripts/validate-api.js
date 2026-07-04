@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 const C_FILE = path.resolve(__dirname, '../../src/lj_expand_lib.c');
-const API_DIR = path.resolve(__dirname, '../api');
+const API_DIR = path.resolve(__dirname, '../static/api');
 
 // JSON files that are Lua-defined and not in the C file — skip for C comparison
 const LUA_ONLY = new Set(['lua']);
