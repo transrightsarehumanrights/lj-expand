@@ -291,6 +291,14 @@ LJ_FUNC void lje_startup_reload(lua_State* L, LJEScript* script)
     }
 
     lje_settings_clear_cache(L);
+    // Clear this script's engine hooks, but first unref as it has GC implications
+    for (size_t i = 0; i < script->extra->engine_call_hook_count; i++)
+    {
+      LJEEngineCallHook* hook = &script->extra->engine_call_hooks[i];
+      luaL_unref(L, LUA_REGISTRYINDEX, hook->ref);
+    }
 
+    script->extra->engine_call_hook_count = 0;
+    memset(script->extra->engine_call_hooks, 0, sizeof(LJEEngineCallHook) * LJE_SCRIPT_MAX_ENGINE_CALL_HOOKS);
     lje_startup_execute(L, script, NULL);
 }
