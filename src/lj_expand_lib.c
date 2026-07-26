@@ -318,6 +318,18 @@ int lje_add_engine_call_hook(lua_State* L)
   return 0;
 }
 
+int lje_suppress_engine_call(lua_State* L)
+{
+  /* Only pre hooks can suppress: by the time post hooks run the engine call is done. */
+  if (!LJEG()->in_pre_engine_call_hook)
+  {
+    luaL_error(L, "suppress_engine_call() may only be called from within a pre engine call hook");
+  }
+
+  LJEG()->engine_call_suppressed = 1;
+  return 0;
+}
+
 int lje_set_cleanup_hook(lua_State* L)
 {
   GCfunc* callback = lj_lib_checkfunc(L, 1);
@@ -636,6 +648,7 @@ void lje_addfuncs(lua_State* L) {
   /* vm: virtual machine manipulation */
   LJE_NEW_SECTION()
     LJE_SET_FUNC("add_engine_call_hook", lje_add_engine_call_hook);
+    LJE_SET_FUNC("suppress_engine_call", lje_suppress_engine_call);
   LJE_END_SECTION("vm");
 
   /* data: simple data storage API */

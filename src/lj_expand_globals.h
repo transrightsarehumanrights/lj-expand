@@ -28,6 +28,10 @@ typedef struct LJEGlobalState
     int flag_lje_protos;
     lua_CFunction adv_error_reporter;
     int using_error_reporter;
+    /* Engine call hooks: in_pre_engine_call_hook is set while pre hooks run, so
+       lje.vm.suppress_engine_call() can tell it is in a valid context. */
+    char in_pre_engine_call_hook;
+    char engine_call_suppressed;
     /* Hot reloading */
     LJEScriptWatcher* script_watcher;
     /* Loaded binary modules */

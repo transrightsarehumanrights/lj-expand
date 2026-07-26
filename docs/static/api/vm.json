@@ -18,7 +18,7 @@
         "",
         "Hooks fire in script load order; within a script they fire in registration order. All pre hooks across every script run before the real call, then all post hooks run after it. A script may register up to 16 hooks, and may freely mix pre and post hooks.",
         "",
-        "The hook's return values are ignored — handling/suppressing engine calls is not currently supported. Errors thrown by a hook are caught and printed to the console; the remaining hooks still run. Requires an active script context, and hooks only fire for secure scripts."
+        "The hook's return values are ignored. A pre hook can stop the engine call from happening at all by calling `lje.vm.suppress_engine_call()`. Errors thrown by a hook are caught and printed to the console; the remaining hooks still run. Requires an active script context, and hooks only fire for secure scripts."
       ],
       "note": "Proxy handles passed to the hook are only valid for the duration of the hook call — do not store them. Post hooks receive a snapshot of the arguments captured before the engine call ran.",
       "params": [
@@ -39,6 +39,28 @@
         "No active script context.",
         "Argument 1 must be a Lua function (not a C function).",
         "Maximum number of engine call hooks (16) reached for the script."
+      ]
+    },
+    {
+      "name": "suppress_engine_call",
+      "description": [
+        "Suppresses the engine call that is currently being hooked. Only valid from inside a *pre* engine call hook (see `add_engine_call_hook`); calling it from a post hook, or outside of a hook entirely, raises an error since by then the engine call has already happened.",
+        "",
+        "When a pre hook calls this:",
+        "",
+        "- The real engine call never runs.",
+        "- Every remaining hook for this call is cancelled — later pre hooks (in this script and in scripts after it) do not fire, and no post hooks fire either.",
+        "- LJE reports the call to the engine as having succeeded and returned nothing; the engine's expected result slots are filled with `nil`.",
+        "",
+        "The suppression only applies to the one engine call being hooked, and does not carry over to the next one. A hook that throws an error after calling this does *not* suppress the call — the suppression is discarded along with the error.",
+        "",
+        "**Note:** Suppression can lead to detection. Only suppress engine calls that are safe to drop; nothing which may be an oracle for adversial scripts. `concommand.Run` is fine to suppress for example, but `Think` is not."
+      ],
+      "note": "Suppressing engine calls hides them from the game's Lua entirely. Be conservative about which calls you suppress: dropping something the gamemode depends on (`Think`, `HUDPaint`, ...) can break or freeze the game.",
+      "params": [],
+      "returns": [],
+      "errors": [
+        "Called outside of a pre engine call hook."
       ]
     },
     {

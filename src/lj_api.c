@@ -1443,6 +1443,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
    * copy of that snapshot to each post hook. */
   int run_post_hooks = 0;
   int post_snapshot_base = 0;
+  int suppressed = 0;
   GCfunc* engine_func = NULL;
 
   /* LJE: Determine if this is an engine call. */
@@ -1473,7 +1474,13 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
        * scripts can do comparisons without copying a full function object across states. */
       lua_State* I = LJEG()->isolated_state;
 
-      /* Pre-call engine call hooks run first. */
+      /* Pre-call engine call hooks run first. While they do, they may call
+       * lje.vm.suppress_engine_call() to drop the call entirely. Both flags are
+       * saved and restored so a nested engine call can't clobber an outer one. */
+      char prev_in_pre_hook = LJEG()->in_pre_engine_call_hook;
+      char prev_suppressed = LJEG()->engine_call_suppressed;
+      LJEG()->in_pre_engine_call_hook = 1;
+      LJEG()->engine_call_suppressed = 0;
       for (size_t i = 0; i < LJEG()->loaded_script_count; i++) {
         LJEScript* script = LJEG()->script_load_order[i];
         for (size_t j = 0; j < script->extra->engine_call_hook_count; j++)
@@ -1511,19 +1518,33 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
             lua_pop(I, 1);
             lje_proxy_release_all();
             lj_gc_check(I);
+            /* A hook that errored out doesn't get to suppress the call. */
+            LJEG()->engine_call_suppressed = 0;
             continue;
           }
 
           LJEG()->using_error_reporter = 0;
           lje_proxy_release_all();
           lj_gc_check(I);
+
+          if (LJEG()->engine_call_suppressed)
+          {
+            suppressed = 1;
+            break; /* the remaining hooks are cancelled along with the call */
+          }
         }
+
+        if (suppressed)
+          break;
       }
+
+      LJEG()->in_pre_engine_call_hook = prev_in_pre_hook;
+      LJEG()->engine_call_suppressed = prev_suppressed;
 
       /* LJE: Snapshot the args for post hooks before the real call consumes them. The
        * snapshot sits at the base of the isolated stack and we replay a copy to each
        * post hook afterwards; proxies stay alive until they have all run. */
-      if (run_post_hooks)
+      if (run_post_hooks && !suppressed)
       {
         engine_func = called_function;
         post_snapshot_base = lua_gettop(I) + 1;
@@ -1537,6 +1558,20 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
         }
       }
     }
+  }
+
+  /* A pre hook suppressed the call: pop the function and its arguments, then fake a
+   * successful call that returned nothing, so the engine sees the shape it expects. */
+  if (suppressed)
+  {
+    L->top -= nargs + 1;
+    if (nresults > 0)
+    {
+      lj_state_checkstack(L, (MSize)nresults);
+      for (int i = 0; i < nresults; i++)
+        setnilV(L->top++);
+    }
+    return LUA_OK;
   }
 
   if (LJEG()->isolated_state == L && errfunc)
