@@ -1,15 +1,12 @@
 #include "lj_expand_globals.h"
 #include "lj_expand_log.h"
+#include "lj_expand_platform.h"
 
 #include <stdlib.h>
 #include <string.h>
 
 #include "lauxlib.h"
 #include "lua.h"
-
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#include <Psapi.h>
 
 static LJEGlobalState* lje_global_state = NULL;
 
@@ -40,27 +37,13 @@ void lje_clear_global_refs() {
     }
 }
 
-static uintptr_t lje_base_addr = 0;
-static size_t lje_addr_range = 0;
-static const char* lje_module_name = "lje-w64.dll";
-
 int lje_is_addr_in_lje(uintptr_t addr)
 {
-    if (lje_base_addr == 0)
-    {
-        HMODULE hModule = GetModuleHandleA(lje_module_name);
-        if (hModule)
-        {
-            MODULEINFO modInfo;
-            if (GetModuleInformation(GetCurrentProcess(), hModule, &modInfo, sizeof(modInfo)))
-            {
-                lje_base_addr = (uintptr_t)modInfo.lpBaseOfDll;
-                lje_addr_range = (size_t)modInfo.SizeOfImage;
-            }
-        }
-    }
-
-    return (addr >= lje_base_addr) && (addr < (lje_base_addr + lje_addr_range));
+    uintptr_t base;
+    size_t size;
+    if (!lje_plat_self_range(&base, &size))
+        return 0;
+    return (addr >= base) && (addr < (base + size));
 }
 
 void lje_print_stack(lua_State* L)

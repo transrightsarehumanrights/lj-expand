@@ -25,6 +25,7 @@
 #include "lj_expand_module.h"
 #include "lj_expand_detour.h"
 #include "lj_expand_signatures.h"
+#include "lj_expand_platform.h"
 #include "lj_frame.h"
 #include "lj_trace.h"
 #include "lj_vm.h"
@@ -1581,7 +1582,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     if (o && !tvisfunc(o))
     {
       LJE_WARN("errfunc is set but not a function. This is unexpected, but we'll try to continue anyway.");
-      __debugbreak();
+      lje_plat_debug_break();
     }
   }
 
@@ -1865,25 +1866,14 @@ static void lua_close_detour(lua_State* L)
 #include <windows.h>
 #include <stdio.h>
 
-BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
-  if (ul_reason_for_call == DLL_PROCESS_ATTACH)
-  {
-    DisableThreadLibraryCalls(hModule);
-    AllocConsole();
+/* Bootstrap — extracted from DllMain so the same initialisation sequence can
+ * later be called from a __attribute__((constructor)) shim on POSIX. */
+static void lje_bootstrap(void* self_handle)
+{
+  lje_plat_init(self_handle);
+  lje_plat_console_init("LJE Console");
 
-    FILE* fDummy;
-    freopen_s(&fDummy, "CONOUT$", "w", stdout);
-    freopen_s(&fDummy, "CONOUT$", "w", stderr);
-
-    SetWindowTextA(GetConsoleWindow(), "LJE Console");
-    // Enable VT processing for colors and stuff
-    DWORD consoleMode;
-    HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-    GetConsoleMode(consoleHandle, &consoleMode);
-    consoleMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    SetConsoleMode(consoleHandle, consoleMode);
-
-    lje_Module* mod = lje_module_find("lua_shared.dll");
+  lje_Module* mod = lje_module_find(LJE_LUA_MODULE);
     if (mod) {
       LJECommandLineOptions* options = lje_get_command_line_options();
       if (options->enable_debug_prints)
@@ -2058,7 +2048,7 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
        * vehemently avoiding having to deal with the engine as opposed to LuaJIT, but
        * given that the game makes *all* engine calls via this function, we have no choice.
        */
-      LJEG()->adv_error_reporter = (lua_CFunction)lje_module_get_func(mod, "?AdvancedLuaErrorReporter@@YAHPEAUlua_State@@@Z");
+      LJEG()->adv_error_reporter = (lua_CFunction)lje_module_get_func(mod, LJE_SYM_ADV_ERROR_REPORTER);
       if (LJEG()->adv_error_reporter)
       {
         LJE_DEBUG("Found AdvancedLuaErrorReporter at %p", LJEG()->adv_error_reporter);
@@ -2094,8 +2084,8 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
       if (!lje_script_folder_exists())
       {
         // Tell them we're creating one for them
-        char path[MAX_PATH];
-        lje_script_resolve_base(path, MAX_PATH);
+        char path[LJE_PATH_MAX];
+        lje_script_resolve_base(path, LJE_PATH_MAX);
         LJE_INFO("%s folder not found, creating it now...", LJE_SCRIPT_FOLDER);
         LJE_INFO("Creating at path: %s", path);
         if (!lje_script_folder_create())
@@ -2162,9 +2152,18 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
         lje_binary_module_run_preinit(mod, LJEG()->isolated_state);
       }
     } else {
-      LJE_ERROR("lua_shared.dll not found!");
+      LJE_ERROR(LJE_LUA_MODULE " not found!");
     }
+  }
 
+  /* ---- DllMain --------------------------------------------------------- */
+  /* On POSIX this whole function is replaced by __attribute__((constructor)). */
+
+BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
+  if (ul_reason_for_call == DLL_PROCESS_ATTACH)
+  {
+    DisableThreadLibraryCalls(hModule);
+    lje_bootstrap(hModule);
     return TRUE;
   }
 

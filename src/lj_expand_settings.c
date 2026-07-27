@@ -6,12 +6,12 @@
 #include "lj_expand_dirs.h"
 #include "lj_expand_globals.h"
 #include "lj_expand_log.h"
+#include "lj_expand_platform.h"
 #include "lj_expand_script.h"
 #include "tomlc17.h"
 
 #include <stdio.h>
 #include <string.h>
-#include <windows.h>
 
 #define LJE_SETTINGS_CACHE "__lje_settings_cache"
 #define LJE_SETTINGS_MT "__lje_settings_obj"
@@ -42,8 +42,7 @@ static int resolve_default_path(LJEScript* s, char* out, size_t size)
 {
     if (!s || !s->folder)
         return 0;
-    snprintf(out, size, "%s%s", s->folder, LJE_SCRIPT_SETTINGS_DEFAULT);
-    return 1;
+    return lje_path_join(out, size, s->folder, LJE_SCRIPT_SETTINGS_DEFAULT);
 }
 
 static int resolve_override_path(LJEScript* s, char* out, size_t size)
@@ -51,8 +50,8 @@ static int resolve_override_path(LJEScript* s, char* out, size_t size)
     if (!s || !s->info)
         return 0;
 
-    char dir[MAX_PATH];
-    if (!lje_directory_get(LJE_DIR_SETTINGS, dir, MAX_PATH))
+    char dir[LJE_PATH_MAX];
+    if (!lje_directory_get(LJE_DIR_SETTINGS, dir, sizeof(dir)))
         return 0;
 
     char slug[256];
@@ -66,17 +65,19 @@ static int resolve_override_path(LJEScript* s, char* out, size_t size)
     if (changed)
         LJE_WARN("settings: sanitized identity for script '%s' to slug '%s'", s->name, slug);
 
-    snprintf(out, size, "%s\\%s.toml", dir, slug);
+    if (!lje_path_join(out, size, dir, slug))
+        return 0;
+    lje_strlcat(out, ".toml", size);
     return 1;
 }
 
 static void ensure_override_template(const char* path, LJEScript* s)
 {
-    if (GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES)
+    if (lje_plat_fs_kind(path) != LJE_FS_MISSING)
         return;
 
-    FILE* f = NULL;
-    if (fopen_s(&f, path, "w") != 0 || !f)
+    FILE* f = fopen(path, "w");
+    if (!f)
         return;
 
     fprintf(f,
@@ -140,15 +141,15 @@ static void push_toml_value(lua_State* L, toml_datum_t d)
 
 static void push_merged(lua_State* L, LJEScript* script)
 {
-    char def_path[MAX_PATH];
-    char ovr_path[MAX_PATH];
-    int have_def = resolve_default_path(script, def_path, MAX_PATH)
-        && GetFileAttributesA(def_path) != INVALID_FILE_ATTRIBUTES;
-    int have_ovr = resolve_override_path(script, ovr_path, MAX_PATH);
+    char def_path[LJE_PATH_MAX];
+    char ovr_path[LJE_PATH_MAX];
+    int have_def = resolve_default_path(script, def_path, sizeof(def_path))
+        && lje_plat_fs_kind(def_path) != LJE_FS_MISSING;
+    int have_ovr = resolve_override_path(script, ovr_path, sizeof(ovr_path));
     if (have_ovr)
     {
         ensure_override_template(ovr_path, script);
-        have_ovr = GetFileAttributesA(ovr_path) != INVALID_FILE_ATTRIBUTES;
+        have_ovr = lje_plat_fs_kind(ovr_path) != LJE_FS_MISSING;
     }
 
     toml_result_t rd, ro;

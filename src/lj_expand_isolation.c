@@ -4,9 +4,8 @@
 #include "lj_expand_globals.h"
 #include "lj_expand_lib.h"
 #include "lj_expand_log.h"
+#include "lj_expand_platform.h"
 #include "lualib.h"
-
-#include <windows.h>
 
 #include "lj_dispatch.h"
 #include "lj_func.h"
@@ -19,15 +18,15 @@ typedef lua_State* (*luaL_newstate_t)(void);
 typedef void       (*luaL_openlibs_t)(lua_State*);
 
 lua_State* lje_create_isolated_state() {
-    HMODULE gmod_lua = GetModuleHandleA("lua_shared.dll");
-    if (!gmod_lua)
+    LJEPlatModule gmod_lua;
+    if (!lje_plat_module_find(LJE_LUA_MODULE, &gmod_lua))
     {
         LJE_ERROR("Failed to locate GMod's lua_shared.dll for isolated state creation.");
         return NULL;
     }
 
-    luaL_newstate_t gmod_newstate = (luaL_newstate_t)GetProcAddress(gmod_lua, "luaL_newstate");
-    luaL_openlibs_t gmod_openlibs = (luaL_openlibs_t)GetProcAddress(gmod_lua, "luaL_openlibs");
+    luaL_newstate_t gmod_newstate = (luaL_newstate_t)lje_plat_module_sym(&gmod_lua, "luaL_newstate");
+    luaL_openlibs_t gmod_openlibs = (luaL_openlibs_t)lje_plat_module_sym(&gmod_lua, "luaL_openlibs");
     if (!gmod_newstate || !gmod_openlibs)
     {
         LJE_ERROR("Failed to resolve GMod luaL_newstate/luaL_openlibs exports.");

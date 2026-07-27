@@ -7,9 +7,7 @@
 #include "lj_expand_dirs.h"
 #include "lj_expand_globals.h"
 #include "lj_expand_log.h"
-#ifdef _WIN64
-#include <windows.h>
-#endif
+#include "lj_expand_platform.h"
 
 void lje_script_resolve_base(char* out_buffer, size_t buffer_size) {
     if (!lje_directory_get(LJE_DIR_SCRIPTS, out_buffer, buffer_size))
@@ -27,62 +25,30 @@ void lje_script_data_resolve_base(char* out_buffer, size_t buffer_size)
 }
 
 int lje_script_folder_exists() {
-    // Simple check for folder existence
-#ifdef _WIN64
-    char path[MAX_PATH] = { 0 };
-    lje_script_resolve_base(path, MAX_PATH);
-    DWORD attribs = GetFileAttributesA(path);
-    if ((attribs != INVALID_FILE_ATTRIBUTES) && (attribs & FILE_ATTRIBUTE_DIRECTORY)) {
-        return 1; // Exists and is a directory
-    }
-#else
-#error "lje_script_folder_exists not implemented for this platform"
-#endif
-    return 0;
+    char path[LJE_PATH_MAX];
+    lje_script_resolve_base(path, sizeof(path));
+    return lje_plat_fs_kind(path) == LJE_FS_DIR;
 }
 
 int lje_script_data_folder_exists()
 {
-    // Basically just a copy of lje_script_folder_exists but for data
-#ifdef _WIN64
-    char path[MAX_PATH] = { 0 };
-    lje_script_data_resolve_base(path, MAX_PATH);
-    DWORD attribs = GetFileAttributesA(path);
-    if ((attribs != INVALID_FILE_ATTRIBUTES) && (attribs & FILE_ATTRIBUTE_DIRECTORY)) {
-        return 1; // Exists and is a directory
-    }
-#else
-#error "lje_script_data_folder_exists not implemented for this platform"
-#endif
-    return 0;
+    char path[LJE_PATH_MAX];
+    lje_script_data_resolve_base(path, sizeof(path));
+    return lje_plat_fs_kind(path) == LJE_FS_DIR;
 }
 
 int lje_script_folder_create()
 {
-#ifdef _WIN64
-    char path[MAX_PATH] = { 0 };
-    lje_script_resolve_base(path, MAX_PATH);
-    if (CreateDirectoryA(path, NULL) || GetLastError() == ERROR_ALREADY_EXISTS) {
-        return 1; // Created or already exists
-    }
-#else
-#error "lje_script_folder_create not implemented for this platform"
-#endif
-    return 0;
+    char path[LJE_PATH_MAX];
+    lje_script_resolve_base(path, sizeof(path));
+    return lje_plat_mkdir(path);
 }
 
 int lje_script_data_folder_create()
 {
-#ifdef _WIN64
-    char path[MAX_PATH] = { 0 };
-    lje_script_data_resolve_base(path, MAX_PATH);
-    if (CreateDirectoryA(path, NULL) || GetLastError() == ERROR_ALREADY_EXISTS) {
-        return 1; // Created or already exists
-    }
-#else
-#error "lje_script_data_folder_create not implemented for this platform"
-#endif
-    return 0;
+    char path[LJE_PATH_MAX];
+    lje_script_data_resolve_base(path, sizeof(path));
+    return lje_plat_mkdir(path);
 }
 
 static char is_data_path_safe(const char* relative_path)
@@ -112,20 +78,19 @@ static char is_data_path_safe(const char* relative_path)
 
 int lje_script_data_write_file(const char* relative_path, const char* data, size_t data_size)
 {
-    // We can use standard C file IO here, so no cross-platform issues
     if (!is_data_path_safe(relative_path))
     {
         return 0; // Unsafe path
     }
 
-    char full_path[MAX_PATH] = { 0 };
-    lje_script_data_resolve_base(full_path, MAX_PATH);
-    strncat_s(full_path, MAX_PATH, "\\", _TRUNCATE);
-    strncat_s(full_path, MAX_PATH, relative_path, _TRUNCATE);
-    strncat_s(full_path, MAX_PATH, ".dat", _TRUNCATE); // No custom extensions allowed here!
+    char full_path[LJE_PATH_MAX];
+    lje_script_data_resolve_base(full_path, sizeof(full_path));
+    if (!lje_path_join(full_path, sizeof(full_path), full_path, relative_path))
+        return 0;
+    lje_strlcat(full_path, ".dat", sizeof(full_path));
 
-    FILE* file = NULL;
-    if (fopen_s(&file, full_path, "wb") != 0 || !file)
+    FILE* file = fopen(full_path, "wb");
+    if (!file)
     {
         return 0; // Failed to open file
     }
@@ -138,20 +103,19 @@ int lje_script_data_write_file(const char* relative_path, const char* data, size
 
 char* lje_script_data_read_file(const char* relative_path, size_t* out_data_size)
 {
-    // We can use standard C file IO here, so no cross-platform issues
     if (!is_data_path_safe(relative_path))
     {
         return NULL; // Unsafe path
     }
 
-    char full_path[MAX_PATH] = { 0 };
-    lje_script_data_resolve_base(full_path, MAX_PATH);
-    strncat_s(full_path, MAX_PATH, "\\", _TRUNCATE);
-    strncat_s(full_path, MAX_PATH, relative_path, _TRUNCATE);
-    strncat_s(full_path, MAX_PATH, ".dat", _TRUNCATE); // No custom extensions allowed here!
+    char full_path[LJE_PATH_MAX];
+    lje_script_data_resolve_base(full_path, sizeof(full_path));
+    if (!lje_path_join(full_path, sizeof(full_path), full_path, relative_path))
+        return NULL;
+    lje_strlcat(full_path, ".dat", sizeof(full_path));
 
-    FILE* file = NULL;
-    if (fopen_s(&file, full_path, "rb") != 0 || !file)
+    FILE* file = fopen(full_path, "rb");
+    if (!file)
     {
         return NULL; // Failed to open file
     }
@@ -206,10 +170,8 @@ static LJEScriptDependency* script_info_parse_dep(const char* dep_str)
     dep->author = (char*)malloc(author_length + 1);
     dep->name = (char*)malloc(name_length + 1);
 
-    strncpy_s((char*)dep->author, author_length + 1, dep_str + author_start, author_length);
-    dep->author[author_length] = '\0';
-    strncpy_s((char*)dep->name, name_length + 1, dep_str + name_start, name_length);
-    dep->name[name_length] = '\0';
+    lje_strlcpy((char*)dep->author, dep_str + author_start, author_length + 1);
+    lje_strlcpy((char*)dep->name, dep_str + name_start, name_length + 1);
 
     return dep;
 }
@@ -217,7 +179,7 @@ static LJEScriptDependency* script_info_parse_dep(const char* dep_str)
 LJEScriptInfo* lje_script_parse_info(const char* info_path)
 {
     // Check if file exists
-    if (GetFileAttributesA(info_path) == INVALID_FILE_ATTRIBUTES)
+    if (lje_plat_fs_kind(info_path) == LJE_FS_MISSING)
     {
         return NULL;
     }
@@ -241,9 +203,9 @@ LJEScriptInfo* lje_script_parse_info(const char* info_path)
     TYPE_CHECK_PROPERTY(dependencies, TOML_ARRAY);
 
     LJEScriptInfo* info = (LJEScriptInfo*)malloc(sizeof(LJEScriptInfo));
-    info->name = _strdup(name.u.s);
-    info->version = _strdup(version.u.s);
-    info->author = _strdup(author.u.s);
+    info->name = lje_strdup(name.u.s);
+    info->version = lje_strdup(version.u.s);
+    info->author = lje_strdup(author.u.s);
 
     // Parse dependencies
     info->dependency_count = dependencies.u.arr.size;
@@ -274,7 +236,7 @@ LJEScriptInfo* lje_script_parse_info(const char* info_path)
             toml_datum_t dep_item = binary_dependencies.u.arr.elem[i];
             TYPE_CHECK_PROPERTY(dep_item, TOML_STRING);
             LJEBinaryModuleDependency* dep = info->binary_dependencies + i;
-            dep->name = _strdup(dep_item.u.s);
+            dep->name = lje_strdup(dep_item.u.s);
         }
     } else
     {
@@ -287,130 +249,120 @@ LJEScriptInfo* lje_script_parse_info(const char* info_path)
 }
 
 LJEScript* lje_script_load_all_scripts(size_t* out_script_count) {
-#ifdef _WIN64
-    char search_path[MAX_PATH] = { 0 };
-    lje_script_resolve_base(search_path, MAX_PATH);
-    strncat_s(search_path, MAX_PATH, "\\*", _TRUNCATE);
+    char base_path[LJE_PATH_MAX];
+    lje_script_resolve_base(base_path, sizeof(base_path));
 
-    WIN32_FIND_DATAA find_data;
-    HANDLE hFind = FindFirstFileA(search_path, &find_data);
-
-    if (hFind == INVALID_HANDLE_VALUE) {
-        LJE_INFO("No scripts found in %s", search_path);
+    LJEPlatDir* d = lje_plat_dir_open(base_path, NULL);
+    if (!d) {
+        LJE_INFO("No scripts found in %s", base_path);
         *out_script_count = 0;
-        return NULL; // No scripts found
+        return NULL;
     }
 
     LJEScript* scripts = NULL;
     size_t script_count = 0;
 
-    do
+    LJEPlatDirEntry entry;
+    while (lje_plat_dir_next(d, &entry))
     {
-        if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+        if (!entry.is_dir)
+            continue;
+
+        LJE_INFO("Found script folder: %s", entry.name);
+
+        char folder_path[LJE_PATH_MAX];
+        if (!lje_path_join(folder_path, sizeof(folder_path), base_path, entry.name))
+            continue;
+        /* script->folder must carry a trailing separator: lje_startup_include and
+         * user Lua code concatenate relative paths onto it directly. lje_path_join
+         * below will not double the separator. */
+        lje_strlcat(folder_path, LJE_PATH_SEP_STR, sizeof(folder_path));
+
+        char main_lua_path[LJE_PATH_MAX];
+        if (!lje_path_join(main_lua_path, sizeof(main_lua_path), folder_path, LJE_SCRIPT_MAIN))
+            continue;
+
+        char info_path[LJE_PATH_MAX];
+        if (!lje_path_join(info_path, sizeof(info_path), folder_path, "info.toml"))
+            continue;
+
+        if (lje_plat_fs_kind(main_lua_path) != LJE_FS_FILE)
+            continue;
+
+        // Found a valid script
+        LJEScriptInfo* info = lje_script_parse_info(info_path);
+        if (!info)
         {
-            // Skip '.' and '..' directories
-            if (strcmp(find_data.cFileName, ".") == 0 || strcmp(find_data.cFileName, "..") == 0)
-                continue;
+            LJE_WARN("Script '%s' is missing a valid info.toml file. Skipping.", entry.name);
+            continue;
+        }
 
-            LJE_INFO("Found script folder: %s", find_data.cFileName);
-            // Check if main.lua exists in this directory
-            char main_lua_path[MAX_PATH] = { 0 };
-            lje_script_resolve_base(main_lua_path, MAX_PATH);
-            strncat_s(main_lua_path, MAX_PATH, "\\", _TRUNCATE);
-            strncat_s(main_lua_path, MAX_PATH, find_data.cFileName, _TRUNCATE);
-            strncat_s(main_lua_path, MAX_PATH, "\\", _TRUNCATE);
-            char folder_path[MAX_PATH] = { 0 };
-            strcpy_s(folder_path, MAX_PATH, main_lua_path); // Save folder path
-            strncat_s(main_lua_path, MAX_PATH, LJE_SCRIPT_MAIN, _TRUNCATE);
-            char info_path[MAX_PATH] = { 0 };
-            strcpy_s(info_path, MAX_PATH, folder_path);
-            strncat_s(info_path, MAX_PATH, "info.toml", _TRUNCATE);
-
-            DWORD attribs = GetFileAttributesA(main_lua_path);
-            if (attribs != INVALID_FILE_ATTRIBUTES && !(attribs & FILE_ATTRIBUTE_DIRECTORY))
+        // Before continuing, check if it has binaries. Scripts likely wont function at all without
+        // their required binaries, so we skip them entirely if they are missing.
+        if (info->binary_dependency_count > 0)
+        {
+            int found_binaries = 0;
+            for (size_t i = 0; i < info->binary_dependency_count; i++)
             {
-                // Found a valid script
-                LJEScriptInfo* info = lje_script_parse_info(info_path);
-                if (!info)
+                const char* binary_name = info->binary_dependencies[i].name;
+                for (size_t j = 0; j < LJEG()->loaded_binary_module_count; j++)
                 {
-                    LJE_WARN("Script '%s' is missing a valid info.toml file. Skipping.", find_data.cFileName);
-                    continue;
-                }
-
-                // Before continuing, check if it has binaries. Scripts likely wont function at all without their required binaries, so we skip them entirely if they are missing.
-                if (info->binary_dependency_count > 0)
-                {
-                    int found_binaries = 0;
-                    for (size_t i = 0; i < info->binary_dependency_count; i++)
+                    if (strcmp(LJEG()->loaded_binary_modules[j].name, binary_name) == 0)
                     {
-                        const char* binary_name = info->binary_dependencies[i].name;
-                        for (size_t j = 0; j < LJEG()->loaded_binary_module_count; j++)
-                        {
-                            if (strcmp(LJEG()->loaded_binary_modules[j].name, binary_name) == 0)
-                            {
-                                found_binaries++;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (found_binaries != info->binary_dependency_count)
-                    {
-                        LJE_WARN("Script '%s' is missing required binary dependencies. Skipping.", find_data.cFileName);
-                        continue;
+                        found_binaries++;
+                        break;
                     }
                 }
+            }
 
-                scripts = (LJEScript*)realloc(scripts, sizeof(LJEScript) * (script_count + 1));
-                scripts[script_count].folder = _strdup(folder_path);
-                scripts[script_count].main_path = _strdup(main_lua_path);
-                scripts[script_count].name = _strdup(find_data.cFileName);
-                scripts[script_count].info = info;
-
-                LJEScriptExtraInfo* extra = (LJEScriptExtraInfo*)malloc(sizeof(LJEScriptExtraInfo));
-                extra->cleanup_ref_id = LUA_NOREF;
-                extra->engine_call_hook_count = 0;
-                memset(extra->engine_call_hooks, 0, sizeof(LJEEngineCallHook) * LJE_SCRIPT_MAX_ENGINE_CALL_HOOKS);
-                scripts[script_count].extra = extra;
-
-                // Check for preinit.lua
-                char preinit_lua_path[MAX_PATH] = { 0 };
-                strcpy_s(preinit_lua_path, MAX_PATH, folder_path);
-                strncat_s(preinit_lua_path, MAX_PATH, LJE_SCRIPT_PREINIT, _TRUNCATE);
-                attribs = GetFileAttributesA(preinit_lua_path);
-                if (attribs != INVALID_FILE_ATTRIBUTES && !(attribs & FILE_ATTRIBUTE_DIRECTORY))
-                {
-                    scripts[script_count].preinit_path = _strdup(preinit_lua_path);
-                }
-                else
-                {
-                    scripts[script_count].preinit_path = NULL;
-                }
-
-                // Check for boot.lua
-                char boot_lua_path[MAX_PATH] = { 0 };
-              strcpy_s(boot_lua_path, MAX_PATH, folder_path);
-              strncat_s(boot_lua_path, MAX_PATH, LJE_SCRIPT_BOOT, _TRUNCATE);
-              attribs = GetFileAttributesA(boot_lua_path);
-              if (attribs != INVALID_FILE_ATTRIBUTES && !(attribs & FILE_ATTRIBUTE_DIRECTORY))
-              {
-                scripts[script_count].boot_path = _strdup(boot_lua_path);
-              } else
-              {
-                scripts[script_count].boot_path = NULL;
-              }
-
-                script_count++;
+            if (found_binaries != info->binary_dependency_count)
+            {
+                LJE_WARN("Script '%s' is missing required binary dependencies. Skipping.", entry.name);
+                continue;
             }
         }
-    } while (FindNextFileA(hFind, &find_data) != 0);
-    FindClose(hFind);
+
+        scripts = (LJEScript*)realloc(scripts, sizeof(LJEScript) * (script_count + 1));
+        scripts[script_count].folder = lje_strdup(folder_path);
+        scripts[script_count].main_path = lje_strdup(main_lua_path);
+        scripts[script_count].name = lje_strdup(entry.name);
+        scripts[script_count].info = info;
+
+        LJEScriptExtraInfo* extra = (LJEScriptExtraInfo*)malloc(sizeof(LJEScriptExtraInfo));
+        extra->cleanup_ref_id = LUA_NOREF;
+        extra->engine_call_hook_count = 0;
+        memset(extra->engine_call_hooks, 0, sizeof(LJEEngineCallHook) * LJE_SCRIPT_MAX_ENGINE_CALL_HOOKS);
+        scripts[script_count].extra = extra;
+
+        // Check for preinit.lua
+        char preinit_lua_path[LJE_PATH_MAX];
+        if (lje_path_join(preinit_lua_path, sizeof(preinit_lua_path), folder_path, LJE_SCRIPT_PREINIT) &&
+            lje_plat_fs_kind(preinit_lua_path) == LJE_FS_FILE)
+        {
+            scripts[script_count].preinit_path = lje_strdup(preinit_lua_path);
+        }
+        else
+        {
+            scripts[script_count].preinit_path = NULL;
+        }
+
+        // Check for boot.lua
+        char boot_lua_path[LJE_PATH_MAX];
+        if (lje_path_join(boot_lua_path, sizeof(boot_lua_path), folder_path, LJE_SCRIPT_BOOT) &&
+            lje_plat_fs_kind(boot_lua_path) == LJE_FS_FILE)
+        {
+            scripts[script_count].boot_path = lje_strdup(boot_lua_path);
+        } else
+        {
+            scripts[script_count].boot_path = NULL;
+        }
+
+        script_count++;
+    }
+    lje_plat_dir_close(d);
 
     *out_script_count = script_count;
     return scripts;
-#else
-#error "lje_script_load_all_scripts not implemented for this platform"
-#endif
 }
 
 static char is_script_in_load_order(LJEScript** load_order, size_t load_order_count, LJEScript* script)
@@ -515,68 +467,79 @@ char** lje_script_find(LJEScript* script, const char* relative_path, size_t* out
         return NULL;
     }
 
-    // Simple search for files in the script's folder matching the given relative path
-    // Supports wildcards (* and ?)
-    // Returns relative paths from the script's folder
-#ifdef _WIN64
-    char search_path[MAX_PATH] = { 0 };
-    strcpy_s(search_path, MAX_PATH, script->folder);
-    strncat_s(search_path, MAX_PATH, "\\", _TRUNCATE);
-    strncat_s(search_path, MAX_PATH, relative_path, _TRUNCATE);
+    // Split relative_path into directory part and glob part.
+    // e.g. "modules/*"  → dir="modules", glob="*"
+    //      "*.lua"      → dir="",       glob="*.lua"
+    const char* last_sep = NULL;
+    for (const char* p = relative_path; *p; p++) {
+        if (*p == '/' || *p == '\\')
+            last_sep = p;
+    }
 
-    WIN32_FIND_DATAA find_data;
-    HANDLE hFind = FindFirstFileA(search_path, &find_data);
+    char dir_part[LJE_PATH_MAX];
+    char glob_part[LJE_NAME_MAX];
+    if (last_sep) {
+        size_t dir_len = (size_t)(last_sep - relative_path);
+        memcpy(dir_part, relative_path, dir_len);
+        dir_part[dir_len] = '\0';
+        lje_strlcpy(glob_part, last_sep + 1, sizeof(glob_part));
+    } else {
+        dir_part[0] = '\0';
+        lje_strlcpy(glob_part, relative_path, sizeof(glob_part));
+    }
 
-    if (hFind == INVALID_HANDLE_VALUE) {
+    // Build the search directory = script->folder + dir_part
+    char search_dir[LJE_PATH_MAX];
+    if (dir_part[0]) {
+        if (!lje_path_join(search_dir, sizeof(search_dir), script->folder, dir_part)) {
+            *out_path_count = 0;
+            return NULL;
+        }
+    } else {
+        lje_strlcpy(search_dir, script->folder, sizeof(search_dir));
+    }
+
+    LJEPlatDir* d = lje_plat_dir_open(search_dir, glob_part);
+    if (!d) {
         *out_path_count = 0;
-        return NULL; // No files found
+        return NULL;
     }
 
     char** found_paths = NULL;
     size_t found_count = 0;
 
-    do
+    LJEPlatDirEntry entry;
+    while (lje_plat_dir_next(d, &entry))
     {
-        if (!(find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-        {
-            // Found a matching file, add to results (and make it relative to script folder)
-            found_paths = (char**)realloc(found_paths, sizeof(char*) * (found_count + 1));
-            char* full_path = (char*)malloc(MAX_PATH);
-            full_path[0] = '\0';
+        if (entry.is_dir)
+            continue;
 
-            // Get directory portion of relative_path (everything before the last slash)
-            const char* last_slash = strrchr(relative_path, '\\');
-            const char* last_fslash = strrchr(relative_path, '/');
-            if (last_fslash > last_slash) last_slash = last_fslash;
+        // Build relative path: dir_part + entry.name
+        char* full_path = (char*)malloc(LJE_PATH_MAX);
+        if (!full_path) continue;
+        full_path[0] = '\0';
 
-            if (last_slash)
-            {
-                // Copy the directory part (e.g., "modules/" from "modules/*")
-                size_t dir_len = last_slash - relative_path + 1;
-                strncpy_s(full_path, MAX_PATH, relative_path, dir_len);
-                full_path[dir_len] = '\0';
-            }
-
-            strncat_s(full_path, MAX_PATH, find_data.cFileName, _TRUNCATE);
-            found_paths[found_count++] = full_path;
+        if (dir_part[0]) {
+            lje_strlcpy(full_path, dir_part, LJE_PATH_MAX);
+            lje_strlcat(full_path, "/", LJE_PATH_MAX);
         }
-    } while (FindNextFileA(hFind, &find_data) != 0);
-    FindClose(hFind);
+        lje_strlcat(full_path, entry.name, LJE_PATH_MAX);
+
+        found_paths = (char**)realloc(found_paths, sizeof(char*) * (found_count + 1));
+        found_paths[found_count++] = full_path;
+    }
+    lje_plat_dir_close(d);
 
     *out_path_count = found_count;
     return found_paths;
-#else
-#error "lje_script_find not implemented for this platform"
-#endif
 }
 
 char* lje_script_read(LJEScript* script, const char* relative_path, size_t* out_size)
 {
   // Literally just read from the script folder
-  char path[MAX_PATH] = { 0 };
-  strcpy_s(path, MAX_PATH, script->folder);
-  strncat_s(path, MAX_PATH, "\\", _TRUNCATE);
-  strncat_s(path, MAX_PATH, relative_path, _TRUNCATE);
+  char path[LJE_PATH_MAX];
+  if (!lje_path_join(path, sizeof(path), script->folder, relative_path))
+    return NULL;
 
   FILE* file = NULL;
   file = fopen(path, "rb");
@@ -599,5 +562,5 @@ char* lje_script_read(LJEScript* script, const char* relative_path, size_t* out_
 void lje_script_get_path(LJEScript* script, char* out_buffer, size_t buffer_size)
 {
     // Simply return the main.lua path for now, we can expand this later if needed
-    strncpy_s(out_buffer, buffer_size, script->main_path, _TRUNCATE);
+    lje_strlcpy(out_buffer, script->main_path, buffer_size);
 }

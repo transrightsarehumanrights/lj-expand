@@ -1,7 +1,11 @@
 #pragma once
 
 #include <stddef.h>
-#define LJE_ROOT_DIR "%USERPROFILE%\\.lje\\"
+
+/* Subfolder name under the user home directory. Resolved at runtime
+ * via lje_plat_home_dir() + lje_path_join(). */
+#define LJE_ROOT_DIR ".lje"
+
 typedef enum
 {
 #define DIRDEF(name, _, __) name,

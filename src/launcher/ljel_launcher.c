@@ -1,28 +1,22 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "ljel_log.h"
 #include "ljel_process.h"
-#ifdef _WIN64
-#include <windows.h>
-#endif
 
 #define GMOD_PATH_ENV_NAME "GMOD_PATH"
 #define LJE_DLL "lje-w64.dll"
 
 char* resolve_lje_path()
 {
-    // We need to get an absolute path to the lje DLL from *our cwd
-#ifdef _WIN64
-    char fullLjePath[MAX_PATH];
-    if (GetFullPathNameA(LJE_DLL, MAX_PATH, fullLjePath, NULL) == 0)
+    char fullLjePath[260];
+    if (!ljel_full_path(LJE_DLL, fullLjePath, sizeof(fullLjePath)))
     {
         return NULL;
     }
 
     return _strdup(fullLjePath);
-#else
-#error "Unsupported platform"
-#endif
 }
 
 char* resolve_gmod_path()
@@ -50,11 +44,9 @@ int main(int argc, char* argv[])
     {
         ljel_log("GMOD_PATH is not set. Please set this environment variable to the GMod executable path in bin/win64.");
 
-        MessageBoxA(
-          NULL,
-          "GMOD_PATH is not set.\nPlease set this environment variable to the GMod executable path in bin/win64.",
+        ljel_alert(
           "Error",
-          MB_OK | MB_ICONERROR
+          "GMOD_PATH is not set.\nPlease set this environment variable to the GMod executable path in bin/win64."
         );
 
         return 1;
