@@ -15,6 +15,7 @@
 #define LJE_PLATFORM_WINDOWS 1
 #else
 #define LJE_PLATFORM_WINDOWS 0
+#include <strings.h>   /* strcasecmp, behind lje_stricmp below */
 #endif
 
 #define LJE_PATH_MAX 1024

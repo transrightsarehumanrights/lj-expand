@@ -146,6 +146,15 @@ endforeach()
 # LJE itself! Note all vendor libraries must be compiled into the shared library, since we can't ship them as separate DLLs.
 file(GLOB LJ_CORE_SRC CONFIGURE_DEPENDS ${LJ_SRC}/lj_*.c ${LJ_SRC}/lib_*.c)
 
+# The platform backends are mutually exclusive. They also self-guard on
+# LJE_PLATFORM_WINDOWS, so this is belt-and-braces, but it keeps the wrong one
+# out of the compile database and off the IDE's radar.
+if(WIN32)
+  list(REMOVE_ITEM LJ_CORE_SRC ${LJ_SRC}/lj_expand_platform_posix.c)
+else()
+  list(REMOVE_ITEM LJ_CORE_SRC ${LJ_SRC}/lj_expand_platform_windows.c)
+endif()
+
 set(LJ_VENDOR_SRC ${LJ_SRC}/libs/tomlc17/src/tomlc17.c)
 if(WIN32)
   list(APPEND LJ_VENDOR_SRC
