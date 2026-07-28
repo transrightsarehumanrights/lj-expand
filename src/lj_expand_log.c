@@ -3,10 +3,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
 typedef struct {
   const char* tag;
   LJELogColor color;
@@ -43,26 +39,9 @@ static void lje_log_autodetect_colors(void)
   if (lje_log_colors != -1)
     return; /* already decided, or explicitly overridden */
 
-#ifdef _WIN32
-  {
-    HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
-    DWORD mode = 0;
-    if (out == INVALID_HANDLE_VALUE || out == NULL || !GetConsoleMode(out, &mode)) {
-      lje_log_colors = 0;
-      return;
-    }
-    if (!(mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING)) {
-      if (!SetConsoleMode(out, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING)) {
-        /* Console too old to understand ANSI escapes. */
-        lje_log_colors = 0;
-        return;
-      }
-    }
-    lje_log_colors = 1;
-  }
-#else
+  /* Console setup (lje_plat_console_init) already enabled VT processing
+   * on Windows; on POSIX terminals ANSI is the standard. */
   lje_log_colors = 1;
-#endif
 }
 
 static void lje_log_emit(LJELogLevel level, const char* fmt, va_list args)

@@ -1,0 +1,39 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "windows-x64",
+      "displayName": "Windows x64 (Ninja, MSVC, Release)",
+      "description": "Builds lje-w64.dll, luajit.exe and lje-launcher.exe. Requires cl on PATH: run from a Visual Studio Developer prompt, or let CLion/VS supply the environment.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/windows-x64",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "cl",
+        "LJE_BUILD_LUAJIT": "ON",
+        "LJE_BUILD_LAUNCHER": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-x64",
+      "displayName": "Windows x64",
+      "configurePreset": "windows-x64"
+    }
+  ]
+}

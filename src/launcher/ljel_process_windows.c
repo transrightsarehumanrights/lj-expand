@@ -206,3 +206,14 @@ void launch_and_inject(const char* gmod_path, const char* lje_path, int argc, ch
 
     return;
 }
+
+int ljel_full_path(const char* relative, char* out, size_t n)
+{
+  DWORD ret = GetFullPathNameA(relative, (DWORD)n, out, NULL);
+  return (ret > 0 && ret < (DWORD)n) ? 1 : 0;
+}
+
+void ljel_alert(const char* title, const char* text)
+{
+  MessageBoxA(NULL, text, title, MB_OK | MB_ICONERROR);
+}

@@ -51,7 +51,6 @@ typedef struct LJEGlobalState
 LJEGlobalState* lje_get_global_state();
 
 void lje_clear_global_refs();
-char* lje_concat_path(const char* relative_path);
 
 int lje_is_addr_in_lje(uintptr_t addr);
 void lje_print_stack(lua_State* L);

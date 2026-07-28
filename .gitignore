@@ -10,6 +10,7 @@
 *.swp
 .tags
 cmake-build-debug
+build
 .idea
 src/*.pdb
 src/generated/*.h

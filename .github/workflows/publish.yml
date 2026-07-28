@@ -7,6 +7,9 @@ on:
 permissions:
   contents: write
 
+env:
+  LJE_BUILD_DIR: build/windows-x64
+
 jobs:
   build:
     runs-on: windows-latest
@@ -24,27 +27,34 @@ jobs:
           $branch = "${{ github.ref_name }}" -replace '[/\\]', '-'
           echo "branch=$branch" >> $env:GITHUB_OUTPUT
 
+      # vswhere so we can find VS without hardcoding it.
       - name: Build
         shell: cmd
         run: |
-          cd src
-          call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          ./msvcbuild.bat gc64
+          for /f "usebackq tokens=*" %%i in (`"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSPATH=%%i"
+          if not defined VSPATH (echo Could not locate a Visual Studio install with the C++ toolset && exit /b 1)
+          call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat"
+          if errorlevel 1 exit /b 1
+          where ninja >nul 2>&1 || (echo Ninja is not on PATH && exit /b 1)
+          cmake --preset windows-x64
+          if errorlevel 1 exit /b 1
+          cmake --build --preset windows-x64
+          if errorlevel 1 exit /b 1
 
       - name: Download rcedit
         run: curl -L -o rcedit.exe https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe
 
       - name: Stamp DLL version
         run: |
-          ./rcedit.exe src/lje-w64.dll --set-version-string "ProductVersion" "${{ steps.version.outputs.short }}" --set-version-string "FileDescription" "LJE Core" --set-version-string "ProductName" "LJE" --set-version-string "Branch" "${{ steps.version.outputs.branch }}"
+          ./rcedit.exe ${{ env.LJE_BUILD_DIR }}/lje-w64.dll --set-version-string "ProductVersion" "${{ steps.version.outputs.short }}" --set-version-string "FileDescription" "LJE Core" --set-version-string "ProductName" "LJE" --set-version-string "Branch" "${{ steps.version.outputs.branch }}"
 
       - name: Publish Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: lje-${{ steps.version.outputs.branch }}-${{ github.sha }}
           path: |
-            src/lje-w64.dll
-            src/lje-launcher.exe
+            ${{ env.LJE_BUILD_DIR }}/lje-w64.dll
+            ${{ env.LJE_BUILD_DIR }}/lje-launcher.exe
 
       - name: Release
         uses: softprops/action-gh-release@v2
@@ -52,6 +62,6 @@ jobs:
           tag_name: ${{ steps.version.outputs.branch }}-latest
           prerelease: ${{ github.ref_name != 'expansion' }}
           name: "Latest ${{ steps.version.outputs.branch }} (${{ steps.version.outputs.short }})"
-          files: src/lje-w64.dll
+          files: ${{ env.LJE_BUILD_DIR }}/lje-w64.dll
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

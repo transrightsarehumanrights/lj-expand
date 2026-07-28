@@ -2,13 +2,9 @@
 #define _LJ_EXPAND_MODULE_H
 
 #include "lj_obj.h"
+#include "lj_expand_platform.h"
 
-typedef struct
-{
-    uintptr_t base;
-    size_t size;
-    void* handle;
-} lje_Module;
+typedef LJEPlatModule lje_Module;
 
 LJ_FUNC lje_Module* lje_module_find(const char* name);
 LJ_FUNC void lje_module_free(lje_Module* module);

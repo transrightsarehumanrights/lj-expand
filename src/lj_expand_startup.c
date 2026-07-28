@@ -5,6 +5,7 @@
 #include "lj_expand_lib.h"
 #include "lj_expand_log.h"
 #include "lj_expand_module.h"
+#include "lj_expand_platform.h"
 #include "lj_expand_settings.h"
 #include "stdio.h"
 
@@ -72,8 +73,8 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
     char* script_file = load_lua_file(path);
 
     char chunkname[LUA_IDSIZE] = { 0 };
-    strncat_s(chunkname, LUA_IDSIZE, "@lje_script:", _TRUNCATE);
-    strncat_s(chunkname, LUA_IDSIZE, script->info->name, _TRUNCATE);
+    lje_strlcat(chunkname, "@lje_script:", LUA_IDSIZE);
+    lje_strlcat(chunkname, script->info->name, LUA_IDSIZE);
     chunkname[LUA_IDSIZE - 1] = '\0';
 
     if (script_file)
@@ -119,12 +120,12 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
 
     // compute relative to current script
     char full_path[512] = { 0 };
-    strncat_s(full_path, 512, LJEG()->current_script->folder, _TRUNCATE);
-    strncat_s(full_path, 512, relative_path, _TRUNCATE);
+    lje_strlcat(full_path, LJEG()->current_script->folder, 512);
+    lje_strlcat(full_path, relative_path, 512);
 
     char chunkname[LUA_IDSIZE] = { 0 };
-    strncat_s(chunkname, LUA_IDSIZE, "@lje_include:", _TRUNCATE);
-    strncat_s(chunkname, LUA_IDSIZE, relative_path, _TRUNCATE);
+    lje_strlcat(chunkname, "@lje_include:", LUA_IDSIZE);
+    lje_strlcat(chunkname, relative_path, LUA_IDSIZE);
 
     char* buffer = load_lua_file(full_path);
     LJEG()->flag_lje_protos = 1;
@@ -280,9 +281,9 @@ LJ_FUNC void lje_startup_reload(lua_State* L, LJEScript* script)
     LJE_INFO("Reloading script '%s'...", script->name);
     // run `lje.includeCache[script] = {}`
     char cacheInvalidationSource[512] = { 0 };
-    strncat_s(cacheInvalidationSource, 512, "lje.includeCache[\"", _TRUNCATE);
-    strncat_s(cacheInvalidationSource, 512, script->info->name, _TRUNCATE);
-    strncat_s(cacheInvalidationSource, 512, "\"] = {}", _TRUNCATE);
+    lje_strlcat(cacheInvalidationSource, "lje.includeCache[\"", 512);
+    lje_strlcat(cacheInvalidationSource, script->info->name, 512);
+    lje_strlcat(cacheInvalidationSource, "\"] = {}", 512);
 
     if (lje_startup_run(L, cacheInvalidationSource) != LUA_OK)
     {

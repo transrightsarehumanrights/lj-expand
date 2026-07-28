@@ -1,8 +1,7 @@
 #include "lj_expand_binary_module.h"
-#include <windows.h> /* Let's be honest, Linux support is not coming anytime soon */
-#include <wincrypt.h>
 
 #include <stdio.h>
+
 #define LJE_NO_OPAQUE_STATE
 #include "lauxlib.h"
 #include "lje_sdk.h"
@@ -10,24 +9,23 @@
 #include "lj_expand_frame.h"
 #include "lj_expand_globals.h"
 #include "lj_expand_log.h"
+#include "lj_expand_platform.h"
 #include "lua.h"
 
 #define VIRUS_TOTAL_FILE_URL "https://www.virustotal.com/gui/file/%s"
 static LjeApi* create_module_api();
 static LjeApi* g_cached_module_api = NULL;
 
-static char* hash_module(const char* full_path);
-
 static LJEBinaryModule* load_module(const char* full_path, const char* name)
 {
-  char* module_hash = hash_module(full_path);
-  if (!module_hash)
+  char module_hash[65];
+  if (!lje_plat_sha256_file(full_path, module_hash))
   {
     LJE_ERROR("Failed to hash binary module: %s", full_path);
     return NULL;
   }
 
-  HMODULE handle = LoadLibraryA(full_path);
+  void* handle = lje_plat_module_load(full_path);
   if (!handle)
   {
     LJE_ERROR("Failed to load binary module: %s", full_path);
@@ -36,15 +34,19 @@ static LJEBinaryModule* load_module(const char* full_path, const char* name)
 
   LJEBinaryModule* module = (LJEBinaryModule*)malloc(sizeof(LJEBinaryModule));
   module->handle = handle;
-  module->path = _strdup(full_path);
-  module->name = _strdup(name);
-  module->hash = module_hash;
-  /* Remove .dll */
-  module->name[strlen(module->name) - 4] = '\0';
+  module->path = lje_strdup(full_path);
+  module->name = lje_strdup(name);
+  module->hash = lje_strdup(module_hash);
+
+  /* Remove module extension */
+  size_t name_len = strlen(module->name);
+  size_t ext_len = strlen(LJE_MODULE_EXT);
+  if (name_len > ext_len)
+    module->name[name_len - ext_len] = '\0';
 
   /* Call init if it exists */
   LjeModuleInitFunc init_func =
-    (LjeModuleInitFunc)GetProcAddress(
+    (LjeModuleInitFunc)lje_plat_module_sym_raw(
       handle,
       "lje_module_init"
     );
@@ -61,7 +63,7 @@ static LJEBinaryModule* load_module(const char* full_path, const char* name)
         LJE_ERROR("Incompatible module version! Expected %d", LJE_SDK_VERSION);
       }
 
-      FreeLibrary(handle);
+      lje_plat_module_unload(handle);
       free((void*)module->path);
       free(module);
       return NULL;
@@ -169,94 +171,37 @@ static LjeApi* create_module_api()
   return api;
 }
 
-static char* hash_module(const char* full_path)
-{
-  HCRYPTPROV prov = 0;
-  HCRYPTHASH hash = 0;
-  HANDLE file = INVALID_HANDLE_VALUE;
-  BYTE buffer[4096];
-  DWORD bytes_read;
-  DWORD hash_len = 32;
-  BYTE hash_out[32];
-
-  file = CreateFileA(full_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
-  if (file == INVALID_HANDLE_VALUE)
-    goto cleanup;
-
-  if (!CryptAcquireContextW(&prov, NULL, NULL, PROV_RSA_AES, CRYPT_VERIFYCONTEXT))
-    goto cleanup;
-
-  if (!CryptCreateHash(prov, CALG_SHA_256, 0, 0, &hash))
-    goto cleanup;
-
-  while (ReadFile(file, buffer, sizeof(buffer), &bytes_read, NULL) && bytes_read > 0)
-  {
-    if (!CryptHashData(hash, buffer, bytes_read, 0))
-      goto cleanup;
-  }
-
-  if (CryptGetHashParam(hash, HP_HASHVAL, hash_out, &hash_len, 0))
-  {
-    char* hash_str = (char*)malloc(hash_len * 2 + 1);
-    for (DWORD i = 0; i < hash_len; i++)
-    {
-      sprintf_s(&hash_str[i * 2], 3, "%02x", hash_out[i]);
-    }
-    hash_str[hash_len * 2] = '\0';
-    return hash_str;
-  }
-
-cleanup:
-  if (hash) CryptDestroyHash(hash);
-  if (prov) CryptReleaseContext(prov, 0);
-  if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
-  return NULL;
-}
-
 static int has_user_been_warned()
 {
   /* Check if the warning flag file is there */
-  char warning_flag_path[MAX_PATH] = {0};
-  char base[MAX_PATH] = {0};
-  if (!lje_directory_get(LJE_DIR_BINARIES, base, MAX_PATH))
+  char warning_flag_path[LJE_PATH_MAX];
+  char base[LJE_PATH_MAX];
+  if (!lje_directory_get(LJE_DIR_BINARIES, base, sizeof(base)))
   {
     return 0; /* Failed to resolve, assume not warned to be safe */
   }
 
-  strncpy_s(warning_flag_path, MAX_PATH, base, _TRUNCATE);
-  strncat_s(warning_flag_path, MAX_PATH, "\\" LJE_WARNED_FLAG, _TRUNCATE);
+  if (!lje_path_join(warning_flag_path, sizeof(warning_flag_path), base, LJE_WARNED_FLAG))
+    return 0;
 
-  DWORD attrs = GetFileAttributesA(warning_flag_path);
-  return (attrs != INVALID_FILE_ATTRIBUTES);
+  return lje_plat_fs_kind(warning_flag_path) != LJE_FS_MISSING;
 }
 
 static void write_warning()
 {
   /* Create the warning flag file */
-  char warning_flag_path[MAX_PATH] = {0};
-  char base[MAX_PATH] = {0};
-  if (!lje_directory_get(LJE_DIR_BINARIES, base, MAX_PATH))
+  char warning_flag_path[LJE_PATH_MAX];
+  char base[LJE_PATH_MAX];
+  if (!lje_directory_get(LJE_DIR_BINARIES, base, sizeof(base)))
   {
     return; /* Failed to resolve, can't write warning but at least we tried */
   }
 
-  strncpy_s(warning_flag_path, MAX_PATH, base, _TRUNCATE);
-  strncat_s(warning_flag_path, MAX_PATH, "\\" LJE_WARNED_FLAG, _TRUNCATE);
+  if (!lje_path_join(warning_flag_path, sizeof(warning_flag_path), base, LJE_WARNED_FLAG))
+    return;
 
-  HANDLE file = CreateFileA(
-    warning_flag_path,
-    GENERIC_WRITE,
-    0,
-    NULL,
-    CREATE_ALWAYS,
-    FILE_ATTRIBUTE_NORMAL,
-    NULL
-  );
-
-  if (file != INVALID_HANDLE_VALUE)
-  {
-    CloseHandle(file);
-  }
+  FILE* f = fopen(warning_flag_path, "w");
+  if (f) fclose(f);
 }
 
 static void resolve_base(char* path, size_t path_size)
@@ -269,14 +214,13 @@ static void resolve_base(char* path, size_t path_size)
 
 void lje_binary_module_ensure_folder_exists()
 {
-  char base_path[MAX_PATH] = {0};
-  resolve_base(base_path, MAX_PATH);
+  char base_path[LJE_PATH_MAX];
+  resolve_base(base_path, sizeof(base_path));
 
-  DWORD attrs = GetFileAttributesA(base_path);
-  if (attrs == INVALID_FILE_ATTRIBUTES || !(attrs & FILE_ATTRIBUTE_DIRECTORY))
+  if (lje_plat_fs_kind(base_path) != LJE_FS_DIR)
   {
     LJE_INFO("Binary module folder not found, creating it now...");
-    if (!CreateDirectoryA(base_path, NULL))
+    if (!lje_plat_mkdir(base_path))
     {
       LJE_ERROR("Failed to create binary module folder at %s", base_path);
     }
@@ -306,22 +250,19 @@ void lje_binary_module_load_all(
     write_warning();
 
     lje_log_raw("\a"); /* Beep to get attention */
-    Sleep(5000); /* Give user time to read the warning */
+    lje_plat_sleep_ms(5000); /* Give user time to read the warning */
   }
 
-  char base_path[MAX_PATH] = {0};
-  resolve_base(base_path, MAX_PATH);
+  char base_path[LJE_PATH_MAX];
+  resolve_base(base_path, sizeof(base_path));
 
   // Add a base directory in case the binary module has additional dependencies. We want them to
   // be able to load them from the same folder as the main module, so we don't add anything to GMod's
   // directory which is detectable.
-  SetDllDirectoryA(base_path);
-  WIN32_FIND_DATAA find_data;
-  char search_path[MAX_PATH];
-  snprintf(search_path, MAX_PATH, "%s\\lje-*.dll", base_path);
+  lje_plat_module_search_dir(base_path);
 
-  HANDLE find_handle = FindFirstFileA(search_path, &find_data);
-  if (find_handle == INVALID_HANDLE_VALUE)
+  LJEPlatDir* d = lje_plat_dir_open(base_path, LJE_BINMODULE_GLOB);
+  if (!d)
   {
     *out_module_count = 0;
     *out_modules = NULL;
@@ -332,7 +273,8 @@ void lje_binary_module_load_all(
   size_t count = 0;
   LJEBinaryModule* modules = (LJEBinaryModule*)malloc(sizeof(LJEBinaryModule) * capacity);
 
-  do
+  LJEPlatDirEntry entry;
+  while (lje_plat_dir_next(d, &entry))
   {
     if (count >= capacity)
     {
@@ -340,21 +282,21 @@ void lje_binary_module_load_all(
       modules = (LJEBinaryModule*)realloc(modules, sizeof(LJEBinaryModule) * capacity);
     }
 
-    char full_path[MAX_PATH];
-    snprintf(full_path, MAX_PATH, "%s\\%s", base_path, find_data.cFileName);
+    char full_path[LJE_PATH_MAX];
+    if (!lje_path_join(full_path, sizeof(full_path), base_path, entry.name))
+      continue;
 
-    LJEBinaryModule* module = load_module(full_path, find_data.cFileName);
+    LJEBinaryModule* module = load_module(full_path, entry.name);
     if (module)
     {
       modules[count++] = *module;
       free(module);
     }
   }
-  while (FindNextFileA(find_handle, &find_data));
 
-  SetDllDirectoryA(NULL); /* Reset DLL directory to avoid affecting other loads */
+  lje_plat_module_search_dir(NULL); /* Reset DLL directory to avoid affecting other loads */
 
-  FindClose(find_handle);
+  lje_plat_dir_close(d);
 
   *out_module_count = count;
   *out_modules = modules;
@@ -365,8 +307,8 @@ void lje_binary_module_unload(LJEBinaryModule* module)
   if (!module) return;
 
   LjeModuleShutdownFunc shutdown_func =
-    (LjeModuleShutdownFunc)GetProcAddress(
-      (HMODULE)module->handle,
+    (LjeModuleShutdownFunc)lje_plat_module_sym_raw(
+      module->handle,
       "lje_module_shutdown"
     );
 
@@ -375,7 +317,7 @@ void lje_binary_module_unload(LJEBinaryModule* module)
     shutdown_func();
   }
 
-  FreeLibrary((HMODULE)module->handle);
+  lje_plat_module_unload(module->handle);
   free((void*)module->path);
   free(module);
 }
@@ -385,8 +327,8 @@ void lje_binary_module_run_preinit(LJEBinaryModule* module, lua_State* L)
   if (!module || !module->handle) return;
 
   LjeModulePreinitFunc preinit_func =
-    (LjeModulePreinitFunc)GetProcAddress(
-      (HMODULE)module->handle,
+    (LjeModulePreinitFunc)lje_plat_module_sym_raw(
+      module->handle,
       "lje_module_preinit"
     );
 
