@@ -40,12 +40,6 @@ int lje_frame_is_lje_involved(lua_State* L, int frame_offset, int max_level)
         }
 
         GCfunc* fn = frame_func(frame);
-        if (isluafunc(fn))
-        {
-            LJEproto* pt = protoextend(funcproto(fn));
-            if (pt->is_from_lje)
-                return 1;
-        }
 
         // Previously, this was not a concern, but with the FFI module,
         // a LJE-created C closure can end up as the root of the call stack (ffi hooks and callbacks).
@@ -73,13 +67,6 @@ int lje_frame_is_lje(lua_State* L, int frame_offset)
     }
 
     GCfunc* fn = frame_func(frame);
-    if (isluafunc(fn))
-    {
-        LJEproto* pt = protoextend(funcproto(fn));
-        if (pt->is_from_lje)
-            return 1;
-    }
-
     if (iscfunc(fn))
     {
         if (lje_is_addr_in_lje((uintptr_t)fn->c.f))

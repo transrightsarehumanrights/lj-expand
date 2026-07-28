@@ -361,35 +361,6 @@ LUA_API int lua_gethookcount(lua_State *L)
 /* Call a hook. */
 void callhook(lua_State *L, int event, BCLine line)
 {
-  GCfunc* fn = curr_func(L);
-  if (isluafunc(fn))
-  {
-    LJEproto* ljePt = protoextend(funcproto(fn));
-    if (ljePt->is_from_lje)
-    {
-      return; // Don't let anyone hook into special functions, or anything from LJE for that matter.
-    }
-  }
-
-  // Sometimes, call debug hooks might trigger in a LJE function.
-  // It won't be seen here since for some reason they are called within the new context
-  // of the called function. So we go back up one frame.
-  cTValue* current = L->base-1;
-  cTValue* caller = frame_prev(current);
-  cTValue* bot = tvref(L->stack)+LJ_FR2;
-  if (caller && caller >= bot)
-  {
-    GCfunc* caller_fn = frame_func(caller);
-    if (isluafunc(caller_fn))
-    {
-      LJEproto* ljePt = protoextend(funcproto(caller_fn));
-      if (ljePt->is_from_lje)
-      {
-        return; // Don't let any hooks fire when called from LJE code.
-      }
-    }
-  }
-
   global_State *g = G(L);
   lua_Hook hookf = g->hookf;
   if (hookf && !hook_active(g)) {

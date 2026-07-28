@@ -44,7 +44,7 @@ typedef int (*lua_pcall_t)(lua_State* L, int nargs, int nresults, int errfunc);
 
 static int resolve_original_functions(luaL_loadbufferx_t* out_loadbufferx, lua_pcall_t* out_pcall)
 {
-    lje_Module* mod = lje_module_find("lua_shared.dll");
+    lje_Module* mod = lje_module_find(LJE_LUA_MODULE);
     if (mod)
     {
         *out_loadbufferx = (luaL_loadbufferx_t)lje_module_get_func(mod, "luaL_loadbufferx");
@@ -80,10 +80,8 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
     if (script_file)
     {
         LJE_INFO("Executing script '%s'...", script->name);
-        LJEG()->flag_lje_protos = 1;
         if (original_loadbufferx(L, script_file, strlen(script_file), chunkname, NULL) == 0)
         {
-            LJEG()->flag_lje_protos = 0;
             if (lua_pcall(L, 0, 0, 0) != 0) /* mental note: figure out why this seems to randomly not work? */
             {
                 LJE_ERROR("Error executing script: %s", lua_tostring(L, -1));
@@ -92,7 +90,6 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
         }
         else
         {
-            LJEG()->flag_lje_protos = 0;
             LJE_ERROR("Error loading script: %s", lua_tostring(L, -1));
             lua_pop(L, 1); // Pop error message
         }
@@ -128,10 +125,8 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
     lje_strlcat(chunkname, relative_path, LUA_IDSIZE);
 
     char* buffer = load_lua_file(full_path);
-    LJEG()->flag_lje_protos = 1;
     if (original_loadbufferx(L, buffer, strlen(buffer), chunkname, NULL) == 0)
     {
-        LJEG()->flag_lje_protos = 0;
         if (!execute)
         {
             // Just return the loaded function
@@ -151,7 +146,6 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
     }
     else
     {
-        LJEG()->flag_lje_protos = 0;
         LJE_ERROR("Error loading include script: %s", lua_tostring(L, -1));
         lua_pop(L, 1); // Pop error message
     }
@@ -164,10 +158,8 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
 static void run_secure_chunk(lua_State* L, luaL_loadbufferx_t original_loadbufferx,
                              lua_pcall_t original_pcall, const char* source, const char* name)
 {
-    LJEG()->flag_lje_protos = 1;
     if (original_loadbufferx(L, source, strlen(source), name, NULL) == 0)
     {
-        LJEG()->flag_lje_protos = 0;
         if (original_pcall(L, 0, 0, 0) != 0)
         {
             LJE_ERROR("Error executing %s script: %s", name, lua_tostring(L, -1));
@@ -179,7 +171,6 @@ static void run_secure_chunk(lua_State* L, luaL_loadbufferx_t original_loadbuffe
     }
     else
     {
-        LJEG()->flag_lje_protos = 0;
         LJE_ERROR("Error loading %s script: %s", name, lua_tostring(L, -1));
         lua_pop(L, 1); // Pop error message
     }
@@ -230,15 +221,12 @@ int lje_startup_compile(lua_State* L, const char* source) {
         return 0;
     }
 
-    LJEG()->flag_lje_protos = 1;
     if (original_loadbufferx(L, source, strlen(source), "@lje_dynamic_compile", NULL) == 0)
     {
-        LJEG()->flag_lje_protos = 0;
         return 1; // success, function is on top of stack
     }
     else
     {
-        LJEG()->flag_lje_protos = 0;
         LJE_ERROR("Error compiling dynamic script: %s", lua_tostring(L, -1));
         lua_pop(L, 1); // Pop error message
     }
@@ -255,9 +243,7 @@ int lje_startup_run(lua_State* L, const char* source) {
         return -1;
     }
 
-    LJEG()->flag_lje_protos = 1;
     int status = original_loadbufferx(L, source, strlen(source), "@lje_run", NULL);
-    LJEG()->flag_lje_protos = 0;
 
     if (status != 0)
     {

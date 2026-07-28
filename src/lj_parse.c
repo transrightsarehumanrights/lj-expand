@@ -1566,8 +1566,6 @@ GCproto *fs_finish(LexState *ls, BCLine line)
   ofsuv = sizept; sizept += ((fs->nuv+1)&~1)*2;
   ofsli = sizept; sizept += fs_prep_line(fs, numline);
   ofsdbg = sizept; sizept += fs_prep_var(ls, fs, &ofsvar);
-  /* LJE: Add size of extension to proto */
-  sizept += sizeof(LJEproto);
 
   /* Allocate prototype and initialize its fields. */
   pt = (GCproto *)lj_mem_newgco(L, (MSize)sizept);
@@ -1578,19 +1576,6 @@ GCproto *fs_finish(LexState *ls, BCLine line)
   pt->numparams = fs->numparams;
   pt->framesize = fs->framesize;
   setgcref(pt->chunkname, obj2gco(ls->chunkname));
-
-  /* LJE: Add extension to proto */
-  LJEproto* lje_pt = protoextend(pt);
-  lje_pt->is_from_lje = 0;
-
-  /* LJE: Account for size difference */
-  G(ls->L)->gc.total -= sizeof(LJEproto);
-
-  /* LJE: Determine if we're currently compiling LJE */
-  if (LJEG()->flag_lje_protos && LJEG()->main_state == ls->L)
-  {
-    lje_pt->is_from_lje = 1;
-  }
 
   /* Close potentially uninitialized gap between bc and kgc. */
   *(uint32_t *)((char *)pt + ofsk - sizeof(GCRef)*(fs->nkgc+1)) = 0;

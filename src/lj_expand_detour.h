@@ -10,16 +10,6 @@
         lje_detour(orig_##name, (void*)func); \
     }
 
-// Macro for easily remapping a specific LuaJIT function to our own. Requires a signature.
-#define lje_remap(mod, name) \
-    void* orig_##name = lje_module_scan(mod, lje_sig(name)); \
-    if (orig_##name) { \
-        LJE_DEBUG("Remapping " #name " from %p to %p", orig_##name, (void*)name); \
-        lje_detour(orig_##name, (void*)name); \
-    } else { \
-        LJE_ERROR("Failed to find " #name " for detouring!"); \
-    } \
-
 #define LJE_DETOUR_SIZE 12
 
 // Dead simple detours. No original function is provided.

@@ -16,7 +16,10 @@
 #include "lj_gc.h"
 #include "lj_err.h"
 #include "lj_buf.h"
+#include "lj_tab.h"
 #include "lj_func.h"
+#include "lj_expand_frame.h"
+#include "lj_expand_log.h"
 #include "lj_frame.h"
 #include "lj_vm.h"
 #include "lj_lex.h"
@@ -144,13 +147,52 @@ typedef int (*lua_loadx_t)(lua_State *L, lua_Reader reader, void *data,
 static lua_loadx_t original_luaL_loadx = NULL;
 static lua_loadx_t get_original_lua_loadx() {
     if (original_luaL_loadx == NULL) {
-        lje_Module* mod = lje_module_find("lua_shared.dll");
+        lje_Module* mod = lje_module_find(LJE_LUA_MODULE);
         if (mod) {
             original_luaL_loadx = (lua_loadx_t)lje_module_get_func(mod, "lua_loadx");
         }
     }
 
     return original_luaL_loadx;
+}
+
+static int is_init_lua(const char* chunkname)
+{
+  // We check backwards since it may come from any path, like an addon.
+  size_t len = strlen(chunkname);
+  size_t target_len = strlen("lua/includes/init.lua");
+
+  return len >= target_len && strcmp(chunkname + len - target_len, "lua/includes/init.lua") == 0;
+}
+
+/* LJE: Watch the engine's boot chunks go by so we know which phase we're in.
+ * This used to hang off lj_func_newL_empty, which needed a byte signature; the
+ * chunkname is identical here and luaL_loadbufferx is an export, so it doesn't.
+ * The frame check keeps Lua-initiated loads (loadstring et al) from spoofing it. */
+static void lje_check_boot_chunk(lua_State* L, const char* name)
+{
+  if (!name || lje_frame_is_lua_involved(L, 0))
+    return;
+
+  if (is_init_lua(name))
+  {
+    GCtab* globalEnv = tabref(L->env);
+    cTValue* clientBool = lj_tab_getstr_lit(globalEnv, "CLIENT"); // Doesn't create any GC size
+    if (clientBool && tvistrue(clientBool))
+    {
+      printf("[LJE] Pre-initializing Lua...\n");
+      LJEG()->waiting_for_init_call = 1;
+    }
+  }
+  else if (strcmp(name, "@Startup") == 0)
+  {
+    LJEG()->waiting_for_startup_call = 1;
+  }
+  else if (strcmp(name, "@lua/includes/init_menu.lua") == 0)
+  {
+    LJE_WARN("Detected menu state at %p", L);
+    LJEG()->waiting_for_menu_call = 1;
+  }
 }
 
 LUALIB_API int luaL_loadbufferx(lua_State *L, const char *buf, size_t size,
@@ -196,7 +238,11 @@ LUALIB_API int luaL_loadbufferx(lua_State *L, const char *buf, size_t size,
     }
   }
 
-  return original_loadx(L, reader_string, &ctx, name, mode);
+  int status = original_loadx(L, reader_string, &ctx, name, mode);
+  if (status == LUA_OK)
+    lje_check_boot_chunk(L, name);
+
+  return status;
 }
 
 LUALIB_API int luaL_loadbuffer(lua_State *L, const char *buf, size_t size,

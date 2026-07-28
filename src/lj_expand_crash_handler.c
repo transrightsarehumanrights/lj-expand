@@ -121,8 +121,6 @@ static void lje_write_state_dump(const LJEPlatCrashInfo* info, const char* dump_
         {
             const char* chunkname = proto_chunknamestr(funcproto(fn));
             fprintf(f, "  [%d] Lua function: %s\n", level, chunkname);
-            if (isljefunc(fn))
-                fprintf(f, "    (This function is from a LJE script)\n");
         } else if (iscfunc(fn))
         {
             fprintf(f, "  [%d] C function: %p\n", level, (void*)fn);

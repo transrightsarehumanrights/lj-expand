@@ -24,7 +24,6 @@
 #include "lj_expand_log.h"
 #include "lj_expand_module.h"
 #include "lj_expand_detour.h"
-#include "lj_expand_signatures.h"
 #include "lj_expand_platform.h"
 #include "lj_frame.h"
 #include "lj_trace.h"
@@ -1899,11 +1898,6 @@ static void lje_bootstrap(void* self_handle)
       {
         LJE_ERROR("Failed to migrate legacy directories! If you had scripts or binary modules in the old folders, please move them to the new ones manually.");
       }
-
-      // Remap all the necessary functions to our own.
-#define SIGDEF(name, _) lje_remap(mod, name)
-#include "lje_signatures.h"
-#undef SIGDEF
 
 // This is *very* annoying, but GMod's luaL_traceback seems to have inlined lj_debug_frame,
 // so we have to detour that as well to ensure our debug_frame is used.

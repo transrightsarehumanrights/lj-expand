@@ -455,20 +455,11 @@ typedef union GCfunc {
   GCfuncL l;
 } GCfunc;
 
-typedef struct LJEproto
-{
-  uint8_t is_from_lje;
-} LJEproto;
-
 #define FF_LUA		0
 #define FF_C		1
-#define protoextend(pt) \
-(LJEproto*)((char*)(pt) + (pt->sizept - sizeof(LJEproto)))
 #define isluafunc(fn)	((fn)->c.ffid == FF_LUA)
 #define iscfunc(fn)	((fn)->c.ffid == FF_C)
 #define isffunc(fn)	((fn)->c.ffid > FF_C)
-#define isljefunc(fn) \
-  (isluafunc(fn) && ((protoextend(funcproto(fn)))->is_from_lje))
 #define funcproto(fn) \
   check_exp(isluafunc(fn), (GCproto *)(mref((fn)->l.pc, char)-sizeof(GCproto)))
 
@@ -686,7 +677,6 @@ struct lua_State {
 #endif
 #define curr_funcisL(L)		(isluafunc(curr_func(L)))
 #define curr_proto(L)		(funcproto(curr_func(L)))
-#define curr_protoextend(L)	(protoextend(curr_proto(L)))
 #define curr_topL(L)		(L->base + curr_proto(L)->framesize)
 #define curr_top(L)		(curr_funcisL(L) ? curr_topL(L) : L->top)
 

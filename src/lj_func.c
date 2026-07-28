@@ -26,8 +26,7 @@
 
 void LJ_FASTCALL lj_func_freeproto(global_State *g, GCproto *pt)
 {
-  /* LJE: We already accounted for the size of LJEproto when allocating the proto */
-  lj_mem_free(g, pt, pt->sizept - sizeof(LJEproto));
+  lj_mem_free(g, pt, pt->sizept);
 }
 
 /* -- Upvalues ------------------------------------------------------------ */
@@ -144,53 +143,9 @@ static GCfunc *func_newL(lua_State *L, GCproto *pt, GCtab *env)
   return fn;
 }
 
-int check_proto_chunkname(GCproto* pt, const char* name)
-{
-  if (strcmp(proto_chunknamestr(pt), name) == 0)
-  {
-    return 1;
-  }
-
-  return 0;
-}
-
-int is_init_lua(const char* chunkname)
-{
-  // We check backwards since it may come from any path, like an addon.
-  size_t len = strlen(chunkname);
-  size_t target_len = strlen("lua/includes/init.lua");
-
-  return len >= target_len && strcmp(chunkname + len - target_len, "lua/includes/init.lua") == 0;
-}
-
 /* Create a new Lua function with empty upvalues. */
 GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
 {
-  if (is_init_lua(proto_chunknamestr(pt)) && !lje_frame_is_lua_involved(L, 0))
-  {
-    GCtab* globalEnv = tabref(L->env);
-    cTValue* clientBool = lj_tab_getstr_lit(globalEnv, "CLIENT"); // Doesn't create any GC size
-    if (clientBool && tvistrue(clientBool))
-    {
-      printf("[LJE] Pre-initializing Lua...\n");
-      LJEG()->waiting_for_init_call = 1;
-    }
-  }
-
-  if (check_proto_chunkname(pt, "@Startup") && !lje_frame_is_lua_involved(L, 0))
-  {
-    /* LJE: Wait for startup call next... */
-    LJEG()->waiting_for_startup_call = 1;
-  }
-
-  if (check_proto_chunkname(pt, "@lua/includes/init_menu.lua") && !lje_frame_is_lua_involved(L, 0))
-  {
-    /* LJE: Wait for startup call next... */
-    LJE_WARN("Detected menu state at %p", L);
-    LJEG()->waiting_for_menu_call = 1;
-  }
-
-
   GCfunc *fn = func_newL(L, pt, env);
   MSize i, nuv = pt->sizeuv;
   /* NOBARRIER: The GCfunc is new (marked white). */
