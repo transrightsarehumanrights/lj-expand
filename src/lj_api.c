@@ -1819,7 +1819,7 @@ LUA_API void lua_setallocf(lua_State *L, lua_Alloc f, void *ud)
 }
 
 typedef void (*lua_close_t)(lua_State* L);
-static lua_close_t lua_close_trampoline = NULL;
+static LJEDetourHook lua_close_hook;
 
 static void lua_close_detour(lua_State* L)
 {
@@ -1858,8 +1858,13 @@ static void lua_close_detour(lua_State* L)
     lj_tab_clear(LJEG()->shadow_registry);
   }
 
-  if (lua_close_trampoline)
-    lua_close_trampoline(L);
+  /* Lift the hook, run the real lua_close, then re-arm it for the next state. */
+  if (lua_close_hook.target)
+  {
+    lje_detour_suspend(&lua_close_hook);
+    ((lua_close_t)lua_close_hook.target)(L);
+    lje_detour_resume(&lua_close_hook);
+  }
 }
 
 #ifdef LJ_TARGET_WINDOWS
@@ -2034,10 +2039,10 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
       lje_detour_export(mod, luaL_setmetatable, luaL_setmetatable);
       lje_detour_export(mod, luaL_pushmodule, luaL_pushmodule);
 
-      lua_close_t original_close = lje_module_get_func(mod, "lua_close");
+      void* original_close = lje_module_get_func(mod, "lua_close");
       if (original_close)
       {
-        int attached = lje_detour_trampoline(original_close, lua_close_detour, (void*)&lua_close_trampoline);
+        int attached = lje_detour_hook(&lua_close_hook, original_close, (void*)lua_close_detour);
         if (!attached)
           LJE_ERROR("Failed to detour lua_close! This may cause resource leaks when the game closes.");
         else

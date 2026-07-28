@@ -75,9 +75,6 @@ void   lje_plat_flush_icache(void* addr, size_t len);
 /* Cheap "is this committed and readable" probe for crash-time introspection. */
 int    lje_plat_addr_readable(const void* addr);
 
-/* Trampolining hook (MinHook on Windows). 1 on success. */
-int    lje_plat_hook_trampoline(void* target, void* detour, void** out_orig);
-
 /* -- filesystem ------------------------------------------------------------ */
 
 enum { LJE_FS_MISSING = 0, LJE_FS_FILE, LJE_FS_DIR };

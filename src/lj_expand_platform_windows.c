@@ -10,7 +10,6 @@
 #include <wincrypt.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <MinHook.h>
 #include "lj_expand_log.h"
 
 #pragma comment(lib, "psapi")
@@ -150,24 +149,6 @@ int lje_plat_addr_readable(const void* addr)
   return (mbi.State & MEM_COMMIT) &&
          !(mbi.Protect & PAGE_NOACCESS) &&
          !(mbi.Protect & PAGE_GUARD);
-}
-
-static int minhook_initialized = 0;
-
-int lje_plat_hook_trampoline(void* target, void* detour, void** out_orig)
-{
-  if (!minhook_initialized) {
-    if (MH_Initialize() != MH_OK)
-      return 0;
-    minhook_initialized = 1;
-  }
-  if (MH_CreateHook(target, detour, out_orig) != MH_OK)
-    return 0;
-  if (MH_EnableHook(target) != MH_OK) {
-    MH_RemoveHook(target);
-    return 0;
-  }
-  return 1;
 }
 
 /* ===== §fs ===== */

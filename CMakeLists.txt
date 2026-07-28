@@ -155,15 +155,9 @@ else()
   list(REMOVE_ITEM LJ_CORE_SRC ${LJ_SRC}/lj_expand_platform_windows.c)
 endif()
 
+# MinHook is no longer built: lje_detour_hook does suspend/resume in portable C.
+# The vendored tree stays in git as a reference if trampolines ever come back.
 set(LJ_VENDOR_SRC ${LJ_SRC}/libs/tomlc17/src/tomlc17.c)
-if(WIN32)
-  list(APPEND LJ_VENDOR_SRC
-    ${LJ_SRC}/libs/minhook/src/buffer.c
-    ${LJ_SRC}/libs/minhook/src/hook.c
-    ${LJ_SRC}/libs/minhook/src/trampoline.c
-    ${LJ_SRC}/libs/minhook/src/hde/hde32.c
-    ${LJ_SRC}/libs/minhook/src/hde/hde64.c)
-endif()
 
 add_library(lje SHARED ${LJ_CORE_SRC} ${LJ_VENDOR_SRC} ${LJ_VM_BOUT} ${LJ_GEN_HDRS})
 add_dependencies(lje lje-vmdef)
@@ -178,7 +172,6 @@ set_target_properties(lje PROPERTIES PREFIX "" POSITION_INDEPENDENT_CODE ON) # N
 target_include_directories(lje PUBLIC ${LJ_SRC} PRIVATE
   ${LJ_GEN}
   ${LJ_SRC}/libs/tomlc17/src
-  ${LJ_SRC}/libs/minhook/include
   ${CMAKE_CURRENT_SOURCE_DIR}/sdk/include)
 
 target_compile_definitions(lje PRIVATE ${LJ_DEFINES})

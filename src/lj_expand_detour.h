@@ -20,9 +20,21 @@
         LJE_ERROR("Failed to find " #name " for detouring!"); \
     } \
 
+#define LJE_DETOUR_SIZE 12
+
 // Dead simple detours. No original function is provided.
 LJ_FUNC int lje_detour(void* target, void* detour);
-// Detour, but the ability to trampoline back to it. Useful basically only for state-related functions
-int lje_detour_trampoline(void* target, void* detour, void** out_trampoline);
+
+/* Keeps the original bytes of the hooked function */
+typedef struct {
+    void* target;
+    void* detour;
+    uint8_t original[LJE_DETOUR_SIZE];
+    int installed;
+} LJEDetourHook;
+
+int lje_detour_hook(LJEDetourHook* hook, void* target, void* detour);
+int lje_detour_suspend(LJEDetourHook* hook);
+int lje_detour_resume(LJEDetourHook* hook);
 
 #endif

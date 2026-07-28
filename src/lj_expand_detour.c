@@ -1,49 +1,80 @@
 #include "lj_expand_detour.h"
 #include "lj_expand_platform.h"
 
-#define DETOUR_SIZE 12
-
-static int write_detour_mcode(void* target, void* detour)
+static void build_jump(uint8_t out[LJE_DETOUR_SIZE], void* detour)
 {
-    if (target == NULL || detour == NULL) {
-        return 0; // Invalid parameters
-    }
-
     // Since we do not care about calling conventions, this is cross-platform atleast for 64-bit Windows and Linux
     // as both mark RAX as a caller-saved register.
-    uint8_t* p = (uint8_t*)target;
-    p[0] = 0x48; // REX.W prefix
-    p[1] = 0xB8; // MOV RAX, imm64
-    uint64_t detourAddr = (uint64_t)(uintptr_t)detour;
-    *(uint64_t*)&p[2] = detourAddr; // imm64
-    p[10] = 0xFF; // JMP
-    p[11] = 0xE0; // JMP RAX
-
-    return 1; // Success
+    uint64_t addr = (uint64_t)(uintptr_t)detour;
+    out[0] = 0x48; // REX.W prefix
+    out[1] = 0xB8; // MOV RAX, imm64
+    memcpy(&out[2], &addr, sizeof(addr));
+    out[10] = 0xFF; // JMP
+    out[11] = 0xE0; // JMP RAX
 }
 
-static int detour_func(void* target, void* detour)
+static int patch_bytes(void* target, const uint8_t* bytes)
 {
-    if (!lje_plat_protect(target, DETOUR_SIZE, LJE_PROT_RW))
-        return 0; // Failed to change page permission to RW
+    /* RWX keeps neighbouring functions on the page executable while we write.
+     * A hardened kernel may refuse it, in which case RW is the fallback. */
+    if (!lje_plat_protect(target, LJE_DETOUR_SIZE, LJE_PROT_RWX) &&
+        !lje_plat_protect(target, LJE_DETOUR_SIZE, LJE_PROT_RW))
+        return 0;
 
-    if (!write_detour_mcode(target, detour))
-        return 0; // Failed to write detour machine code
+    memcpy(target, bytes, LJE_DETOUR_SIZE);
 
-    if (!lje_plat_protect(target, DETOUR_SIZE, LJE_PROT_RX))
-        return 0; // Failed to change page permission back to RX
+    if (!lje_plat_protect(target, LJE_DETOUR_SIZE, LJE_PROT_RX))
+        return 0;
 
-    lje_plat_flush_icache(target, DETOUR_SIZE);
-
-    return 1; // Success
+    lje_plat_flush_icache(target, LJE_DETOUR_SIZE);
+    return 1;
 }
 
 int lje_detour(void* target, void* detour)
 {
-    return detour_func(target, detour);
+    if (target == NULL || detour == NULL)
+        return 0;
+
+    uint8_t code[LJE_DETOUR_SIZE];
+    build_jump(code, detour);
+    return patch_bytes(target, code);
 }
 
-int lje_detour_trampoline(void* target, void* detour, void** original)
+int lje_detour_resume(LJEDetourHook* hook)
 {
-    return lje_plat_hook_trampoline(target, detour, original);
+    if (hook == NULL || hook->installed)
+        return 0;
+
+    uint8_t code[LJE_DETOUR_SIZE];
+    build_jump(code, hook->detour);
+    if (!patch_bytes(hook->target, code))
+        return 0;
+
+    hook->installed = 1;
+    return 1;
+}
+
+int lje_detour_suspend(LJEDetourHook* hook)
+{
+    if (hook == NULL || !hook->installed)
+        return 0;
+
+    if (!patch_bytes(hook->target, hook->original))
+        return 0;
+
+    hook->installed = 0;
+    return 1;
+}
+
+int lje_detour_hook(LJEDetourHook* hook, void* target, void* detour)
+{
+    if (hook == NULL || target == NULL || detour == NULL)
+        return 0;
+
+    memcpy(hook->original, target, LJE_DETOUR_SIZE);
+    hook->target = target;
+    hook->detour = detour;
+    hook->installed = 0;
+
+    return lje_detour_resume(hook);
 }
