@@ -370,36 +370,10 @@ static int lje_create_table(lua_State* L)
   return 1;
 }
 
-
-// Wraps every C function we pull so we can securely call it.
-static int lje_secure_gmod_api(lua_State* L)
-{
-  void* func_ptr = lua_touserdata(L, lua_upvalueindex(1));
-  if (!func_ptr)
-  {
-    lua_pushnil(L);
-    return 1;
-  }
-
-  // zero-copy function call! state redirection handles this,
-  // we just need to dispatch the c function raw.
-  lua_CFunction func = (lua_CFunction)func_ptr;
-  // Latch incase isolation is being forced
-  int redirection_required = LJEG()->redirect_to_isolation == 0;
-  int prev = LJEG()->redirect_to_isolation;
-  if (redirection_required)
-    LJEG()->redirect_to_isolation = 1;
-  int results = func(LJEG()->main_state); /* make it think it's running in the main state, it won't know any better! */
-  if (redirection_required)
-    LJEG()->redirect_to_isolation = prev;
-  return results;
-}
-
 static int lje_secure_pull(lua_State* L)
 {
   // Pulls a global out of the client state and returns it to the secure state.
-  // This is necessary for secure scripts to be able to interact with the client state
-  // in a limited way, without exposing the full global environment.
+  // This is basically a less advanced version of the state API meant for preinit.
   if (!LJEG()->main_state)
   {
     luaL_error(L, "main state not set for secure pull");
@@ -498,8 +472,7 @@ static int lje_secure_pull(lua_State* L)
       return 1;
     }
 
-    lua_pushlightuserdata(L, func->c.f);
-    lua_pushcclosure(L, lje_secure_gmod_api, 1);
+    lje_push_safe_cfunction(L, func->c.f);
     return 1;
   }
 

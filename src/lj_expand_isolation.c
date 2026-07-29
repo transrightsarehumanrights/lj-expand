@@ -77,20 +77,23 @@ static TValue *stkindex2adr(lua_State *L, int idx)
 // Wraps every C function we pull so we can securely call it.
 static int lje_secure_gmod_api(lua_State* L)
 {
-    void* func_ptr = lua_touserdata(L, lua_upvalueindex(1));
-    if (!func_ptr)
-    {
-        lua_pushnil(L);
-        return 1;
-    }
+  void* func_ptr = lua_touserdata(L, lua_upvalueindex(1));
+  if (!func_ptr)
+  {
+    lua_pushnil(L);
+    return 1;
+  }
 
-    // we just need to dispatch the c function ourselves.
-    lua_CFunction func = (lua_CFunction)func_ptr;
-    int prev = LJEG()->redirect_to_isolation;
+  lua_CFunction func = (lua_CFunction)func_ptr;
+
+  int redirection_required = LJEG()->redirect_to_isolation == 0;
+  int prev = LJEG()->redirect_to_isolation;
+  if (redirection_required)
     LJEG()->redirect_to_isolation = 1;
-    int results = func(LJEG()->main_state); /* make it think it's running in the main state, it won't know any better! */
+  int results = func(LJEG()->main_state); /* make it think it's running in the main state, it won't know any better! */
+  if (redirection_required)
     LJEG()->redirect_to_isolation = prev;
-    return results;
+  return results;
 }
 
 int lje_push_safe_cfunction(lua_State* L, lua_CFunction func)
