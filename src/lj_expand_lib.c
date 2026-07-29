@@ -522,10 +522,17 @@ static int lje_proxy_copy(lua_State* L)
     return 1;
   }
 
-  /* Registry-backed userdata (e.g. GMod entities) carry their host registry ref in
-   * align1. The tag can be stale or garbage, so only trust it if the host registry
-   * still holds this exact userdata at that index; then reuse/cache the isolated
-   * copy under the same index in the shadow registry instead of copying each time. */
+  /* So, LJE does a fairly unorthodox fix here for the instance where:
+   * lje.proxy.copy(foo) -> foo is a proxy to a **SPECIFIC ENTITY** -> the copied proxy object is compared with foo obtained from a different place
+   * In this case, the proxy copied userdata is **not equal** to the userdata obtained from a different API even if they're identical.
+   * This causes massive issues in things like comparing a player object from a hook to a player object from the `player` API
+   * even if the userdatas point to the same player.
+   *
+   * What we do here is abuse the unused `align1` member in the GCudata structure to tag each GMod userdata with its registry reference number
+   * (tracked from the luaL_ref functions). This way, we can create a reverse mapping of userdata --> ref ID. That means we can reflect it
+   * into our shadow registry and return the same userdata object to the secure state, even if it was obtained from a different API,
+   * fixing userdata equality.
+   */
   if (proxy->host_type == ~LJ_TUDATA && LJEG()->main_state)
   {
     GCudata* ud = (GCudata*)proxy->host_obj;
