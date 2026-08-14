@@ -2,6 +2,8 @@
 #define _LJ_EXPAND_SCRIPT_H
 #include <stdint.h>
 
+#include "lj_expand_host.h"
+
 #define LJE_SCRIPT_MAIN "main.lua"
 #define LJE_SCRIPT_PREINIT "preinit.lua"
 #define LJE_SCRIPT_BOOT "boot.lua"
@@ -37,6 +39,12 @@ typedef struct LJEEngineCallHook
 {
   int is_post;
   int ref;
+  /* Which universe's engine calls this hook listens to. */
+  LJEHostId host;
+  /* Registered from boot.lua, which runs once per process rather than once per
+     client state. Those hooks outlive a client swap; everything else is dropped
+     and re-registered when main.lua re-runs. */
+  int boot_scoped;
 } LJEEngineCallHook;
 
 typedef struct LJEScriptExtraInfo

@@ -20,13 +20,34 @@ LJEGlobalState* lje_get_global_state() {
     return lje_global_state;
 }
 
+size_t lje_script_drop_transient_hooks(LJEScript* script, lua_State* unref_state)
+{
+    size_t kept = 0;
+    for (size_t i = 0; i < script->extra->engine_call_hook_count; i++)
+    {
+        LJEEngineCallHook hook = script->extra->engine_call_hooks[i];
+        if (hook.boot_scoped)
+        {
+            script->extra->engine_call_hooks[kept++] = hook;
+            continue;
+        }
+
+        if (unref_state && hook.ref != LUA_NOREF)
+            luaL_unref(unref_state, LUA_REGISTRYINDEX, hook.ref);
+    }
+
+    memset(&script->extra->engine_call_hooks[kept], 0,
+           sizeof(LJEEngineCallHook) * (LJE_SCRIPT_MAX_ENGINE_CALL_HOOKS - kept));
+    script->extra->engine_call_hook_count = kept;
+    return kept;
+}
+
 void lje_clear_global_refs() {
     LJEG()->script_hook_ref_id = LUA_NOREF;
     for (size_t i = 0; i < LJEG()->loaded_script_count; i++)
     {
         LJEScript* script = LJEG()->script_load_order[i];
-        script->extra->engine_call_hook_count = 0;
-        memset(script->extra->engine_call_hooks, 0, sizeof(LJEEngineCallHook) * LJE_SCRIPT_MAX_ENGINE_CALL_HOOKS);
+        lje_script_drop_transient_hooks(script, NULL);
         script->extra->cleanup_ref_id = LUA_NOREF;
     }
 

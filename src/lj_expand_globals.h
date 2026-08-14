@@ -3,22 +3,10 @@
 
 #include "lua.h"
 #include "lj_obj.h"
+#include "lj_expand_host.h"
 #include "lj_expand_script.h"
 #include "lj_expand_script_watcher.h"
 #include "lj_expand_binary_module.h"
-
-typedef enum LJEHostId
-{
-    LJE_HOST_CLIENT = 0,
-    LJE_HOST_MENU = 1,
-    LJE_HOST_COUNT
-} LJEHostId;
-
-// Each state has to have its own shadow registry
-typedef struct LJEHostView
-{
-    GCtab* shadow_registry;
-} LJEHostView;
 
 /* LJE: This is our own global state, sysmalloc'd without any
  * interference with LuaJIT's own global_State. This is because
@@ -45,6 +33,9 @@ typedef struct LJEGlobalState
        lje.vm.suppress_engine_call() can tell it is in a valid context. */
     char in_pre_engine_call_hook;
     char engine_call_suppressed;
+    /* Hooks registered during boot have to be specially recognized as such
+     * so they're not accidentally removed if the client state is recreated. */
+    char in_boot_phase;
     /* Hot reloading */
     LJEScriptWatcher* script_watcher;
     /* Loaded binary modules */
@@ -66,16 +57,13 @@ typedef struct LJEGlobalState
 #define LJEG() (lje_get_global_state())
 LJEGlobalState* lje_get_global_state();
 
-/* Shadow registry of the host the current redirect belongs to. */
+/* Shadow registry of the host the current redirect belongs to. The host
+   accessors themselves live in lj_expand_host.h. */
 #define LJE_SHADOW() (LJEG()->hosts[LJEG()->redirect_host].shadow_registry)
 
-LJEHostView* lje_host_view(LJEHostId id);
-lua_State* lje_host_state(LJEHostId id);
-/* Maps a live GMod state to its host id. Returns 0 if L is not a host state. */
-int lje_host_id_of(lua_State* L, LJEHostId* out);
-const char* lje_host_name(LJEHostId id);
-
 void lje_clear_global_refs();
+/* Drops a script's engine call hooks, keeping the menu state ones. */
+size_t lje_script_drop_transient_hooks(LJEScript* script, lua_State* unref_state);
 
 int lje_is_addr_in_lje(uintptr_t addr);
 void lje_print_stack(lua_State* L);

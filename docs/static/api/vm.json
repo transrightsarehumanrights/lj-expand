@@ -5,7 +5,7 @@
     {
       "name": "add_engine_call_hook",
       "description": [
-        "Registers an engine call hook for the current script. Whenever the engine invokes a Lua function in the **client** state, every registered hook is invoked in the secure state as `fn(func, nargs, nresults, ...)`:",
+        "Registers an engine call hook for the current script. Whenever the engine invokes a Lua function in the universe the hook was registered for, the hook is invoked in the secure state as `fn(func, nargs, nresults, ...)`:",
         "",
         "- `func` — a number holding the called function's pointer (its address cast to a `lua_Number`). Useful for identity comparisons without copying a full function object across states.",
         "- `nargs` / `nresults` — the argument and result counts of the engine call.",
@@ -20,7 +20,19 @@
         "",
         "The hook's return values are ignored. A pre hook can stop the engine call from happening at all by calling `lje.vm.suppress_engine_call()`. Errors thrown by a hook are caught and printed to the console; the remaining hooks still run. Requires an active script context, and hooks only fire for secure scripts.",
         "",
-        "Engine calls made in the **menu** state are not hooked. You can still call into the menu with `lje.secure.pull` or `lje.state.path`; you just cannot intercept its calls."
+        "### Which universe you are listening to",
+        "",
+        "The optional `state` argument picks the universe, defaulting to the client. A hook only ever sees calls from the one universe it was registered for — to watch both, register twice. Proxy handles handed to the hook are resolved against that same universe, so `lje.proxy.copy` gives you the right object either way.",
+        "",
+        "```lua",
+        "-- Watch the menu's engine calls. Valid from boot.lua, where the client",
+        "-- state does not exist yet.",
+        "lje.vm.add_engine_call_hook(function(func, nargs, nresults, ...)",
+        "  lje.con_print(\"menu called \" .. func)",
+        "end, false, lje.state.menu)",
+        "```",
+        "",
+        "Hooks registered from `boot.lua` live for the whole process. Every other hook belongs to the client script lifecycle and is dropped when the client state goes away (a map change or disconnect), then re-registered when `main.lua` runs again — the same applies to a hot reload, which re-runs `main.lua` but not `boot.lua`."
       ],
       "note": "Proxy handles passed to the hook are only valid for the duration of the hook call — do not store them. Post hooks receive a snapshot of the arguments captured before the engine call ran.",
       "params": [
@@ -34,13 +46,20 @@
           "type": "boolean",
           "optional": true,
           "description": "`true` to run the hook after the engine call, `false` (default) to run it before."
+        },
+        {
+          "name": "state",
+          "type": "lightuserdata",
+          "optional": true,
+          "description": "Whose engine calls to listen to: `lje.state.client` (the default) or `lje.state.menu`. See `lje.state` for when each handle is available."
         }
       ],
       "returns": [],
       "errors": [
         "No active script context.",
         "Argument 1 must be a Lua function (not a C function).",
-        "Maximum number of engine call hooks (16) reached for the script."
+        "Maximum number of engine call hooks (16) reached for the script.",
+        "add_engine_call_hook: argument 3 is not a live host state"
       ]
     },
     {
@@ -68,12 +87,18 @@
     {
       "name": "add_pre_engine_call_hook",
       "defined_in": "lua",
-      "description": "Convenience wrapper around `lje.vm.add_engine_call_hook(hook, false)` that registers `hook` as a pre hook (runs before the engine call). See `add_engine_call_hook` for the hook signature and semantics.",
+      "description": "Convenience wrapper around `lje.vm.add_engine_call_hook(hook, false, state)` that registers `hook` as a pre hook (runs before the engine call). See `add_engine_call_hook` for the hook signature and semantics.",
       "params": [
         {
           "name": "hook",
           "type": "function",
           "description": "The hook function, called as `fn(func, nargs, nresults, ...)`."
+        },
+        {
+          "name": "state",
+          "type": "lightuserdata",
+          "optional": true,
+          "description": "Whose engine calls to listen to: `lje.state.client` (the default) or `lje.state.menu`."
         }
       ],
       "returns": []
@@ -81,12 +106,18 @@
     {
       "name": "add_post_engine_call_hook",
       "defined_in": "lua",
-      "description": "Convenience wrapper around `lje.vm.add_engine_call_hook(hook, true)` that registers `hook` as a post hook (runs after the engine call, against a snapshot of the original arguments). See `add_engine_call_hook` for the hook signature and semantics.",
+      "description": "Convenience wrapper around `lje.vm.add_engine_call_hook(hook, true, state)` that registers `hook` as a post hook (runs after the engine call, against a snapshot of the original arguments). See `add_engine_call_hook` for the hook signature and semantics.",
       "params": [
         {
           "name": "hook",
           "type": "function",
           "description": "The hook function, called as `fn(func, nargs, nresults, ...)`."
+        },
+        {
+          "name": "state",
+          "type": "lightuserdata",
+          "optional": true,
+          "description": "Whose engine calls to listen to: `lje.state.client` (the default) or `lje.state.menu`."
         }
       ],
       "returns": []

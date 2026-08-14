@@ -304,16 +304,22 @@ int lje_add_engine_call_hook(lua_State* L)
     luaL_error(L, "maximum number of engine call hooks reached for script '%s'", current_script->name);
   }
 
-  // Ensure the boolean is popped first if it was passed so we don't ref that
-  if (lua_gettop(L) >= 2)
+  // Optional arg 3 picks which universe's engine calls to listen to.
+  LJEHostId host = LJE_HOST_CLIENT;
+  if (!lua_isnoneornil(L, 3) && !lje_host_id_of(lua_touserdata(L, 3), &host))
   {
-    lua_pop(L, 1);
+    luaL_error(L, "add_engine_call_hook: argument 3 is not a live host state");
   }
+
+  // Drop everything but the callback so luaL_ref refs the right value.
+  lua_settop(L, 1);
 
   int ref_id = luaL_ref(L, LUA_REGISTRYINDEX);
   LJEEngineCallHook hook;
   hook.is_post = is_post;
   hook.ref = ref_id;
+  hook.host = host;
+  hook.boot_scoped = LJEG()->in_boot_phase;
   current_script->extra->engine_call_hooks[current_script->extra->engine_call_hook_count++] = hook;
   return 0;
 }
@@ -541,15 +547,17 @@ static int lje_proxy_copy(lua_State* L)
    * into our shadow registry and return the same userdata object to the secure state, even if it was obtained from a different API,
    * fixing userdata equality.
    */
-  /* Proxies only ever come from client engine call hooks for now. */
-  GCtab* shadow = lje_host_view(LJE_HOST_CLIENT)->shadow_registry;
-  if (proxy->host_type == ~LJ_TUDATA && LJEG()->main_state && shadow)
+  /* Resolved against the universe the proxy came from: registry refs and the
+     shadow registry are both per-host. */
+  lua_State* host_state = lje_host_state(proxy->host);
+  GCtab* shadow = lje_host_view(proxy->host)->shadow_registry;
+  if (proxy->host_type == ~LJ_TUDATA && host_state && shadow)
   {
     GCudata* ud = (GCudata*)proxy->host_obj;
     int32_t n = (int32_t)ud->align1;
     if (n != 0)
     {
-      cTValue* hv = lj_tab_getint(tabV(registry(LJEG()->main_state)), n);
+      cTValue* hv = lj_tab_getint(tabV(registry(host_state)), n);
       if (hv && tvisudata(hv) && udataV(hv) == ud)
       {
         cTValue* cached = lj_tab_getint(shadow, n);
@@ -562,7 +570,7 @@ static int lje_proxy_copy(lua_State* L)
 
         TValue host_tv;
         setgcV(L, &host_tv, proxy->host_obj, ~proxy->host_type);
-        lje_copy_to_isolated_state_tv(LJEG()->main_state, L, &host_tv, 0);
+        lje_copy_to_isolated_state_tv(host_state, L, &host_tv, 0);
 
         TValue* slot = lj_tab_setint(L, shadow, n);
         copyTV(L, slot, L->top - 1);
@@ -575,7 +583,7 @@ static int lje_proxy_copy(lua_State* L)
   TValue proxy_object;
   setgcV(L, &proxy_object, proxy->host_obj, ~proxy->host_type);
 
-  lje_copy_to_isolated_state_tv(LJEG()->main_state, L, &proxy_object, 0);
+  lje_copy_to_isolated_state_tv(host_state, L, &proxy_object, 0);
   return 1;
 }
 

@@ -46,7 +46,7 @@ local openURL = lje.secure.pull("gui.OpenURL", lje.state.menu)
 See [lje.state](/api/state) for the details on which universe is available when.
 
 This is really only useful for:
-- Reading or calling into the main menu.
+- Reading, calling into, or [hooking](/api/vm#add_engine_call_hook) the main menu. Hooks registered here last for the whole process, unlike ones registered from `main.lua`.
 - Setting up deep engine detours (with unsafe LJE).
 - Amortizing something expensive that you don't want to run during normal execution.
 - Setting up some kind of early state that your script needs.

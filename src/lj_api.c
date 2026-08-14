@@ -1419,6 +1419,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     lje_startup_secure_helpers(LJEG()->isolated_state);
 
     // Check if any scripts have boot.lua, if so run them now in the isolated state
+    LJEG()->in_boot_phase = 1;
     lje_iterate_scripts()
       if (script->boot_path != NULL)
       {
@@ -1426,6 +1427,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
         lje_startup_execute(LJEG()->isolated_state, script, script->boot_path);
       }
     lje_iterate_scripts_end()
+    LJEG()->in_boot_phase = 0;
 }
 
   /* LJE: Reload any scripts at this point, if needed. */
@@ -1455,6 +1457,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
   int post_snapshot_base = 0;
   int suppressed = 0;
   GCfunc* engine_func = NULL;
+  LJEHostId call_host = LJE_HOST_CLIENT;
 
   /* LJE: Determine if this is an engine call. */
   /* Note: Not all engine calls start at the base of the stack.
@@ -1462,9 +1465,13 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
    * Some are called during Lua (e.g: in a C function), so we need to pivot around the **top** of the stack instead, using
    * api_call_base & the errfunc to determine where the function actually is.
    */
-  if (L == LJEG()->main_state && !LJEG()->using_error_reporter && errfunc)
+  /* Every CLuaInterface shares one AdvancedLuaErrorReporter, so the same check
+     identifies an engine call in the menu universe as in the client one. */
+  cTValue* errfunc_tv = errfunc ? stkindex2adr(L, errfunc) : NULL;
+  if (lje_host_id_of(L, &call_host) && !LJEG()->using_error_reporter && errfunc &&
+      tvisfunc(errfunc_tv) && tvisfunc(stkindex2adr(L, -nargs - 1)))
   {
-    GCfunc* f = funcV(stkindex2adr(L, errfunc));
+    GCfunc* f = funcV(errfunc_tv);
     GCfunc* called_function = funcV(stkindex2adr(L, -nargs - 1));
     char is_function_null = f == LJ_GCVMASK || (uintptr_t)f == 0x0000400000000000;
     if (is_function_null)
@@ -1498,6 +1505,8 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
           LJEEngineCallHook hook = script->extra->engine_call_hooks[j];
           if (hook.ref == LUA_NOREF)
             continue;
+          if (hook.host != call_host)
+            continue; /* registered for the other universe */
           if (hook.is_post)
           {
             run_post_hooks = 1; /* defer this one until after the real call */
@@ -1513,7 +1522,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
           {
             cTValue* arg_val = stkindex2adr(L, -nargs + arg);
             if (tvistab(arg_val) || tvisudata(arg_val))
-              lua_pushlightuserdata(I, lje_proxy(arg_val));
+              lua_pushlightuserdata(I, lje_proxy(arg_val, call_host));
             else
               lje_copy_to_isolated_state(L, I, -nargs + arg, 0);
           }
@@ -1562,7 +1571,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
         {
           cTValue* arg_val = stkindex2adr(L, -nargs + arg);
           if (tvistab(arg_val) || tvisudata(arg_val))
-            lua_pushlightuserdata(I, lje_proxy(arg_val));
+            lua_pushlightuserdata(I, lje_proxy(arg_val, call_host));
           else
             lje_copy_to_isolated_state(L, I, -nargs + arg, 0);
         }
@@ -1630,7 +1639,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
         LJEEngineCallHook hook = script->extra->engine_call_hooks[j];
         if (hook.ref == LUA_NOREF)
           continue;
-        if (!hook.is_post)
+        if (!hook.is_post || hook.host != call_host)
           continue;
 
         lua_rawgeti(I, LUA_REGISTRYINDEX, hook.ref);
