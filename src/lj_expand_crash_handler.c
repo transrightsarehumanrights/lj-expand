@@ -1,193 +1,51 @@
 #include "lj_expand_crash_handler.h"
 
-#define WIN32_LEAN_AND_MEAN
 #include <stdio.h>
-#include <Windows.h>
-#include <DbgHelp.h>
-#include <Psapi.h>
+#include <string.h>
+#include <stdlib.h>
 
 #include "lj_debug.h"
 #include "lj_expand_dirs.h"
 #include "lj_expand_globals.h"
+#include "lj_expand_platform.h"
 #include "lj_frame.h"
 #include "lj_obj.h"
 
-#pragma comment(lib, "dbghelp")
-#pragma comment(lib, "psapi")
+/* Register names indexed by LJE_REG_* enum order. */
+static const char* const reg_names[LJE_REG_COUNT] = {
+  "RAX", "RBX", "RCX", "RDX",
+  "RSI", "RDI", "RBP", "RSP",
+  "R8",  "R9",  "R10", "R11",
+  "R12", "R13", "R14", "R15",
+  "RIP"
+};
 
-#define LJE_CRASH_DUMPS_PATH ".lje_crash_dumps"
-
-typedef struct {
-    ULONG_PTR base;
-    ULONG_PTR end;
-} ModuleRange;
-
-static ModuleRange get_module_range(const char* name)
-{
-    ModuleRange range = {0, 0};
-    HMODULE mod = GetModuleHandleA(name);
-    if (!mod) return range;
-
-    MODULEINFO info;
-    if (GetModuleInformation(GetCurrentProcess(), mod, &info, sizeof(info)))
-    {
-        range.base = (ULONG_PTR)info.lpBaseOfDll;
-        range.end = range.base + info.SizeOfImage;
-    }
-    return range;
-}
-
-static int addr_in_range(ULONG_PTR addr, ModuleRange range)
-{
-    return range.base && addr >= range.base && addr < range.end;
-}
-
-static int lje_is_relevant_crash(const struct _EXCEPTION_POINTERS* ep)
-{
-    ModuleRange lje = get_module_range("lje-w64.dll");
-    ModuleRange lua = get_module_range("lua_shared.dll");
-
-    ULONG_PTR fault_addr = (ULONG_PTR)ep->ExceptionRecord->ExceptionAddress;
-    if (addr_in_range(fault_addr, lje) || addr_in_range(fault_addr, lua))
-        return 1;
-
-    CONTEXT ctx = *ep->ContextRecord;
-    STACKFRAME64 frame;
-    memset(&frame, 0, sizeof(frame));
-
-    frame.AddrPC.Offset = ctx.Rip;
-    frame.AddrPC.Mode = AddrModeFlat;
-    frame.AddrFrame.Offset = ctx.Rbp;
-    frame.AddrFrame.Mode = AddrModeFlat;
-    frame.AddrStack.Offset = ctx.Rsp;
-    frame.AddrStack.Mode = AddrModeFlat;
-
-    HANDLE process = GetCurrentProcess();
-    HANDLE thread = GetCurrentThread();
-
-    for (int i = 0; i < 64; i++)
-    {
-        if (!StackWalk64(IMAGE_FILE_MACHINE_AMD64, process, thread, &frame, &ctx,
-                         NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL))
-            break;
-
-        if (frame.AddrPC.Offset == 0)
-            break;
-
-        if (addr_in_range((ULONG_PTR)frame.AddrPC.Offset, lje) ||
-            addr_in_range((ULONG_PTR)frame.AddrPC.Offset, lua))
-            return 1;
-    }
-
-    return 0;
-}
-
-static char expand_crash_dump_path(char* out, size_t out_size)
-{
-    return lje_directory_get(LJE_DIR_CRASH_DUMPS, out, out_size);
-}
-
-static char ensure_crash_dump_directory_exists()
-{
-    char path[MAX_PATH] = { 0 };
-    if (!expand_crash_dump_path(path, MAX_PATH))
-    {
-        return 0;
-    }
-
-    DWORD attribs = GetFileAttributesA(path);
-    if (attribs == INVALID_FILE_ATTRIBUTES)
-    {
-        if (!CreateDirectoryA(path, NULL))
-        {
-            return 0;
-        }
-    }
-    else if (!(attribs & FILE_ATTRIBUTE_DIRECTORY))
-    {
-        return 0;
-    }
-
-    return 1;
-}
+/* ------------------------------------------------------------------ */
 
 static void make_dump_filename(char* out, size_t out_size)
 {
-    SYSTEMTIME st;
-    GetLocalTime(&st);
+    LJEPlatTime lt;
+    lje_plat_local_time(&lt);
     snprintf(out, out_size, "lje_crash_%04d%02d%02d_%02d%02d%02d",
-             st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+             lt.year, lt.month, lt.day, lt.hour, lt.minute, lt.second);
 }
 
-static char is_valid_code(DWORD exception_code)
+/* Write a crash state text dump into the LJE crash directory. */
+static void lje_write_state_dump(const LJEPlatCrashInfo* info, const char* dump_path)
 {
-    return exception_code == EXCEPTION_ACCESS_VIOLATION ||
-           exception_code == EXCEPTION_ARRAY_BOUNDS_EXCEEDED ||
-           exception_code == EXCEPTION_BREAKPOINT ||
-           exception_code == EXCEPTION_DATATYPE_MISALIGNMENT ||
-           exception_code == EXCEPTION_FLT_DENORMAL_OPERAND ||
-           exception_code == EXCEPTION_FLT_DIVIDE_BY_ZERO ||
-           exception_code == EXCEPTION_FLT_INEXACT_RESULT ||
-           exception_code == EXCEPTION_FLT_INVALID_OPERATION ||
-           exception_code == EXCEPTION_FLT_OVERFLOW ||
-           exception_code == EXCEPTION_FLT_STACK_CHECK ||
-           exception_code == EXCEPTION_FLT_UNDERFLOW ||
-           exception_code == EXCEPTION_ILLEGAL_INSTRUCTION ||
-           exception_code == EXCEPTION_IN_PAGE_ERROR ||
-           exception_code == EXCEPTION_INT_DIVIDE_BY_ZERO ||
-           exception_code == EXCEPTION_INT_OVERFLOW ||
-           exception_code == EXCEPTION_INVALID_DISPOSITION ||
-           exception_code == EXCEPTION_NONCONTINUABLE_EXCEPTION ||
-           exception_code == EXCEPTION_PRIV_INSTRUCTION ||
-           exception_code == EXCEPTION_SINGLE_STEP ||
-           exception_code == EXCEPTION_STACK_OVERFLOW;
-}
-
-static char ptr_valid(void* ptr)
-{
-    MEMORY_BASIC_INFORMATION mbi;
-    if (VirtualQuery(ptr, &mbi, sizeof(mbi)) == 0)
-    {
-        return 0;
-    }
-
-    return (mbi.State & MEM_COMMIT) && !(mbi.Protect & PAGE_NOACCESS);
-}
-
-static void lje_write_dump_state(const struct _EXCEPTION_POINTERS* exception_pointers, const char* dump_path)
-{
-    FILE* f = NULL;
-    fopen_s(&f, dump_path, "w");
+    FILE* f = fopen(dump_path, "w");
     if (!f)
-    {
         return;
-    }
 
     fprintf(f, "LJE Crash Dump\n================\n\n");
-    fprintf(f, "Exception code: 0x%08X\n", exception_pointers->ExceptionRecord->ExceptionCode);
-    fprintf(f, "Exception address: 0x%p\n", exception_pointers->ExceptionRecord->ExceptionAddress);
-    fprintf(f, "Number of parameters: %d\n", exception_pointers->ExceptionRecord->NumberParameters);
-    for (DWORD i = 0; i < exception_pointers->ExceptionRecord->NumberParameters; i++)
-    {
-        fprintf(f, "  Parameter %d: 0x%p\n", i, exception_pointers->ExceptionRecord->ExceptionInformation[i]);
-    }
+    fprintf(f, "Exception code: 0x%08X (%s)\n", info->native_code, info->name ? info->name : "UNKNOWN");
+    fprintf(f, "Fault address: 0x%p\n", info->fault_addr);
+    fprintf(f, "Frame count: %zu\n", info->frame_count);
 
     fprintf(f, "\nRegisters:\n");
-    fprintf(f, "  RAX: 0x%016llX\n", exception_pointers->ContextRecord->Rax);
-    fprintf(f, "  RBX: 0x%016llX\n", exception_pointers->ContextRecord->Rbx);
-    fprintf(f, "  RCX: 0x%016llX\n", exception_pointers->ContextRecord->Rcx);
-    fprintf(f, "  RDX: 0x%016llX\n", exception_pointers->ContextRecord->Rdx);
-    fprintf(f, "  R8:  0x%016llX\n", exception_pointers->ContextRecord->R8);
-    fprintf(f, "  R9:  0x%016llX\n", exception_pointers->ContextRecord->R9);
-    fprintf(f, "  R10: 0x%016llX\n", exception_pointers->ContextRecord->R10);
-    fprintf(f, "  R11: 0x%016llX\n", exception_pointers->ContextRecord->R11);
-    fprintf(f, "  R12: 0x%016llX\n", exception_pointers->ContextRecord->R12);
-    fprintf(f, "  R13: 0x%016llX\n", exception_pointers->ContextRecord->R13);
-    fprintf(f, "  R14: 0x%016llX\n", exception_pointers->ContextRecord->R14);
-    fprintf(f, "  R15: 0x%016llX\n", exception_pointers->ContextRecord->R15);
-    fprintf(f, "  RSP: 0x%016llX\n", exception_pointers->ContextRecord->Rsp);
-    fprintf(f, "  RBP: 0x%016llX\n", exception_pointers->ContextRecord->Rbp);
-    fprintf(f, "  RIP: 0x%016llX\n", exception_pointers->ContextRecord->Rip);
+    for (int i = 0; i < LJE_REG_COUNT; i++) {
+        fprintf(f, "  %-4s: 0x%016llX\n", reg_names[i], (unsigned long long)info->regs[i]);
+    }
 
     fprintf(f, "\nLJE dump\n================\n\n");
 
@@ -239,9 +97,9 @@ static void lje_write_dump_state(const struct _EXCEPTION_POINTERS* exception_poi
         return;
     }
 
-    if (!ptr_valid(func))
+    if (!lje_plat_addr_readable(func))
     {
-        fprintf(f, "\nCurrent function pointer (0x%p) is not valid. Stack may be too corrupted to retrieve.\n", func);
+        fprintf(f, "\nCurrent function pointer (0x%p) is not valid. Stack may be too corrupted to retrieve.\n", (void*)func);
         fclose(f);
         return;
     }
@@ -263,43 +121,28 @@ static void lje_write_dump_state(const struct _EXCEPTION_POINTERS* exception_poi
         {
             const char* chunkname = proto_chunknamestr(funcproto(fn));
             fprintf(f, "  [%d] Lua function: %s\n", level, chunkname);
-            if (isljefunc(fn))
-                fprintf(f, "    (This function is from a LJE script)\n");
         } else if (iscfunc(fn))
         {
-            fprintf(f, "  [%d] C function: %p\n", level, fn);
-            HMODULE mod = NULL;
-            if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCSTR)fn->c.f, &mod))
+            fprintf(f, "  [%d] C function: %p\n", level, (void*)fn);
+            char mod_name[LJE_PATH_MAX];
+            if (lje_plat_module_name_from_addr((void*)fn->c.f, mod_name, sizeof(mod_name)))
             {
-                char mod_name[MAX_PATH];
-                if (GetModuleFileNameA(mod, mod_name, MAX_PATH))
-                {
-                    char* filename = strrchr(mod_name, '\\');
-                    if (filename)
-                    {
-                        filename++;
-                    } else
-                    {
-                        filename = mod_name;
-                    }
-
-                    fprintf(f, "    (Module: %s)\n", filename);
-                }
-                else
-                {
-                    fprintf(f, "    (Module: unknown)\n");
-                }
+                fprintf(f, "    (Module: %s)\n", mod_name);
+            }
+            else
+            {
+                fprintf(f, "    (Module: unknown)\n");
             }
         }
         else
         {
-            fprintf(f, "  [%d] Unknown function type (ffid=%d): %p\n", level, fn->c.ffid, fn);
+            fprintf(f, "  [%d] Unknown function type (ffid=%d): %p\n", level, fn->c.ffid, (void*)fn);
         }
     }
 
     global_State* gl = G(L);
     fprintf(f, "\nHooks:\n");
-    fprintf(f, "  Hook function: %p\n", gl->hookf);
+    fprintf(f, "  Hook function: %p\n", (void*)gl->hookf);
     fprintf(f, "  Hook mask: 0x%02X\n", gl->hookmask);
     if (gl->hookmask & HOOK_GC)
     {
@@ -309,77 +152,102 @@ static void lje_write_dump_state(const struct _EXCEPTION_POINTERS* exception_poi
     fprintf(f, "vmstate: %d\n", gl->vmstate);
     if (gl->jit_base.ptr64)
     {
-        fprintf(f, "  JIT base (JIT code is running): %p\n", (void*)gl->jit_base.ptr64);
+        fprintf(f, "  JIT base (JIT code is running): %p\n", (void*)(uintptr_t)gl->jit_base.ptr64);
     }
     fclose(f);
 }
 
-static void lje_write_minidump(const struct _EXCEPTION_POINTERS* exception_pointers, const char* dump_path)
+/* Crash callback registered with the platform layer.
+ * Returns 0 to continue search (preserving EXCEPTION_CONTINUE_SEARCH semantics). */
+static int lje_on_crash(const LJEPlatCrashInfo* info, void* ud)
 {
-    HANDLE hFile = CreateFileA(dump_path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (hFile == INVALID_HANDLE_VALUE)
+    (void)ud;
+
+    /* Determine if this crash is relevant to LJE or LuaJIT. */
+    int is_relevant = 0;
+    LJEPlatModule luamod;
+    uintptr_t base;
+    size_t size;
+
+    /* Check fault address against LJE's own range. */
+    if (lje_plat_self_range(&base, &size))
     {
-        return;
+        uintptr_t fault = (uintptr_t)info->fault_addr;
+        if (fault >= base && fault < base + size)
+            is_relevant = 1;
     }
 
-    MINIDUMP_EXCEPTION_INFORMATION exception_info;
-    exception_info.ThreadId = GetCurrentThreadId();
-    exception_info.ExceptionPointers = (PEXCEPTION_POINTERS)exception_pointers;
-    exception_info.ClientPointers = FALSE;
-
-    MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile,
-                      MiniDumpNormal | MiniDumpWithDataSegs | MiniDumpWithUnloadedModules | MiniDumpWithThreadInfo,
-                      &exception_info, NULL, NULL);
-    CloseHandle(hFile);
-}
-
-static LONG WINAPI lje_exception_handler(const struct _EXCEPTION_POINTERS* exception_pointers)
-{
-    if (!is_valid_code(exception_pointers->ExceptionRecord->ExceptionCode))
+    /* Check fault address against LuaJIT's range. */
+    if (!is_relevant && lje_plat_module_find(LJE_LUA_MODULE, &luamod))
     {
-        return EXCEPTION_CONTINUE_SEARCH;
+        uintptr_t fault = (uintptr_t)info->fault_addr;
+        if (fault >= luamod.base && fault < luamod.base + luamod.size)
+            is_relevant = 1;
     }
 
-    if (!lje_is_relevant_crash(exception_pointers))
+    /* Check each frame address against both ranges. */
+    if (!is_relevant)
     {
-        return EXCEPTION_CONTINUE_SEARCH;
+        for (size_t i = 0; i < info->frame_count; i++)
+        {
+            uintptr_t frame = (uintptr_t)info->frames[i];
+            if (frame == 0)
+                continue;
+            if (lje_plat_self_range(&base, &size) &&
+                frame >= base && frame < base + size)
+            {
+                is_relevant = 1;
+                break;
+            }
+            if (lje_plat_module_find(LJE_LUA_MODULE, &luamod) &&
+                frame >= luamod.base && frame < luamod.base + luamod.size)
+            {
+                is_relevant = 1;
+                break;
+            }
+        }
     }
 
-    ensure_crash_dump_directory_exists();
-    char minidump_path[MAX_PATH] = { 0 };
-    char state_path[MAX_PATH] = { 0 };
+    if (!is_relevant)
+        return 0;
 
-    char filename[MAX_PATH] = { 0 };
-    make_dump_filename(filename, MAX_PATH);
+    /* Ensure crash dump directory exists and build paths. */
+    char dumps_dir[LJE_PATH_MAX];
+    if (!lje_directory_get(LJE_DIR_CRASH_DUMPS, dumps_dir, sizeof(dumps_dir)))
+        return 0;
 
-    expand_crash_dump_path(minidump_path, MAX_PATH);
-    expand_crash_dump_path(state_path, MAX_PATH);
+    char filename[LJE_PATH_MAX];
+    make_dump_filename(filename, sizeof(filename));
 
-    strncat_s(minidump_path, MAX_PATH, "\\", _TRUNCATE);
-    strncat_s(state_path, MAX_PATH, "\\", _TRUNCATE);
+    char state_path[LJE_PATH_MAX];
+    if (!lje_path_join(state_path, sizeof(state_path), dumps_dir, filename))
+        return 0;
+    lje_strlcat(state_path, ".txt", sizeof(state_path));
 
-    strncat_s(minidump_path, MAX_PATH, filename, _TRUNCATE);
-    strncat_s(state_path, MAX_PATH, filename, _TRUNCATE);
+    /* Write the state text dump. */
+    lje_write_state_dump(info, state_path);
 
-    strncat_s(minidump_path, MAX_PATH, ".dmp", _TRUNCATE);
-    strncat_s(state_path, MAX_PATH, ".txt", _TRUNCATE);
+    /* Write the platform-native minidump. */
+    char minidump_path[LJE_PATH_MAX];
+    if (lje_path_join(minidump_path, sizeof(minidump_path), dumps_dir, filename))
+    {
+        lje_strlcat(minidump_path, ".dmp", sizeof(minidump_path));
+        lje_plat_crash_write_native_dump(info, minidump_path);
+    }
 
-    lje_write_dump_state(exception_pointers, state_path);
-    lje_write_minidump(exception_pointers, minidump_path);
-
-    MessageBoxA(
-        NULL,
-        "LJE has encountered a crash. A crash dump will be generated in %USERPROFILE%/" LJE_CRASH_DUMPS_PATH " to help fix the issue.\n\n"
-        "Please consider sharing the crash dump to help improve LJE. It will not automatically be shared.\n\n",
+    /* Show a message box to the user. */
+    lje_plat_message_box(
         "LJE Crash Handler",
-        MB_OK | MB_ICONERROR
+        "LJE has encountered a crash. A crash dump will be generated in your LJE crash directory to help fix the issue.\n\n"
+        "Please consider sharing the crash dump to help improve LJE. It will not automatically be shared.\n\n"
     );
 
-    return EXCEPTION_CONTINUE_SEARCH;
+    return 0; /* Let the OS continue searching for other handlers */
 }
 
-void lje_crash_handler_init()
+/* ------------------------------------------------------------------ */
+
+void lje_crash_handler_init(void)
 {
-    SymInitialize(GetCurrentProcess(), NULL, TRUE);
-    SetUnhandledExceptionFilter(lje_exception_handler);
+    lje_plat_crash_install(lje_on_crash, NULL);
 }

@@ -24,7 +24,7 @@
 #include "lj_expand_log.h"
 #include "lj_expand_module.h"
 #include "lj_expand_detour.h"
-#include "lj_expand_signatures.h"
+#include "lj_expand_platform.h"
 #include "lj_frame.h"
 #include "lj_trace.h"
 #include "lj_vm.h"
@@ -79,7 +79,7 @@ static TValue *index2adr(lua_State *L, int idx)
     if (LJEG()->redirect_to_isolation)
     {
       TValue* o = &G(L)->tmptv;
-      settabV(L, o, LJEG()->shadow_registry);
+      settabV(L, o, LJE_SHADOW());
       return o;
     }
 
@@ -258,6 +258,7 @@ LUA_API void lua_pushvalue(lua_State *L, int idx)
 LUA_API int lua_type(lua_State *L, int idx)
 {
   lje_redirect_state(L);
+
   cTValue *o = index2adr(L, idx);
   if (tvisnumber(o)) {
     return LUA_TNUMBER;
@@ -803,7 +804,7 @@ LUALIB_API int luaL_newmetatable(lua_State *L, const char *tname)
   GCtab *regt = tabV(registry(L));
   if (LJEG()->redirect_to_isolation)
   {
-    regt = LJEG()->shadow_registry;
+    regt = LJE_SHADOW();
   }
   TValue *tv = lj_tab_setstr(L, regt, lj_str_newz(L, tname));
   if (tvisnil(tv)) {
@@ -894,6 +895,7 @@ LUA_API void lua_gettable(lua_State *L, int idx)
 LUA_API void lua_getfield(lua_State *L, int idx, const char *k)
 {
   lje_redirect_state(L);
+
   cTValue *v, *t = index2adr(L, idx);
   TValue key;
   api_checkvalidindex(L, t);
@@ -923,7 +925,11 @@ LUA_API void lua_rawgeti(lua_State *L, int idx, int n)
   lje_redirect_state(L);
 
   TValue shadow_registry;
-  settabV(L, &shadow_registry, LJEG()->shadow_registry);
+  settabV(L, &shadow_registry, LJE_SHADOW());
+
+  /* Hoisted: the miss path below is also reached by goto, which would skip an
+     initialiser declared inside it. */
+  lua_State* redirect_host_state = lje_host_state(LJEG()->redirect_host);
 
   cTValue *v, *t = index2adr(L, idx);
   if (LJEG()->redirect_to_isolation && idx == LUA_REGISTRYINDEX)
@@ -939,15 +945,20 @@ LUA_API void lua_rawgeti(lua_State *L, int idx, int n)
     {
       goto copy_to_isolated_registry; /* Means we invalidated this from the preinit Lua script. Fetch it again from host. */
     }
+    /* LJE: Tag registry-backed host userdata with its ref index (align1 is dead
+     * padding) so engine call hooks can reuse the shadow registry copy later. */
+    if (!LJEG()->redirect_to_isolation && idx == LUA_REGISTRYINDEX &&
+        lje_host_id_of(L, NULL) && n != 0 && tvisudata(v))
+      udataV(v)->align1 = (uint32_t)n;
     copyTV(L, L->top, v);
   } else {
     if (LJEG()->redirect_to_isolation && idx == LUA_REGISTRYINDEX)
     {
 copy_to_isolated_registry:
       /* Slot 0 == freelist head. Will cause collisions. */
-      if (n != 0)
+      if (n != 0 && redirect_host_state)
       {
-        lua_State* host = LJEG()->main_state;
+        lua_State* host = redirect_host_state;
         cTValue* reg = registry(host);
         v = lj_tab_getint(tabV(reg), n);
         if (v && !tvisnil(v))
@@ -969,7 +980,7 @@ copy_to_isolated_registry:
 
                 /* Cache it in the shadow registry under the same ref so the next
                  * lookup hits the fast path without re-checking the host. */
-                GCtab* isolated_reg = LJEG()->shadow_registry;
+                GCtab* isolated_reg = LJE_SHADOW();
                 TValue* dst = lj_tab_setint(L, isolated_reg, n);
                 copyTV(L, dst, to_metatable);
                 lj_gc_barriert(L, isolated_reg, dst);
@@ -986,7 +997,7 @@ copy_to_isolated_registry:
            * next lookup succeeds without copying. No numbers since those are freelist links. */
           if (!tvisnumber(v))
           {
-            GCtab* isolated_reg = LJEG()->shadow_registry;
+            GCtab* isolated_reg = LJE_SHADOW();
             TValue* dst = lj_tab_setint(L, isolated_reg, n);
             TValue* src = L->top - 1; /* what we just pushed */
             copyTV(L, dst, src);
@@ -1186,11 +1197,16 @@ LUA_API void lua_rawseti(lua_State *L, int idx, int n)
   lj_gc_barriert(L, t, dst);
   L->top = src;
 
-  /* LJE: Clear any host registry writes in the shadow registry so they are identical again. */
+  /* LJE: Clear any host registry writes in that host's shadow registry so they are identical again. */
+  LJEHostId host = LJE_HOST_CLIENT;
   if (!LJEG()->redirect_to_isolation && idx == LUA_REGISTRYINDEX &&
-      L == LJEG()->main_state && LJEG()->shadow_registry && n != 0) {
-    TValue *cached = (TValue *)lj_tab_getint(LJEG()->shadow_registry, n);
+      lje_host_id_of(L, &host) && lje_host_view(host)->shadow_registry && n != 0) {
+    TValue *cached = (TValue *)lj_tab_getint(lje_host_view(host)->shadow_registry, n);
     if (cached) setnilV(cached);
+    if (tvisudata(dst)) {
+      // Tag this userdata with its registry index for caching
+      udataV(dst)->align1 = (uint32_t)n;
+    }
   }
 }
 
@@ -1358,6 +1374,8 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     /* main_state is only now known; bind LJE_CLIENT_STATE before secure scripts run. */
     lje_path_install_state_globals(LJEG()->isolated_state);
 
+    /* Closing the previous client state cleared its shadow registry, so re-seed. */
+    lje_startup_shadow_stubs(LJEG()->isolated_state);
     lje_startup_secure_preinit(LJEG()->isolated_state);
     // Ensure settings are refetched as well
     lje_settings_clear_cache(LJEG()->isolated_state);
@@ -1388,6 +1406,30 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     LJE_INFO("Starting up Lua...");
   }
 
+  /* LJE: Run all boot.lua entrypoints */
+  if (tvisfunc(L->base) && LJEG()->waiting_for_menu_call)
+  {
+    LJEG()->waiting_for_menu_call = 0;
+    LJE_INFO("Running boot entrypoint for all scripts...");
+    // Boot scripts are the earliest thing that can call into a host state, so the
+    // shadow registries need their stubs before the helpers land.
+    lje_startup_shadow_stubs(LJEG()->isolated_state);
+    // Load the pure-Lua helpers into the isolated state so boot scripts have them
+    // available before they run.
+    lje_startup_secure_helpers(LJEG()->isolated_state);
+
+    // Check if any scripts have boot.lua, if so run them now in the isolated state
+    LJEG()->in_boot_phase = 1;
+    lje_iterate_scripts()
+      if (script->boot_path != NULL)
+      {
+        LJE_INFO("Running boot script for script %s...", script->info->name);
+        lje_startup_execute(LJEG()->isolated_state, script, script->boot_path);
+      }
+    lje_iterate_scripts_end()
+    LJEG()->in_boot_phase = 0;
+}
+
   /* LJE: Reload any scripts at this point, if needed. */
   if (LJEG()->script_watcher && LJEG()->main_state == L) /* only reload on new engine calls */
   {
@@ -1413,7 +1455,9 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
    * copy of that snapshot to each post hook. */
   int run_post_hooks = 0;
   int post_snapshot_base = 0;
+  int suppressed = 0;
   GCfunc* engine_func = NULL;
+  LJEHostId call_host = LJE_HOST_CLIENT;
 
   /* LJE: Determine if this is an engine call. */
   /* Note: Not all engine calls start at the base of the stack.
@@ -1421,9 +1465,13 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
    * Some are called during Lua (e.g: in a C function), so we need to pivot around the **top** of the stack instead, using
    * api_call_base & the errfunc to determine where the function actually is.
    */
-  if (L == LJEG()->main_state && !LJEG()->using_error_reporter && errfunc)
+  /* Every CLuaInterface shares one AdvancedLuaErrorReporter, so the same check
+     identifies an engine call in the menu universe as in the client one. */
+  cTValue* errfunc_tv = errfunc ? stkindex2adr(L, errfunc) : NULL;
+  if (lje_host_id_of(L, &call_host) && !LJEG()->using_error_reporter && errfunc &&
+      tvisfunc(errfunc_tv) && tvisfunc(stkindex2adr(L, -nargs - 1)))
   {
-    GCfunc* f = funcV(stkindex2adr(L, errfunc));
+    GCfunc* f = funcV(errfunc_tv);
     GCfunc* called_function = funcV(stkindex2adr(L, -nargs - 1));
     char is_function_null = f == LJ_GCVMASK || (uintptr_t)f == 0x0000400000000000;
     if (is_function_null)
@@ -1443,7 +1491,13 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
        * scripts can do comparisons without copying a full function object across states. */
       lua_State* I = LJEG()->isolated_state;
 
-      /* Pre-call engine call hooks run first. */
+      /* Pre-call engine call hooks run first. While they do, they may call
+       * lje.vm.suppress_engine_call() to drop the call entirely. Both flags are
+       * saved and restored so a nested engine call can't clobber an outer one. */
+      char prev_in_pre_hook = LJEG()->in_pre_engine_call_hook;
+      char prev_suppressed = LJEG()->engine_call_suppressed;
+      LJEG()->in_pre_engine_call_hook = 1;
+      LJEG()->engine_call_suppressed = 0;
       for (size_t i = 0; i < LJEG()->loaded_script_count; i++) {
         LJEScript* script = LJEG()->script_load_order[i];
         for (size_t j = 0; j < script->extra->engine_call_hook_count; j++)
@@ -1451,6 +1505,8 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
           LJEEngineCallHook hook = script->extra->engine_call_hooks[j];
           if (hook.ref == LUA_NOREF)
             continue;
+          if (hook.host != call_host)
+            continue; /* registered for the other universe */
           if (hook.is_post)
           {
             run_post_hooks = 1; /* defer this one until after the real call */
@@ -1466,7 +1522,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
           {
             cTValue* arg_val = stkindex2adr(L, -nargs + arg);
             if (tvistab(arg_val) || tvisudata(arg_val))
-              lua_pushlightuserdata(I, lje_proxy(arg_val));
+              lua_pushlightuserdata(I, lje_proxy(arg_val, call_host));
             else
               lje_copy_to_isolated_state(L, I, -nargs + arg, 0);
           }
@@ -1481,19 +1537,33 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
             lua_pop(I, 1);
             lje_proxy_release_all();
             lj_gc_check(I);
+            /* A hook that errored out doesn't get to suppress the call. */
+            LJEG()->engine_call_suppressed = 0;
             continue;
           }
 
           LJEG()->using_error_reporter = 0;
           lje_proxy_release_all();
           lj_gc_check(I);
+
+          if (LJEG()->engine_call_suppressed)
+          {
+            suppressed = 1;
+            break; /* the remaining hooks are cancelled along with the call */
+          }
         }
+
+        if (suppressed)
+          break;
       }
+
+      LJEG()->in_pre_engine_call_hook = prev_in_pre_hook;
+      LJEG()->engine_call_suppressed = prev_suppressed;
 
       /* LJE: Snapshot the args for post hooks before the real call consumes them. The
        * snapshot sits at the base of the isolated stack and we replay a copy to each
        * post hook afterwards; proxies stay alive until they have all run. */
-      if (run_post_hooks)
+      if (run_post_hooks && !suppressed)
       {
         engine_func = called_function;
         post_snapshot_base = lua_gettop(I) + 1;
@@ -1501,12 +1571,26 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
         {
           cTValue* arg_val = stkindex2adr(L, -nargs + arg);
           if (tvistab(arg_val) || tvisudata(arg_val))
-            lua_pushlightuserdata(I, lje_proxy(arg_val));
+            lua_pushlightuserdata(I, lje_proxy(arg_val, call_host));
           else
             lje_copy_to_isolated_state(L, I, -nargs + arg, 0);
         }
       }
     }
+  }
+
+  /* A pre hook suppressed the call: pop the function and its arguments, then fake a
+   * successful call that returned nothing, so the engine sees the shape it expects. */
+  if (suppressed)
+  {
+    L->top -= nargs + 1;
+    if (nresults > 0)
+    {
+      lj_state_checkstack(L, (MSize)nresults);
+      for (int i = 0; i < nresults; i++)
+        setnilV(L->top++);
+    }
+    return LUA_OK;
   }
 
   if (LJEG()->isolated_state == L && errfunc)
@@ -1516,7 +1600,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     if (o && !tvisfunc(o))
     {
       LJE_WARN("errfunc is set but not a function. This is unexpected, but we'll try to continue anyway.");
-      __debugbreak();
+      lje_plat_debug_break();
     }
   }
 
@@ -1555,7 +1639,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
         LJEEngineCallHook hook = script->extra->engine_call_hooks[j];
         if (hook.ref == LUA_NOREF)
           continue;
-        if (!hook.is_post)
+        if (!hook.is_post || hook.host != call_host)
           continue;
 
         lua_rawgeti(I, LUA_REGISTRYINDEX, hook.ref);
@@ -1752,11 +1836,17 @@ LUA_API void lua_setallocf(lua_State *L, lua_Alloc f, void *ud)
   g->allocf = f;
 }
 
+// Anything to do with new states is hooked - not overwritten.
+// This is because GMod has a lot of proprietary changes that we can't really replicate easily
+
 typedef void (*lua_close_t)(lua_State* L);
-static lua_close_t lua_close_trampoline = NULL;
+
+static LJEDetourHook lua_close_hook;
 
 static void lua_close_detour(lua_State* L)
 {
+  int host_closed = lje_host_id_of(L, NULL);
+
   if (L == LJEG()->main_state)
   {
     LJE_INFO("Detected main state being closed. Cleaning up LJE resources...");
@@ -1789,36 +1879,42 @@ static void lua_close_detour(lua_State* L)
     LJEG()->main_state = NULL;
     lje_clear_global_refs();
     // Kill off old registry.
-    lj_tab_clear(LJEG()->shadow_registry);
+    if (lje_host_view(LJE_HOST_CLIENT)->shadow_registry)
+      lj_tab_clear(lje_host_view(LJE_HOST_CLIENT)->shadow_registry);
+  }
+  else if (L == LJEG()->menu_state)
+  {
+    LJE_INFO("Detected menu state being closed.");
+    LJEG()->menu_state = NULL;
+    if (lje_host_view(LJE_HOST_MENU)->shadow_registry)
+      lj_tab_clear(lje_host_view(LJE_HOST_MENU)->shadow_registry);
   }
 
-  if (lua_close_trampoline)
-    lua_close_trampoline(L);
+  /* lje.state holds raw pointers, so drop the one that just died. */
+  if (host_closed && LJEG()->isolated_state)
+    lje_path_install_state_globals(LJEG()->isolated_state);
+
+  /* Lift the hook, run the real lua_close, then re-arm it for the next state. */
+  if (lua_close_hook.target)
+  {
+    lje_detour_suspend(&lua_close_hook);
+    ((lua_close_t)lua_close_hook.target)(L);
+    lje_detour_resume(&lua_close_hook);
+  }
 }
 
 #ifdef LJ_TARGET_WINDOWS
 #include <windows.h>
 #include <stdio.h>
 
-BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
-  if (ul_reason_for_call == DLL_PROCESS_ATTACH)
-  {
-    DisableThreadLibraryCalls(hModule);
-    AllocConsole();
+/* Bootstrap — extracted from DllMain so the same initialisation sequence can
+ * later be called from a __attribute__((constructor)) shim on POSIX. */
+static void lje_bootstrap(void* self_handle)
+{
+  lje_plat_init(self_handle);
+  lje_plat_console_init("LJE Console");
 
-    FILE* fDummy;
-    freopen_s(&fDummy, "CONOUT$", "w", stdout);
-    freopen_s(&fDummy, "CONOUT$", "w", stderr);
-
-    SetWindowTextA(GetConsoleWindow(), "LJE Console");
-    // Enable VT processing for colors and stuff
-    DWORD consoleMode;
-    HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-    GetConsoleMode(consoleHandle, &consoleMode);
-    consoleMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    SetConsoleMode(consoleHandle, consoleMode);
-
-    lje_Module* mod = lje_module_find("lua_shared.dll");
+  lje_Module* mod = lje_module_find(LJE_LUA_MODULE);
     if (mod) {
       LJECommandLineOptions* options = lje_get_command_line_options();
       if (options->enable_debug_prints)
@@ -1839,11 +1935,6 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved
       {
         LJE_ERROR("Failed to migrate legacy directories! If you had scripts or binary modules in the old folders, please move them to the new ones manually.");
       }
-
-      // Remap all the necessary functions to our own.
-#define SIGDEF(name, _) lje_remap(mod, name)
-#include "lje_signatures.h"
-#undef SIGDEF
 
 // This is *very* annoying, but GMod's luaL_traceback seems to have inlined lj_debug_frame,
 // so we have to detour that as well to ensure our debug_frame is used.
@@ -1979,10 +2070,10 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
       lje_detour_export(mod, luaL_setmetatable, luaL_setmetatable);
       lje_detour_export(mod, luaL_pushmodule, luaL_pushmodule);
 
-      lua_close_t original_close = lje_module_get_func(mod, "lua_close");
+      void* original_close = lje_module_get_func(mod, "lua_close");
       if (original_close)
       {
-        int attached = lje_detour_trampoline(original_close, lua_close_detour, (void*)&lua_close_trampoline);
+        int attached = lje_detour_hook(&lua_close_hook, original_close, (void*)lua_close_detour);
         if (!attached)
           LJE_ERROR("Failed to detour lua_close! This may cause resource leaks when the game closes.");
         else
@@ -1993,15 +2084,13 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
        * vehemently avoiding having to deal with the engine as opposed to LuaJIT, but
        * given that the game makes *all* engine calls via this function, we have no choice.
        */
-      LJEG()->adv_error_reporter = (lua_CFunction)lje_module_get_func(mod, "?AdvancedLuaErrorReporter@@YAHPEAUlua_State@@@Z");
+      LJEG()->adv_error_reporter = (lua_CFunction)lje_module_get_func(mod, LJE_SYM_ADV_ERROR_REPORTER);
       if (LJEG()->adv_error_reporter)
       {
         LJE_DEBUG("Found AdvancedLuaErrorReporter at %p", LJEG()->adv_error_reporter);
       } else {
         LJE_WARN("AdvancedLuaErrorReporter not found!");
       }
-
-
 
       if (options->disable_binary_modules)
       {
@@ -2029,8 +2118,8 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
       if (!lje_script_folder_exists())
       {
         // Tell them we're creating one for them
-        char path[MAX_PATH];
-        lje_script_resolve_base(path, MAX_PATH);
+        char path[LJE_PATH_MAX];
+        lje_script_resolve_base(path, LJE_PATH_MAX);
         LJE_INFO("%s folder not found, creating it now...", LJE_SCRIPT_FOLDER);
         LJE_INFO("Creating at path: %s", path);
         if (!lje_script_folder_create())
@@ -2096,24 +2185,19 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
         LJE_INFO("Loading binary module %s into isolated state...", mod->name);
         lje_binary_module_run_preinit(mod, LJEG()->isolated_state);
       }
-
-      // Load the pure-Lua helpers into the isolated state so boot scripts have them
-      // available before they run.
-      lje_startup_secure_helpers(LJEG()->isolated_state);
-
-      // Check if any scripts have boot.lua, if so run them now in the isolated state
-      lje_iterate_scripts()
-        if (script->boot_path != NULL)
-        {
-          LJE_INFO("Running boot script for script %s...", script->info->name);
-          lje_startup_execute(LJEG()->isolated_state, script, script->boot_path);
-        }
-      lje_iterate_scripts_end()
-
     } else {
-      LJE_ERROR("lua_shared.dll not found!");
+      LJE_ERROR(LJE_LUA_MODULE " not found!");
     }
+  }
 
+  /* ---- DllMain --------------------------------------------------------- */
+  /* On POSIX this whole function is replaced by __attribute__((constructor)). */
+
+BOOL WINAPI DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
+  if (ul_reason_for_call == DLL_PROCESS_ATTACH)
+  {
+    DisableThreadLibraryCalls(hModule);
+    lje_bootstrap(hModule);
     return TRUE;
   }
 

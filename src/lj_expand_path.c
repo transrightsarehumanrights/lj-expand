@@ -53,7 +53,8 @@ typedef struct LJEPathOp
 
 typedef struct LJEPath
 {
-  lua_State* target_state;
+  /* A host id, not a pointer: paths can outlive the state they were built for. */
+  LJEHostId target_host;
   int num_ops;
   LJEPathOp ops[LJE_PATH_MAX_OPS];
   char str[LJE_PATH_STR_MAX];
@@ -141,7 +142,14 @@ static int method_copy(lua_State* L)
 
   // Handle first string which determines the root of the path, we do this
   // by indexing it into the global state of the target
-  lua_State* T = path->target_state;
+  lua_State* T = lje_host_state(path->target_host);
+  if (!T)
+  {
+    LJE_WARN("Path target (%s state) is not alive", lje_host_name(path->target_host));
+    lua_pushnil(L);
+    return 1;
+  }
+
   GCtab* env = tabref(T->env);
   cTValue* root = lj_tab_getstr_raw(env, path->str, strlen(path->str));
   if (!root)
@@ -202,11 +210,18 @@ static void initialize_mt(lua_State* L)
 
 int lje_state_path(lua_State* L)
 {
-  lua_State* T = lua_touserdata(L, 1); // lightuserdata
+  lua_State* T = lua_touserdata(L, 1); // lightuserdata, from lje.state.client/menu
   const char* path = luaL_checkstring(L, 2);
 
+  LJEHostId host;
+  if (!lje_host_id_of(T, &host))
+  {
+    luaL_error(L, "lje.state.path: argument 1 is not a live host state");
+    return 0;
+  }
+
   LJEPath* path_ud = (LJEPath*)lua_newuserdata(L, sizeof(LJEPath));
-  path_ud->target_state = T;
+  path_ud->target_host = host;
   path_ud->num_ops = 0;
   strncpy(path_ud->str, path, LJE_PATH_STR_MAX - 1);
   path_ud->str[LJE_PATH_STR_MAX - 1] = '\0';
@@ -220,17 +235,28 @@ int lje_state_path(lua_State* L)
 
 void lje_path_install_state_globals(lua_State* L)
 {
-  if (!LJEG()->main_state)
+  lua_getfield(L, LUA_GLOBALSINDEX, "lje");
+  lua_getfield(L, -1, "state");
+  if (!lua_istable(L, -1))
   {
-    LJE_WARN("Cannot install path globals, main state is null");
+    LJE_WARN("Cannot install state globals, lje.state is missing");
+    lua_pop(L, 2);
     return;
   }
 
-  lua_getfield(L, LUA_GLOBALSINDEX, "lje");
-  lua_getfield(L, -1, "state");
-  lua_pushlightuserdata(L, (void*)LJEG()->main_state);
-  lua_setfield(L, -2, "client");
-  lua_pop(L, 1);
+  /* Re-run whenever a host state appears or is replaced: these are raw pointers
+     and a closed state leaves a stale one behind. */
+  for (int i = 0; i < LJE_HOST_COUNT; i++)
+  {
+    lua_State* host = lje_host_state((LJEHostId)i);
+    if (host != NULL)
+      lua_pushlightuserdata(L, (void*)host);
+    else
+      lua_pushnil(L);
+    lua_setfield(L, -2, lje_host_name((LJEHostId)i));
+  }
+
+  lua_pop(L, 2);
 }
 
 bool index_path_op(lua_State* target_state, TValue* current_object, LJEPathOp* op)

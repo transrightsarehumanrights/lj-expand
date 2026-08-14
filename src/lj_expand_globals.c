@@ -1,15 +1,12 @@
 #include "lj_expand_globals.h"
 #include "lj_expand_log.h"
+#include "lj_expand_platform.h"
 
 #include <stdlib.h>
 #include <string.h>
 
 #include "lauxlib.h"
 #include "lua.h"
-
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#include <Psapi.h>
 
 static LJEGlobalState* lje_global_state = NULL;
 
@@ -23,13 +20,34 @@ LJEGlobalState* lje_get_global_state() {
     return lje_global_state;
 }
 
+size_t lje_script_drop_transient_hooks(LJEScript* script, lua_State* unref_state)
+{
+    size_t kept = 0;
+    for (size_t i = 0; i < script->extra->engine_call_hook_count; i++)
+    {
+        LJEEngineCallHook hook = script->extra->engine_call_hooks[i];
+        if (hook.boot_scoped)
+        {
+            script->extra->engine_call_hooks[kept++] = hook;
+            continue;
+        }
+
+        if (unref_state && hook.ref != LUA_NOREF)
+            luaL_unref(unref_state, LUA_REGISTRYINDEX, hook.ref);
+    }
+
+    memset(&script->extra->engine_call_hooks[kept], 0,
+           sizeof(LJEEngineCallHook) * (LJE_SCRIPT_MAX_ENGINE_CALL_HOOKS - kept));
+    script->extra->engine_call_hook_count = kept;
+    return kept;
+}
+
 void lje_clear_global_refs() {
     LJEG()->script_hook_ref_id = LUA_NOREF;
     for (size_t i = 0; i < LJEG()->loaded_script_count; i++)
     {
         LJEScript* script = LJEG()->script_load_order[i];
-        script->extra->engine_call_hook_count = 0;
-        memset(script->extra->engine_call_hooks, 0, sizeof(LJEEngineCallHook) * LJE_SCRIPT_MAX_ENGINE_CALL_HOOKS);
+        lje_script_drop_transient_hooks(script, NULL);
         script->extra->cleanup_ref_id = LUA_NOREF;
     }
 
@@ -40,27 +58,48 @@ void lje_clear_global_refs() {
     }
 }
 
-static uintptr_t lje_base_addr = 0;
-static size_t lje_addr_range = 0;
-static const char* lje_module_name = "lje-w64.dll";
-
-int lje_is_addr_in_lje(uintptr_t addr)
+LJEHostView* lje_host_view(LJEHostId id)
 {
-    if (lje_base_addr == 0)
+    if ((int)id < 0 || (int)id >= LJE_HOST_COUNT)
+        id = LJE_HOST_CLIENT;
+    return &LJEG()->hosts[id];
+}
+
+/* We only support menu or client for now. */
+lua_State* lje_host_state(LJEHostId id)
+{
+    return id == LJE_HOST_MENU ? LJEG()->menu_state : LJEG()->main_state;
+}
+
+int lje_host_id_of(lua_State* L, LJEHostId* out)
+{
+    if (!L)
+        return 0;
+
+    for (int i = 0; i < LJE_HOST_COUNT; i++)
     {
-        HMODULE hModule = GetModuleHandleA(lje_module_name);
-        if (hModule)
+        if (lje_host_state((LJEHostId)i) == L)
         {
-            MODULEINFO modInfo;
-            if (GetModuleInformation(GetCurrentProcess(), hModule, &modInfo, sizeof(modInfo)))
-            {
-                lje_base_addr = (uintptr_t)modInfo.lpBaseOfDll;
-                lje_addr_range = (size_t)modInfo.SizeOfImage;
-            }
+            if (out) *out = (LJEHostId)i;
+            return 1;
         }
     }
 
-    return (addr >= lje_base_addr) && (addr < (lje_base_addr + lje_addr_range));
+    return 0;
+}
+
+const char* lje_host_name(LJEHostId id)
+{
+    return id == LJE_HOST_MENU ? "menu" : "client";
+}
+
+int lje_is_addr_in_lje(uintptr_t addr)
+{
+    uintptr_t base;
+    size_t size;
+    if (!lje_plat_self_range(&base, &size))
+        return 0;
+    return (addr >= base) && (addr < (base + size));
 }
 
 void lje_print_stack(lua_State* L)

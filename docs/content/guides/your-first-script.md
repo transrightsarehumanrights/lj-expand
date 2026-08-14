@@ -34,9 +34,23 @@ binaries = ["lje-mymodule"]
 
 ## boot.lua
 
-This is the earliest entry point for your script. It runs before GMod is finished loading. **There is no GMod API at this stage.**
+This is the earliest entry point for your script. It runs during the main menu, before GMod is finished loading. **There is no client GMod API at this stage** — no `surface`, `ents`, `hook` or anything else the [preinit](/api/secure#pull) pulls in, because the client state does not exist yet.
+
+The **menu** state does exist by then, and is reachable:
+
+```lua
+-- lje.state.client is nil here; lje.state.menu is not.
+local openURL = lje.secure.pull("gui.OpenURL", lje.state.menu)
+```
+
+Feel free to pull in any GMod API available in the menu state, **but be aware some functions differ in behavior depending on the state**.
+It is **not recommended** to pollute the global LJE environment with menu state functions, as they may overwrite client functions imported during preinit.
+Declare them locally instead, or use `lje.secure.pull` to pull them into a local table.
+
+See [lje.state](/api/state) for the details on which universe is available when.
 
 This is really only useful for:
+- Reading, calling into, or [hooking](/api/vm#add_engine_call_hook) the main menu. Hooks registered here last for the whole process, unlike ones registered from `main.lua`.
 - Setting up deep engine detours (with unsafe LJE).
 - Amortizing something expensive that you don't want to run during normal execution.
 - Setting up some kind of early state that your script needs.

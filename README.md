@@ -14,3 +14,10 @@ I don't condone cheating, or exploiting a server. I do however believe that you 
 # Licensing
 
 No license file on purpose since it is a fork of LuaJIT, which is MIT licensed anyways, which means this project is also MIT licensed.
+
+## AI Disclaimer
+
+LLMs are partially used in LJE to primarily assist with documentation and auxiliary tasks such as CI/CD.
+LLMs touching the core functionality of LJE is strictly scrutinized and not recommended, since even the most simple bugs in LJE can be exploited to lead to holes in the LJE security model.
+
+LLM-generated code **must be reviewed** in full before being merged, please do not submit LLM-generated code without any regard for its security implications.

@@ -41,7 +41,7 @@ void lje_proxy_arena_init()
     memset(proxy_arena, 0, sizeof(LJEProxy) * proxy_arena_size);
 }
 
-LJEProxy* lje_proxy(cTValue* val)
+LJEProxy* lje_proxy(cTValue* val, LJEHostId host)
 {
     if (!proxy_arena)
     {
@@ -63,6 +63,7 @@ LJEProxy* lje_proxy(cTValue* val)
         {
             // Initialize the proxy
             proxy_arena[i].host_type = obj->gch.gct;
+            proxy_arena[i].host = host;
             proxy_arena[i].host_obj = obj;
 
             proxy_arena_used++;
@@ -72,7 +73,7 @@ LJEProxy* lje_proxy(cTValue* val)
 
     // No free slot found, need to resize the arena
     resize_arena(proxy_arena_size * 2);
-    return lje_proxy(val); // Try again after resizing
+    return lje_proxy(val, host); // Try again after resizing
 }
 
 void lje_proxy_release_all()

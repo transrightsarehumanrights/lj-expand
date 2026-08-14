@@ -304,17 +304,35 @@ int lje_add_engine_call_hook(lua_State* L)
     luaL_error(L, "maximum number of engine call hooks reached for script '%s'", current_script->name);
   }
 
-  // Ensure the boolean is popped first if it was passed so we don't ref that
-  if (lua_gettop(L) >= 2)
+  // Optional arg 3 picks which universe's engine calls to listen to.
+  LJEHostId host = LJE_HOST_CLIENT;
+  if (!lua_isnoneornil(L, 3) && !lje_host_id_of(lua_touserdata(L, 3), &host))
   {
-    lua_pop(L, 1);
+    luaL_error(L, "add_engine_call_hook: argument 3 is not a live host state");
   }
+
+  // Drop everything but the callback so luaL_ref refs the right value.
+  lua_settop(L, 1);
 
   int ref_id = luaL_ref(L, LUA_REGISTRYINDEX);
   LJEEngineCallHook hook;
   hook.is_post = is_post;
   hook.ref = ref_id;
+  hook.host = host;
+  hook.boot_scoped = LJEG()->in_boot_phase;
   current_script->extra->engine_call_hooks[current_script->extra->engine_call_hook_count++] = hook;
+  return 0;
+}
+
+int lje_suppress_engine_call(lua_State* L)
+{
+  /* Only pre hooks can suppress: by the time post hooks run the engine call is done. */
+  if (!LJEG()->in_pre_engine_call_hook)
+  {
+    luaL_error(L, "suppress_engine_call() may only be called from within a pre engine call hook");
+  }
+
+  LJEG()->engine_call_suppressed = 1;
   return 0;
 }
 
@@ -358,42 +376,10 @@ static int lje_create_table(lua_State* L)
   return 1;
 }
 
-
-// Wraps every C function we pull so we can securely call it.
-static int lje_secure_gmod_api(lua_State* L)
-{
-  void* func_ptr = lua_touserdata(L, lua_upvalueindex(1));
-  if (!func_ptr)
-  {
-    lua_pushnil(L);
-    return 1;
-  }
-
-  // zero-copy function call! state redirection handles this,
-  // we just need to dispatch the c function raw.
-  lua_CFunction func = (lua_CFunction)func_ptr;
-  // Latch incase isolation is being forced
-  int redirection_required = LJEG()->redirect_to_isolation == 0;
-  int prev = LJEG()->redirect_to_isolation;
-  if (redirection_required)
-    LJEG()->redirect_to_isolation = 1;
-  int results = func(LJEG()->main_state); /* make it think it's running in the main state, it won't know any better! */
-  if (redirection_required)
-    LJEG()->redirect_to_isolation = prev;
-  return results;
-}
-
 static int lje_secure_pull(lua_State* L)
 {
-  // Pulls a global out of the client state and returns it to the secure state.
-  // This is necessary for secure scripts to be able to interact with the client state
-  // in a limited way, without exposing the full global environment.
-  if (!LJEG()->main_state)
-  {
-    luaL_error(L, "main state not set for secure pull");
-    return 0;
-  }
-
+  // Pulls a global out of a host state and returns it to the secure state.
+  // This is basically a less advanced version of the state API meant for preinit.
   const char* name = luaL_checkstring(L, 1); // e.g: "Msg" or "player.GetAll"
   if (!name)
   {
@@ -401,7 +387,21 @@ static int lje_secure_pull(lua_State* L)
     return 1;
   }
 
-  lua_State* L2 = LJEG()->main_state;
+  // Optional arg 2 selects the universe (lje.state.client / lje.state.menu).
+  LJEHostId host = LJE_HOST_CLIENT;
+  if (!lua_isnoneornil(L, 2) && !lje_host_id_of(lua_touserdata(L, 2), &host))
+  {
+    luaL_error(L, "secure pull: argument 2 is not a live host state");
+    return 0;
+  }
+
+  lua_State* L2 = lje_host_state(host);
+  if (!L2)
+  {
+    luaL_error(L, "secure pull: %s state is not alive", lje_host_name(host));
+    return 0;
+  }
+
   global_State* g = G(L2);
 
   // We cannot interact with the main state directly. Since there is no active function call,
@@ -417,7 +417,7 @@ static int lje_secure_pull(lua_State* L)
   {
     // _G is special, just push the entire global env. Recursion does not matter here cause we have a seen table.
     TValue global_env;
-    settabV(L, &global_env, tabref(LJEG()->main_state->env));
+    settabV(L, &global_env, tabref(L2->env));
     lje_copy_to_isolated_state_tv(L2, L, &global_env, 0);
     return 1;
   }
@@ -486,8 +486,7 @@ static int lje_secure_pull(lua_State* L)
       return 1;
     }
 
-    lua_pushlightuserdata(L, func->c.f);
-    lua_pushcclosure(L, lje_secure_gmod_api, 1);
+    lje_push_safe_cfunction(L, func->c.f, host);
     return 1;
   }
 
@@ -506,7 +505,11 @@ static int lje_secure_isolate(lua_State* L)
 static int lje_proxy_type(lua_State* L)
 {
   LJEProxy* proxy = lua_touserdata(L, 1);
-  // We need as much performance as possible, so no type checking here.
+  if (!proxy)
+  {
+    lua_pushnil(L);
+    return 1;
+  }
 
   switch (proxy->host_type)
   {
@@ -527,12 +530,60 @@ static int lje_proxy_type(lua_State* L)
 static int lje_proxy_copy(lua_State* L)
 {
   LJEProxy* proxy = lua_touserdata(L, 1);
-  // Copies the given proxied object into the secure state.
+  if (!proxy)
+  {
+    lua_pushnil(L);
+    return 1;
+  }
+
+  /* So, LJE does a fairly unorthodox fix here for the instance where:
+   * lje.proxy.copy(foo) -> foo is a proxy to a **SPECIFIC ENTITY** -> the copied proxy object is compared with foo obtained from a different place
+   * In this case, the proxy copied userdata is **not equal** to the userdata obtained from a different API even if they're identical.
+   * This causes massive issues in things like comparing a player object from a hook to a player object from the `player` API
+   * even if the userdatas point to the same player.
+   *
+   * What we do here is abuse the unused `align1` member in the GCudata structure to tag each GMod userdata with its registry reference number
+   * (tracked from the luaL_ref functions). This way, we can create a reverse mapping of userdata --> ref ID. That means we can reflect it
+   * into our shadow registry and return the same userdata object to the secure state, even if it was obtained from a different API,
+   * fixing userdata equality.
+   */
+  /* Resolved against the universe the proxy came from: registry refs and the
+     shadow registry are both per-host. */
+  lua_State* host_state = lje_host_state(proxy->host);
+  GCtab* shadow = lje_host_view(proxy->host)->shadow_registry;
+  if (proxy->host_type == ~LJ_TUDATA && host_state && shadow)
+  {
+    GCudata* ud = (GCudata*)proxy->host_obj;
+    int32_t n = (int32_t)ud->align1;
+    if (n != 0)
+    {
+      cTValue* hv = lj_tab_getint(tabV(registry(host_state)), n);
+      if (hv && tvisudata(hv) && udataV(hv) == ud)
+      {
+        cTValue* cached = lj_tab_getint(shadow, n);
+        if (cached && tvisudata(cached))
+        {
+          copyTV(L, L->top, cached);
+          L->top++;
+          return 1;
+        }
+
+        TValue host_tv;
+        setgcV(L, &host_tv, proxy->host_obj, ~proxy->host_type);
+        lje_copy_to_isolated_state_tv(host_state, L, &host_tv, 0);
+
+        TValue* slot = lj_tab_setint(L, shadow, n);
+        copyTV(L, slot, L->top - 1);
+        lj_gc_barriert(L, shadow, slot);
+        return 1;
+      }
+    }
+  }
 
   TValue proxy_object;
   setgcV(L, &proxy_object, proxy->host_obj, ~proxy->host_type);
 
-  lje_copy_to_isolated_state_tv(LJEG()->main_state, L, &proxy_object, 0);
+  lje_copy_to_isolated_state_tv(host_state, L, &proxy_object, 0);
   return 1;
 }
 
@@ -595,6 +646,7 @@ void lje_addfuncs(lua_State* L) {
   /* vm: virtual machine manipulation */
   LJE_NEW_SECTION()
     LJE_SET_FUNC("add_engine_call_hook", lje_add_engine_call_hook);
+    LJE_SET_FUNC("suppress_engine_call", lje_suppress_engine_call);
   LJE_END_SECTION("vm");
 
   /* data: simple data storage API */

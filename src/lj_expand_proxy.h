@@ -2,9 +2,10 @@
 #include <stdint.h>
 
 #include "lj_obj.h"
+#include "lj_expand_host.h"
 
 /*
- * low-overhead proxy system for interacting with complex GCOs in the GMod client state.
+ * low-overhead proxy system for interacting with complex GCOs in a GMod host state.
  * only tables/userdata are proxied as they typically involve the most allocations or complexity (GC barriers).
  *
  * this makes it so reflecting any engine calls to the isolated state is incredibly low-cost and doesn't involve any
@@ -28,9 +29,12 @@
 typedef struct LJEProxy
 {
     uint8_t host_type;
+    /* Which universe host_obj lives in — it decides the registry and shadow
+       registry the proxy is resolved against when materialized. */
+    LJEHostId host;
     GCobj* host_obj;
 } LJEProxy;
 
 void lje_proxy_arena_init();
-LJEProxy* lje_proxy(cTValue* val);
+LJEProxy* lje_proxy(cTValue* val, LJEHostId host);
 void lje_proxy_release_all();

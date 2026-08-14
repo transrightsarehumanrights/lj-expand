@@ -4,9 +4,8 @@
 #include "lj_expand_globals.h"
 #include "lj_expand_lib.h"
 #include "lj_expand_log.h"
+#include "lj_expand_platform.h"
 #include "lualib.h"
-
-#include <windows.h>
 
 #include "lj_dispatch.h"
 #include "lj_func.h"
@@ -19,15 +18,15 @@ typedef lua_State* (*luaL_newstate_t)(void);
 typedef void       (*luaL_openlibs_t)(lua_State*);
 
 lua_State* lje_create_isolated_state() {
-    HMODULE gmod_lua = GetModuleHandleA("lua_shared.dll");
-    if (!gmod_lua)
+    LJEPlatModule gmod_lua;
+    if (!lje_plat_module_find(LJE_LUA_MODULE, &gmod_lua))
     {
         LJE_ERROR("Failed to locate GMod's lua_shared.dll for isolated state creation.");
         return NULL;
     }
 
-    luaL_newstate_t gmod_newstate = (luaL_newstate_t)GetProcAddress(gmod_lua, "luaL_newstate");
-    luaL_openlibs_t gmod_openlibs = (luaL_openlibs_t)GetProcAddress(gmod_lua, "luaL_openlibs");
+    luaL_newstate_t gmod_newstate = (luaL_newstate_t)lje_plat_module_sym(&gmod_lua, "luaL_newstate");
+    luaL_openlibs_t gmod_openlibs = (luaL_openlibs_t)lje_plat_module_sym(&gmod_lua, "luaL_openlibs");
     if (!gmod_newstate || !gmod_openlibs)
     {
         LJE_ERROR("Failed to resolve GMod luaL_newstate/luaL_openlibs exports.");
@@ -55,11 +54,19 @@ lua_State* lje_create_isolated_state() {
     // Open dispatch table with our stuff, however.
     lj_dispatch_init((GG_State*)L);
 
-    // Create the shadow registry
-  lua_newtable(L);
-  LJEG()->shadow_registry = tabV(L->top - 1);
-  lua_setfield(L, LUA_REGISTRYINDEX, "__lje_shadow_registry");
+    // One shadow registry per host.
+    static const char* const shadow_keys[LJE_HOST_COUNT] = {
+        "__lje_shadow_registry_client",
+        "__lje_shadow_registry_menu",
+    };
 
+    LJEG()->redirect_host = LJE_HOST_CLIENT;
+    for (int i = 0; i < LJE_HOST_COUNT; i++)
+    {
+        lua_newtable(L);
+        LJEG()->hosts[i].shadow_registry = tabV(L->top - 1);
+        lua_setfield(L, LUA_REGISTRYINDEX, shadow_keys[i]);
+    }
 
     LJE_SUCCESS("Created isolated Lua state: %p", (void*)L);
     return L;
@@ -78,27 +85,45 @@ static TValue *stkindex2adr(lua_State *L, int idx)
 // Wraps every C function we pull so we can securely call it.
 static int lje_secure_gmod_api(lua_State* L)
 {
-    void* func_ptr = lua_touserdata(L, lua_upvalueindex(1));
-    if (!func_ptr)
-    {
-        lua_pushnil(L);
-        return 1;
-    }
+  void* func_ptr = lua_touserdata(L, lua_upvalueindex(1));
+  if (!func_ptr)
+  {
+    lua_pushnil(L);
+    return 1;
+  }
 
-    // we just need to dispatch the c function ourselves.
-    lua_CFunction func = (lua_CFunction)func_ptr;
-    int prev = LJEG()->redirect_to_isolation;
-    LJEG()->redirect_to_isolation = 1;
-    int results = func(LJEG()->main_state); /* make it think it's running in the main state, it won't know any better! */
-    LJEG()->redirect_to_isolation = prev;
-    return results;
+  // Note: We're not passing raw state pointers since the client state is usually recreated multiple times per session
+  lua_Integer host_id = lua_tointeger(L, lua_upvalueindex(2));
+  if (host_id < 0 || host_id >= LJE_HOST_COUNT)
+    host_id = LJE_HOST_CLIENT;
+  LJEHostId host = (LJEHostId)host_id;
+
+  lua_State* host_state = lje_host_state(host);
+  if (!host_state)
+  {
+    LJE_WARN("Refusing to call into the %s state: it is not alive.", lje_host_name(host));
+    lua_pushnil(L);
+    return 1;
+  }
+
+  lua_CFunction func = (lua_CFunction)func_ptr;
+
+  char prev_redirect = LJEG()->redirect_to_isolation;
+  LJEHostId prev_host = LJEG()->redirect_host;
+  LJEG()->redirect_to_isolation = 1;
+  LJEG()->redirect_host = host;
+  int results = func(host_state); // Does not actually run in their state. We just lie to the function so it chooses the right CLuaInterface.
+  LJEG()->redirect_to_isolation = prev_redirect;
+  LJEG()->redirect_host = prev_host;
+  return results;
 }
 
-int lje_push_safe_cfunction(lua_State* L, lua_CFunction func)
+int lje_push_safe_cfunction(lua_State* L, lua_CFunction func, LJEHostId host)
 {
-    // We push a wrapper C function that securely redirects to the main state, and we store the real function pointer in an upvalue.
+    // We push a wrapper C function that securely redirects to the host state, and we store the real function pointer in an upvalue.
     lua_pushlightuserdata(L, (void*)func);
-    lua_pushcclosure(L, lje_secure_gmod_api, 1);
+    lua_pushinteger(L, (int)host);
+    lua_pushcclosure(L, lje_secure_gmod_api, 2);
     return 1;
 }
 
@@ -262,9 +287,13 @@ static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, 
             GCfunc* from_fn = funcV(val);
             if (iscfunc(from_fn))
             {
-                GCfunc* new = lj_func_newC(to, 1, tabref(to->env));
+                LJEHostId host = LJE_HOST_CLIENT;
+                lje_host_id_of(from, &host); /* so the wrapper calls back into the universe it came from */
+
+                GCfunc* new = lj_func_newC(to, 2, tabref(to->env));
                 new->c.f = lje_secure_gmod_api;
                 setlightudV(&new->c.upvalue[0], from_fn->c.f);
+                setnumV(&new->c.upvalue[1], (lua_Number)host);
                 setfuncV(to, dst, new);
                 break;
             } else if (isluafunc(from_fn))
@@ -276,8 +305,11 @@ static int copy_to_isolated_state(lua_State* from, lua_State* to, cTValue* val, 
                 LJE_DEBUG("Encountered Lua function from %s, not copying.", proto_chunknamestr(pt));
                 // Set an empty Lua function, then.
                 // Our registry has 13371010 as the empty Lua function, so we can just copy that in.
-                cTValue* empty_lua_func = lj_tab_getint(LJEG()->shadow_registry, 13371010);
-                setfuncV(to, dst, funcV(empty_lua_func));
+                cTValue* empty_lua_func = lj_tab_getint(LJE_SHADOW(), 13371010);
+                if (empty_lua_func && tvisfunc(empty_lua_func))
+                  setfuncV(to, dst, funcV(empty_lua_func));
+                else
+                  setnilV(dst);
               } else
               {
                 LJE_DEBUG("Encountered Lua function, copying it as a number pointer.");

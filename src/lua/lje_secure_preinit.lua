@@ -7,10 +7,7 @@ lje.con_print("Running secure preinit script...")
 
 local registry = lje.util.get_registry()
 
-registry["__lje_shadow_registry"][2] = { hook = { Call = function() end } } -- hook ref GMod uses
-registry["__lje_shadow_registry"][1337153] = function() return "hello" end
-registry["__lje_shadow_registry"][13371010] = function() return end       -- Dummy Lua function
-
+-- Shadow registry stubs live in lje_shadow_init.lua
 
 -- Only a subset of necessary GMod C APIs are pulled in. We have our own versions of any base library as well.
 achievements = lje.secure.pull("achievements")
@@ -39,7 +36,7 @@ vgui = lje.secure.pull("vgui")
 -- Globals
 local globalEnv = lje.secure.pull("_G")
 for k, v in pairs(globalEnv) do
-  if not _G[k] then
+  if _G[k] == nil then
     _G[k] = v     -- Merge
   end
 end
@@ -62,13 +59,8 @@ registry.Panel = lje.secure.pull("_R.Panel")
 registry.CSEnt = lje.secure.pull("_R.CSEnt")
 registry.NPC = lje.secure.pull("_R.NPC")
 
-function registry.Player:__eq(other)
-  -- Temporary hack for identical Player objects with different userdata.
-  return self:EntIndex() == other:EntIndex()
-end
-
 NULL = lje.secure.pull("NULL") -- For some reason, the null entity is a special userdata..?
-
+registry.NULL = NULL
 -- Polyfills for common things
 local cam2D = { type = "2D" }
 cam.Start2D = function()
@@ -95,9 +87,8 @@ function hook.Listen(post)
     hook._listeners[script] = {}
   end
 
-  lje.vm.add_engine_call_hook(function(func, nargs, nresults, ...)
-    local name = ...
-    if hook._listeners[script][name] then
+  lje.vm.add_engine_call_hook(function(func, nargs, nresults, name, gm, ...)
+    if name and hook._listeners[script][name] then
       for _, listener in pairs(hook._listeners[script][name]) do
         listener(...)
       end

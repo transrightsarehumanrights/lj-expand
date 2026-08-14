@@ -1,0 +1,47 @@
+{
+  "namespace": "secure",
+  "description": "Secure-state-only functionality for interacting with the host (game) Lua state in a controlled way. These functions are only meaningful from within the isolated secure state.",
+  "functions": [
+    {
+      "name": "pull",
+      "description": "Resolves a dot-separated path in a host state's global environment using raw lookups (no metamethods) and brings the resulting value into the secure state.\n\n- Paths starting with `_R.` are resolved in that host's registry instead of the global environment (e.g. `_R.Entity`).\n- If the final value is a **C function**, it is wrapped in a secure dispatcher: calling the wrapper executes the original C function against the host state it came from, while redirecting its Lua C API activity (e.g. registry access) back to the secure state. Lua functions are rejected and `nil` is returned.\n- Any other value is deep-copied into the secure state (see `lje.proxy.copy` for the copy semantics).\n\nWhich universe is read comes from the optional second argument, defaulting to the client. Each host keeps its own shadow registry, so a function pulled from the menu talks to the menu's interface and resolves its registry references against the menu — pulling the same name from both universes gives you two independent wrappers. Wrappers store which universe they belong to rather than a state pointer, so they survive that state being closed and recreated.\n\nReturns `nil` if any path segment is missing, empty, or a non-table intermediate. Each failure case is logged to the console.",
+      "params": [
+        {
+          "name": "name",
+          "type": "string",
+          "description": "A dot-separated path into the host global environment, e.g. `\"Msg\"` or `\"player.GetAll\"`. Prefix with `_R.` to resolve in the host registry."
+        },
+        {
+          "name": "state",
+          "type": "lightuserdata",
+          "optional": true,
+          "description": "Which universe to pull from: `lje.state.client` (the default) or `lje.state.menu`. See `lje.state` for when each handle is available."
+        }
+      ],
+      "returns": [
+        {
+          "type": "any | nil",
+          "description": "A secure wrapper (for C functions) or a copy of the value, or `nil` if the path could not be resolved or the value is a Lua function."
+        }
+      ],
+      "errors": [
+        "secure pull: argument 2 is not a live host state",
+        "secure pull: client state is not alive",
+        "secure pull: menu state is not alive"
+      ]
+    },
+    {
+      "name": "isolate",
+      "description": "Forces state redirection on or off. While enabled, Lua C API calls made against the host state are transparently redirected to the secure state (registry accesses go to the shadow registry, etc.). This is normally managed automatically — wrappers returned by `lje.secure.pull` enable it for the duration of each call, and set the universe the redirect belongs to — so manual use is only needed for advanced control.\n\nForcing it on by hand does not name a universe, so registry accesses land in the **client** shadow registry unless a wrapper is already running.",
+      "note": "You shouldn't need to use this unless you know what you are doing!",
+      "params": [
+        {
+          "name": "force",
+          "type": "boolean",
+          "description": "`true` to force redirection to the secure state, `false` to disable it."
+        }
+      ],
+      "returns": []
+    }
+  ]
+}

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <windows.h>
 #include "lj_expand_script.h"
 
 typedef struct LJEScriptWatcher LJEScriptWatcher;

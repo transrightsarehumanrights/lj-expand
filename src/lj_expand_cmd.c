@@ -3,8 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
+#include "lj_expand_platform.h"
 
 static LJECommandLineOptions* lje_global_command_line_options = NULL;
 
@@ -14,7 +13,7 @@ static void lje_parse_command_line() {
 
     LJECommandLineOptions* options = lje_global_command_line_options; // Shorter alias
 
-    const char* cmd_line = GetCommandLineA();
+    const char* cmd_line = lje_plat_command_line();
 
 #define CMDDEF(switch_str, name) \
     options->name = (strstr(cmd_line, switch_str) != NULL);

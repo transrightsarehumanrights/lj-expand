@@ -5,11 +5,13 @@
 #include "lj_expand_lib.h"
 #include "lj_expand_log.h"
 #include "lj_expand_module.h"
+#include "lj_expand_platform.h"
 #include "lj_expand_settings.h"
 #include "stdio.h"
 
 #include "generated/lje_secure_preinit.h"
 #include "generated/lje_helpers.h"
+#include "generated/lje_shadow_init.h"
 
 static char* load_lua_file(const char* path)
 {
@@ -43,7 +45,7 @@ typedef int (*lua_pcall_t)(lua_State* L, int nargs, int nresults, int errfunc);
 
 static int resolve_original_functions(luaL_loadbufferx_t* out_loadbufferx, lua_pcall_t* out_pcall)
 {
-    lje_Module* mod = lje_module_find("lua_shared.dll");
+    lje_Module* mod = lje_module_find(LJE_LUA_MODULE);
     if (mod)
     {
         *out_loadbufferx = (luaL_loadbufferx_t)lje_module_get_func(mod, "luaL_loadbufferx");
@@ -72,17 +74,15 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
     char* script_file = load_lua_file(path);
 
     char chunkname[LUA_IDSIZE] = { 0 };
-    strncat_s(chunkname, LUA_IDSIZE, "@lje_script:", _TRUNCATE);
-    strncat_s(chunkname, LUA_IDSIZE, script->info->name, _TRUNCATE);
+    lje_strlcat(chunkname, "@lje_script:", LUA_IDSIZE);
+    lje_strlcat(chunkname, script->info->name, LUA_IDSIZE);
     chunkname[LUA_IDSIZE - 1] = '\0';
 
     if (script_file)
     {
         LJE_INFO("Executing script '%s'...", script->name);
-        LJEG()->flag_lje_protos = 1;
         if (original_loadbufferx(L, script_file, strlen(script_file), chunkname, NULL) == 0)
         {
-            LJEG()->flag_lje_protos = 0;
             if (lua_pcall(L, 0, 0, 0) != 0) /* mental note: figure out why this seems to randomly not work? */
             {
                 LJE_ERROR("Error executing script: %s", lua_tostring(L, -1));
@@ -91,7 +91,6 @@ void lje_startup_execute(lua_State* L, LJEScript* script, const char* path) {
         }
         else
         {
-            LJEG()->flag_lje_protos = 0;
             LJE_ERROR("Error loading script: %s", lua_tostring(L, -1));
             lua_pop(L, 1); // Pop error message
         }
@@ -119,18 +118,16 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
 
     // compute relative to current script
     char full_path[512] = { 0 };
-    strncat_s(full_path, 512, LJEG()->current_script->folder, _TRUNCATE);
-    strncat_s(full_path, 512, relative_path, _TRUNCATE);
+    lje_strlcat(full_path, LJEG()->current_script->folder, 512);
+    lje_strlcat(full_path, relative_path, 512);
 
     char chunkname[LUA_IDSIZE] = { 0 };
-    strncat_s(chunkname, LUA_IDSIZE, "@lje_include:", _TRUNCATE);
-    strncat_s(chunkname, LUA_IDSIZE, relative_path, _TRUNCATE);
+    lje_strlcat(chunkname, "@lje_include:", LUA_IDSIZE);
+    lje_strlcat(chunkname, relative_path, LUA_IDSIZE);
 
     char* buffer = load_lua_file(full_path);
-    LJEG()->flag_lje_protos = 1;
     if (original_loadbufferx(L, buffer, strlen(buffer), chunkname, NULL) == 0)
     {
-        LJEG()->flag_lje_protos = 0;
         if (!execute)
         {
             // Just return the loaded function
@@ -150,7 +147,6 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
     }
     else
     {
-        LJEG()->flag_lje_protos = 0;
         LJE_ERROR("Error loading include script: %s", lua_tostring(L, -1));
         lua_pop(L, 1); // Pop error message
     }
@@ -163,10 +159,8 @@ int lje_startup_include(lua_State* L, const char* relative_path, int execute) {
 static void run_secure_chunk(lua_State* L, luaL_loadbufferx_t original_loadbufferx,
                              lua_pcall_t original_pcall, const char* source, const char* name)
 {
-    LJEG()->flag_lje_protos = 1;
     if (original_loadbufferx(L, source, strlen(source), name, NULL) == 0)
     {
-        LJEG()->flag_lje_protos = 0;
         if (original_pcall(L, 0, 0, 0) != 0)
         {
             LJE_ERROR("Error executing %s script: %s", name, lua_tostring(L, -1));
@@ -178,7 +172,6 @@ static void run_secure_chunk(lua_State* L, luaL_loadbufferx_t original_loadbuffe
     }
     else
     {
-        LJEG()->flag_lje_protos = 0;
         LJE_ERROR("Error loading %s script: %s", name, lua_tostring(L, -1));
         lua_pop(L, 1); // Pop error message
     }
@@ -199,6 +192,20 @@ void lje_startup_secure_preinit(lua_State* L) {
                      lje_secure_preinit_data, "@lje_secure_preinit");
 
     return;
+}
+
+// Seeds the shadow registries.
+void lje_startup_shadow_stubs(lua_State* L) {
+    luaL_loadbufferx_t original_loadbufferx = NULL;
+    lua_pcall_t original_pcall = NULL;
+    if (!resolve_original_functions(&original_loadbufferx, &original_pcall))
+    {
+        LJE_ERROR("Failed to resolve original startup functions necessary...");
+        return;
+    }
+
+    run_secure_chunk(L, original_loadbufferx, original_pcall,
+                     lje_shadow_init_data, "@lje_shadow_init");
 }
 
 // Loads the pure-Lua helpers chunk into the given state. Kept separate from preinit
@@ -229,15 +236,12 @@ int lje_startup_compile(lua_State* L, const char* source) {
         return 0;
     }
 
-    LJEG()->flag_lje_protos = 1;
     if (original_loadbufferx(L, source, strlen(source), "@lje_dynamic_compile", NULL) == 0)
     {
-        LJEG()->flag_lje_protos = 0;
         return 1; // success, function is on top of stack
     }
     else
     {
-        LJEG()->flag_lje_protos = 0;
         LJE_ERROR("Error compiling dynamic script: %s", lua_tostring(L, -1));
         lua_pop(L, 1); // Pop error message
     }
@@ -254,9 +258,7 @@ int lje_startup_run(lua_State* L, const char* source) {
         return -1;
     }
 
-    LJEG()->flag_lje_protos = 1;
     int status = original_loadbufferx(L, source, strlen(source), "@lje_run", NULL);
-    LJEG()->flag_lje_protos = 0;
 
     if (status != 0)
     {
@@ -280,9 +282,9 @@ LJ_FUNC void lje_startup_reload(lua_State* L, LJEScript* script)
     LJE_INFO("Reloading script '%s'...", script->name);
     // run `lje.includeCache[script] = {}`
     char cacheInvalidationSource[512] = { 0 };
-    strncat_s(cacheInvalidationSource, 512, "lje.includeCache[\"", _TRUNCATE);
-    strncat_s(cacheInvalidationSource, 512, script->info->name, _TRUNCATE);
-    strncat_s(cacheInvalidationSource, 512, "\"] = {}", _TRUNCATE);
+    lje_strlcat(cacheInvalidationSource, "lje.includeCache[\"", 512);
+    lje_strlcat(cacheInvalidationSource, script->info->name, 512);
+    lje_strlcat(cacheInvalidationSource, "\"] = {}", 512);
 
     if (lje_startup_run(L, cacheInvalidationSource) != LUA_OK)
     {
@@ -291,6 +293,8 @@ LJ_FUNC void lje_startup_reload(lua_State* L, LJEScript* script)
     }
 
     lje_settings_clear_cache(L);
-
+    // Clear this script's engine hooks, unrefing as we go since it has GC implications.
+    // Boot-scoped hooks stay: only main.lua re-runs below, so nothing would re-register them.
+    lje_script_drop_transient_hooks(script, L);
     lje_startup_execute(L, script, NULL);
 }
