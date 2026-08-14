@@ -11,6 +11,7 @@
 
 #include "generated/lje_secure_preinit.h"
 #include "generated/lje_helpers.h"
+#include "generated/lje_shadow_init.h"
 
 static char* load_lua_file(const char* path)
 {
@@ -191,6 +192,20 @@ void lje_startup_secure_preinit(lua_State* L) {
                      lje_secure_preinit_data, "@lje_secure_preinit");
 
     return;
+}
+
+// Seeds the shadow registries.
+void lje_startup_shadow_stubs(lua_State* L) {
+    luaL_loadbufferx_t original_loadbufferx = NULL;
+    lua_pcall_t original_pcall = NULL;
+    if (!resolve_original_functions(&original_loadbufferx, &original_pcall))
+    {
+        LJE_ERROR("Failed to resolve original startup functions necessary...");
+        return;
+    }
+
+    run_secure_chunk(L, original_loadbufferx, original_pcall,
+                     lje_shadow_init_data, "@lje_shadow_init");
 }
 
 // Loads the pure-Lua helpers chunk into the given state. Kept separate from preinit

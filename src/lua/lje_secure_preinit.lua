@@ -7,10 +7,7 @@ lje.con_print("Running secure preinit script...")
 
 local registry = lje.util.get_registry()
 
-registry["__lje_shadow_registry"][2] = { hook = { Call = function() end } } -- hook ref GMod uses
-registry["__lje_shadow_registry"][1337153] = function() return "hello" end
-registry["__lje_shadow_registry"][13371010] = function() return end       -- Dummy Lua function
-
+-- Shadow registry stubs live in lje_shadow_init.lua
 
 -- Only a subset of necessary GMod C APIs are pulled in. We have our own versions of any base library as well.
 achievements = lje.secure.pull("achievements")

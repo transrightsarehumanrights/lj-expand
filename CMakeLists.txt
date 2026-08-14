@@ -133,7 +133,7 @@ add_custom_command(
 add_custom_target(lje-vmdef DEPENDS ${LJ_SRC}/jit/vmdef.lua)
 
 # All embedded Lua is lua2c'd then copied into the generated/ directory.
-foreach(script lje_secure_preinit lje_helpers)
+foreach(script lje_secure_preinit lje_helpers lje_shadow_init)
   add_custom_command(
     OUTPUT ${LJ_SRC}/generated/${script}.h
     COMMAND $<TARGET_FILE:lua2c> lua/${script}.lua generated/${script}.h ${script}

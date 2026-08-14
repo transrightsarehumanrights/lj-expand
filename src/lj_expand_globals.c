@@ -37,6 +37,41 @@ void lje_clear_global_refs() {
     }
 }
 
+LJEHostView* lje_host_view(LJEHostId id)
+{
+    if ((int)id < 0 || (int)id >= LJE_HOST_COUNT)
+        id = LJE_HOST_CLIENT;
+    return &LJEG()->hosts[id];
+}
+
+/* We only support menu or client for now. */
+lua_State* lje_host_state(LJEHostId id)
+{
+    return id == LJE_HOST_MENU ? LJEG()->menu_state : LJEG()->main_state;
+}
+
+int lje_host_id_of(lua_State* L, LJEHostId* out)
+{
+    if (!L)
+        return 0;
+
+    for (int i = 0; i < LJE_HOST_COUNT; i++)
+    {
+        if (lje_host_state((LJEHostId)i) == L)
+        {
+            if (out) *out = (LJEHostId)i;
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+const char* lje_host_name(LJEHostId id)
+{
+    return id == LJE_HOST_MENU ? "menu" : "client";
+}
+
 int lje_is_addr_in_lje(uintptr_t addr)
 {
     uintptr_t base;

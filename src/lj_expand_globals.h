@@ -7,6 +7,19 @@
 #include "lj_expand_script_watcher.h"
 #include "lj_expand_binary_module.h"
 
+typedef enum LJEHostId
+{
+    LJE_HOST_CLIENT = 0,
+    LJE_HOST_MENU = 1,
+    LJE_HOST_COUNT
+} LJEHostId;
+
+// Each state has to have its own shadow registry
+typedef struct LJEHostView
+{
+    GCtab* shadow_registry;
+} LJEHostView;
+
 /* LJE: This is our own global state, sysmalloc'd without any
  * interference with LuaJIT's own global_State. This is because
  * it has very *very* specific and precise allocation to facilitate JITed
@@ -16,6 +29,7 @@ typedef struct LJEGlobalState
 {
     int script_hook_ref_id;
     lua_State* main_state;
+    lua_State* menu_state;
     int waiting_for_init_call;
     int waiting_for_startup_call;
     int waiting_for_menu_call;
@@ -39,15 +53,27 @@ typedef struct LJEGlobalState
     /* Isolated state */
     lua_State* isolated_state;
     char redirect_to_isolation;
-    GCtab* shadow_registry;
+    /* Which host the current redirect is targeted towards. */
+    LJEHostId redirect_host;
+    LJEHostView hosts[LJE_HOST_COUNT];
     /* Monotonic allocator for fresh shadow-registry refs (luaL_ref under redirect).
        lua_objlen on the shadow registry returns 0 (its keys live in the hash part),
-       so size-based fresh refs would all collide on the same slot. */
+       so size-based fresh refs would all collide on the same slot. Shared across
+       hosts so a ref that leaks between views misses instead of aliasing. */
     int isolated_ref_counter;
 } LJEGlobalState;
 
 #define LJEG() (lje_get_global_state())
 LJEGlobalState* lje_get_global_state();
+
+/* Shadow registry of the host the current redirect belongs to. */
+#define LJE_SHADOW() (LJEG()->hosts[LJEG()->redirect_host].shadow_registry)
+
+LJEHostView* lje_host_view(LJEHostId id);
+lua_State* lje_host_state(LJEHostId id);
+/* Maps a live GMod state to its host id. Returns 0 if L is not a host state. */
+int lje_host_id_of(lua_State* L, LJEHostId* out);
+const char* lje_host_name(LJEHostId id);
 
 void lje_clear_global_refs();
 

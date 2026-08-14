@@ -5,7 +5,7 @@
     {
       "name": "add_engine_call_hook",
       "description": [
-        "Registers an engine call hook for the current script. Whenever the engine invokes a Lua function in the host (game) state, every registered hook is invoked in the secure state as `fn(func, nargs, nresults, ...)`:",
+        "Registers an engine call hook for the current script. Whenever the engine invokes a Lua function in the **client** state, every registered hook is invoked in the secure state as `fn(func, nargs, nresults, ...)`:",
         "",
         "- `func` — a number holding the called function's pointer (its address cast to a `lua_Number`). Useful for identity comparisons without copying a full function object across states.",
         "- `nargs` / `nresults` — the argument and result counts of the engine call.",
@@ -18,7 +18,9 @@
         "",
         "Hooks fire in script load order; within a script they fire in registration order. All pre hooks across every script run before the real call, then all post hooks run after it. A script may register up to 16 hooks, and may freely mix pre and post hooks.",
         "",
-        "The hook's return values are ignored. A pre hook can stop the engine call from happening at all by calling `lje.vm.suppress_engine_call()`. Errors thrown by a hook are caught and printed to the console; the remaining hooks still run. Requires an active script context, and hooks only fire for secure scripts."
+        "The hook's return values are ignored. A pre hook can stop the engine call from happening at all by calling `lje.vm.suppress_engine_call()`. Errors thrown by a hook are caught and printed to the console; the remaining hooks still run. Requires an active script context, and hooks only fire for secure scripts.",
+        "",
+        "Engine calls made in the **menu** state are not hooked. You can still call into the menu with `lje.secure.pull` or `lje.state.path`; you just cannot intercept its calls."
       ],
       "note": "Proxy handles passed to the hook are only valid for the duration of the hook call — do not store them. Post hooks receive a snapshot of the arguments captured before the engine call ran.",
       "params": [

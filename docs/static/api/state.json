@@ -1,17 +1,26 @@
 {
   "namespace": "state",
   "description": [
-    "Read values out of another Lua universe — the game client (and, later, the menu) — from inside the secure state, **without ever holding a reference into it**.",
+    "Read values out of another Lua universe — the game client or the main menu — from inside the secure state, **without ever holding a reference into it**.",
     "",
     "Holding a live reference to a foreign object is detectable by adversarial scripts in that state, and a bare pointer into it can dangle if the foreign garbage collector runs. `lje.state.path` avoids both: you describe a traversal up front as a chain of inert operations, and only the terminal `:copy()` touches the foreign state. The whole walk runs in a single C call using raw lookups (no metamethods, no allocation in the foreign state), so the foreign GC cannot step mid-walk and no foreign pointer survives the call. The value you get back is a deep copy living entirely in the secure state.",
     "",
-    "Because of this, you can hold onto the **result** of `:copy()` freely — it is yours. What you must never do is try to keep a path pointed at something long-term and treat it as a live handle; a path is a recipe, evaluated fresh each time you call `:copy()`."
+    "Because of this, you can hold onto the **result** of `:copy()` freely — it is yours. What you must never do is try to keep a path pointed at something long-term and treat it as a live handle; a path is a recipe, evaluated fresh each time you call `:copy()`.",
+    "",
+    "### State handles come and go",
+    "",
+    "The two handles below are re-bound whenever a state appears or is closed, and the client state is destroyed and recreated on every map change and disconnect. Read `lje.state.client` fresh each time rather than caching it in a local — a handle to a dead state is rejected by both `lje.state.path` and `lje.secure.pull`. Path objects and pulled functions record *which* universe they belong to rather than the state pointer itself, so those keep working across a state being recreated."
   ],
   "constants": [
     {
       "name": "client",
       "type": "lightuserdata",
-      "description": "A handle to the game client's Lua state, for use as the first argument to `lje.state.path`. This is the state your scripts would normally run in. It is installed as a global in the secure state once the client state is known (at startup, before secure scripts run). A `LJE_MENU_STATE` handle is planned for the future."
+      "description": "A handle to the game client's Lua state, for use as the first argument to `lje.state.path` or as the second argument to `lje.secure.pull`. This is the state your scripts would normally run in. It is bound once the client state is known — at startup, before secure scripts run — and is `nil` before that, which includes the whole time you sit in the main menu without a game loaded."
+    },
+    {
+      "name": "menu",
+      "type": "lightuserdata",
+      "description": "A handle to the main menu's Lua state, used the same way as `client`. The menu state comes up long before the client one, so this is bound by the time `boot.lua` runs and is the only universe reachable from there. It stays valid for the rest of the session."
     }
   ],
   "functions": [
@@ -33,7 +42,7 @@
         "| `:expect(type)` | Asserts the current value's type and fails the path otherwise. Accepts Lua type names (`\"table\"`, `\"function\"`, `\"userdata\"`, …) and GMod metatypes by `MetaName` (`\"Player\"`, `\"Vector\"`, …), resolved from the object's metatable. GMod metatype takes priority over the bare Lua type. Opt-in — only add it where you want the guard. |",
         "| `:copy()` | Evaluates the whole chain against `target` and deep-copies the final value into the secure state. Returns the copy, or `nil` if any step fails (each failure is logged to the console). See `lje.proxy.copy` for the copy semantics. |",
         "",
-        "If the root is missing or `nil`, or any operation fails — indexing a non-table, a missing key, taking an upvalue of a non-function or an out-of-range index, or a failed `:expect` — `:copy()` logs the reason and returns `nil`.",
+        "If the root is missing or `nil`, or any operation fails — indexing a non-table, a missing key, taking an upvalue of a non-function or an out-of-range index, or a failed `:expect` — `:copy()` logs the reason and returns `nil`. The same applies if the target universe's state has been closed since the path was built.",
         "",
         "### Example",
         "",
@@ -45,14 +54,23 @@
         "  :upvalue(1)        -- its first upvalue",
         "  :expect(\"table\")   -- guard: make sure it really is a table",
         "  :copy()            -- deep-copy it into the secure state",
+        "```",
+        "",
+        "The menu universe works identically — and is the only one available from `boot.lua`, since the client state does not exist yet at that point.",
+        "",
+        "```lua",
+        "local openURL = lje.state.path(lje.state.menu, \"gui\")",
+        "  :index(\"OpenURL\")",
+        "  :expect(\"function\")",
+        "  :copy()",
         "```"
       ],
-      "note": "A path is capped at 16 operations; index keys are limited to 127 characters and `:expect` type names to 63. `target` must be a valid state handle such as `LJE_CLIENT_STATE`.",
+      "note": "A path is capped at 16 operations; index keys are limited to 127 characters and `:expect` type names to 63. `target` must be a handle to a live state — `lje.state.client` or `lje.state.menu` — and raises an error otherwise.",
       "params": [
         {
           "name": "target",
           "type": "lightuserdata",
-          "description": "The state to read from, e.g. `LJE_CLIENT_STATE`."
+          "description": "The state to read from: `lje.state.client` or `lje.state.menu`."
         },
         {
           "name": "root",
@@ -65,6 +83,10 @@
           "type": "userdata",
           "description": "A path object. Chain `:index`, `:upvalue`, `:expect`, then `:copy()`."
         }
+      ],
+      "errors": [
+        "lje.state.path: argument 1 is not a live host state",
+        "path operation limit exceeded"
       ]
     }
   ]

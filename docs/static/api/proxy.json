@@ -1,6 +1,6 @@
 {
   "namespace": "proxy",
-  "description": "Functions for working with proxy objects in the secure state. When an engine call hook fires, table and userdata arguments are not copied — they are passed as lightweight proxy handles (light userdata) pointing at the host object. Proxies are arena-allocated and do not pin their referent, so they are only valid for the duration of the engine call that produced them. Do not store proxy handles.",
+  "description": "Functions for working with proxy objects in the secure state. When an engine call hook fires, table and userdata arguments are not copied — they are passed as lightweight proxy handles (light userdata) pointing at the host object. Proxies are arena-allocated and do not pin their referent, so they are only valid for the duration of the engine call that produced them. Do not store proxy handles.\n\nProxies only ever come from client-state engine calls, since those are the only calls that are hooked.",
   "functions": [
     {
       "name": "type",

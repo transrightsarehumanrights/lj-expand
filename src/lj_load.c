@@ -27,6 +27,7 @@
 #include "lj_parse.h"
 #include "lj_expand_globals.h"
 #include "lj_expand_module.h"
+#include "lj_expand_path.h"
 
 /* -- Load Lua source code and bytecode ----------------------------------- */
 
@@ -191,7 +192,13 @@ static void lje_check_boot_chunk(lua_State* L, const char* name)
   else if (strcmp(name, "@lua/includes/init_menu.lua") == 0)
   {
     LJE_WARN("Detected menu state at %p", L);
+    LJEG()->menu_state = L;
     LJEG()->waiting_for_menu_call = 1;
+
+    /* The menu state comes up long before the client one, so bind lje.state.menu
+       now rather than waiting for the client init call that may never arrive. */
+    if (LJEG()->isolated_state)
+      lje_path_install_state_globals(LJEG()->isolated_state);
   }
 }
 

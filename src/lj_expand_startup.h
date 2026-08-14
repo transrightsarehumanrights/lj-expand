@@ -7,6 +7,8 @@ LJ_FUNC void lje_startup_execute(lua_State* L, LJEScript* script, const char* pa
 LJ_FUNC void lje_startup_secure_preinit(lua_State* L);
 /* Loads the pure-Lua helpers chunk (split out of preinit) */
 LJ_FUNC void lje_startup_secure_helpers(lua_State* L);
+/* Seeds the per-host shadow registries with the stubs GMod's C API expects */
+LJ_FUNC void lje_startup_shadow_stubs(lua_State* L);
 LJ_FUNC int lje_startup_include(lua_State* L, const char* relative_path, int execute);
 /* Used for any dynamic compilation since we need to make sure their protos are tagged */
 LJ_FUNC int lje_startup_compile(lua_State* L, const char* source);

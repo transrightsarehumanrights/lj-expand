@@ -372,14 +372,8 @@ static int lje_create_table(lua_State* L)
 
 static int lje_secure_pull(lua_State* L)
 {
-  // Pulls a global out of the client state and returns it to the secure state.
+  // Pulls a global out of a host state and returns it to the secure state.
   // This is basically a less advanced version of the state API meant for preinit.
-  if (!LJEG()->main_state)
-  {
-    luaL_error(L, "main state not set for secure pull");
-    return 0;
-  }
-
   const char* name = luaL_checkstring(L, 1); // e.g: "Msg" or "player.GetAll"
   if (!name)
   {
@@ -387,7 +381,21 @@ static int lje_secure_pull(lua_State* L)
     return 1;
   }
 
-  lua_State* L2 = LJEG()->main_state;
+  // Optional arg 2 selects the universe (lje.state.client / lje.state.menu).
+  LJEHostId host = LJE_HOST_CLIENT;
+  if (!lua_isnoneornil(L, 2) && !lje_host_id_of(lua_touserdata(L, 2), &host))
+  {
+    luaL_error(L, "secure pull: argument 2 is not a live host state");
+    return 0;
+  }
+
+  lua_State* L2 = lje_host_state(host);
+  if (!L2)
+  {
+    luaL_error(L, "secure pull: %s state is not alive", lje_host_name(host));
+    return 0;
+  }
+
   global_State* g = G(L2);
 
   // We cannot interact with the main state directly. Since there is no active function call,
@@ -403,7 +411,7 @@ static int lje_secure_pull(lua_State* L)
   {
     // _G is special, just push the entire global env. Recursion does not matter here cause we have a seen table.
     TValue global_env;
-    settabV(L, &global_env, tabref(LJEG()->main_state->env));
+    settabV(L, &global_env, tabref(L2->env));
     lje_copy_to_isolated_state_tv(L2, L, &global_env, 0);
     return 1;
   }
@@ -472,7 +480,7 @@ static int lje_secure_pull(lua_State* L)
       return 1;
     }
 
-    lje_push_safe_cfunction(L, func->c.f);
+    lje_push_safe_cfunction(L, func->c.f, host);
     return 1;
   }
 
@@ -533,7 +541,9 @@ static int lje_proxy_copy(lua_State* L)
    * into our shadow registry and return the same userdata object to the secure state, even if it was obtained from a different API,
    * fixing userdata equality.
    */
-  if (proxy->host_type == ~LJ_TUDATA && LJEG()->main_state)
+  /* Proxies only ever come from client engine call hooks for now. */
+  GCtab* shadow = lje_host_view(LJE_HOST_CLIENT)->shadow_registry;
+  if (proxy->host_type == ~LJ_TUDATA && LJEG()->main_state && shadow)
   {
     GCudata* ud = (GCudata*)proxy->host_obj;
     int32_t n = (int32_t)ud->align1;
@@ -542,7 +552,7 @@ static int lje_proxy_copy(lua_State* L)
       cTValue* hv = lj_tab_getint(tabV(registry(LJEG()->main_state)), n);
       if (hv && tvisudata(hv) && udataV(hv) == ud)
       {
-        cTValue* cached = lj_tab_getint(LJEG()->shadow_registry, n);
+        cTValue* cached = lj_tab_getint(shadow, n);
         if (cached && tvisudata(cached))
         {
           copyTV(L, L->top, cached);
@@ -554,9 +564,9 @@ static int lje_proxy_copy(lua_State* L)
         setgcV(L, &host_tv, proxy->host_obj, ~proxy->host_type);
         lje_copy_to_isolated_state_tv(LJEG()->main_state, L, &host_tv, 0);
 
-        TValue* slot = lj_tab_setint(L, LJEG()->shadow_registry, n);
+        TValue* slot = lj_tab_setint(L, shadow, n);
         copyTV(L, slot, L->top - 1);
-        lj_gc_barriert(L, LJEG()->shadow_registry, slot);
+        lj_gc_barriert(L, shadow, slot);
         return 1;
       }
     }

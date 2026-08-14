@@ -79,7 +79,7 @@ static TValue *index2adr(lua_State *L, int idx)
     if (LJEG()->redirect_to_isolation)
     {
       TValue* o = &G(L)->tmptv;
-      settabV(L, o, LJEG()->shadow_registry);
+      settabV(L, o, LJE_SHADOW());
       return o;
     }
 
@@ -804,7 +804,7 @@ LUALIB_API int luaL_newmetatable(lua_State *L, const char *tname)
   GCtab *regt = tabV(registry(L));
   if (LJEG()->redirect_to_isolation)
   {
-    regt = LJEG()->shadow_registry;
+    regt = LJE_SHADOW();
   }
   TValue *tv = lj_tab_setstr(L, regt, lj_str_newz(L, tname));
   if (tvisnil(tv)) {
@@ -925,7 +925,11 @@ LUA_API void lua_rawgeti(lua_State *L, int idx, int n)
   lje_redirect_state(L);
 
   TValue shadow_registry;
-  settabV(L, &shadow_registry, LJEG()->shadow_registry);
+  settabV(L, &shadow_registry, LJE_SHADOW());
+
+  /* Hoisted: the miss path below is also reached by goto, which would skip an
+     initialiser declared inside it. */
+  lua_State* redirect_host_state = lje_host_state(LJEG()->redirect_host);
 
   cTValue *v, *t = index2adr(L, idx);
   if (LJEG()->redirect_to_isolation && idx == LUA_REGISTRYINDEX)
@@ -944,7 +948,7 @@ LUA_API void lua_rawgeti(lua_State *L, int idx, int n)
     /* LJE: Tag registry-backed host userdata with its ref index (align1 is dead
      * padding) so engine call hooks can reuse the shadow registry copy later. */
     if (!LJEG()->redirect_to_isolation && idx == LUA_REGISTRYINDEX &&
-        L == LJEG()->main_state && n != 0 && tvisudata(v))
+        lje_host_id_of(L, NULL) && n != 0 && tvisudata(v))
       udataV(v)->align1 = (uint32_t)n;
     copyTV(L, L->top, v);
   } else {
@@ -952,9 +956,9 @@ LUA_API void lua_rawgeti(lua_State *L, int idx, int n)
     {
 copy_to_isolated_registry:
       /* Slot 0 == freelist head. Will cause collisions. */
-      if (n != 0)
+      if (n != 0 && redirect_host_state)
       {
-        lua_State* host = LJEG()->main_state;
+        lua_State* host = redirect_host_state;
         cTValue* reg = registry(host);
         v = lj_tab_getint(tabV(reg), n);
         if (v && !tvisnil(v))
@@ -976,7 +980,7 @@ copy_to_isolated_registry:
 
                 /* Cache it in the shadow registry under the same ref so the next
                  * lookup hits the fast path without re-checking the host. */
-                GCtab* isolated_reg = LJEG()->shadow_registry;
+                GCtab* isolated_reg = LJE_SHADOW();
                 TValue* dst = lj_tab_setint(L, isolated_reg, n);
                 copyTV(L, dst, to_metatable);
                 lj_gc_barriert(L, isolated_reg, dst);
@@ -993,7 +997,7 @@ copy_to_isolated_registry:
            * next lookup succeeds without copying. No numbers since those are freelist links. */
           if (!tvisnumber(v))
           {
-            GCtab* isolated_reg = LJEG()->shadow_registry;
+            GCtab* isolated_reg = LJE_SHADOW();
             TValue* dst = lj_tab_setint(L, isolated_reg, n);
             TValue* src = L->top - 1; /* what we just pushed */
             copyTV(L, dst, src);
@@ -1193,10 +1197,11 @@ LUA_API void lua_rawseti(lua_State *L, int idx, int n)
   lj_gc_barriert(L, t, dst);
   L->top = src;
 
-  /* LJE: Clear any host registry writes in the shadow registry so they are identical again. */
+  /* LJE: Clear any host registry writes in that host's shadow registry so they are identical again. */
+  LJEHostId host = LJE_HOST_CLIENT;
   if (!LJEG()->redirect_to_isolation && idx == LUA_REGISTRYINDEX &&
-      L == LJEG()->main_state && LJEG()->shadow_registry && n != 0) {
-    TValue *cached = (TValue *)lj_tab_getint(LJEG()->shadow_registry, n);
+      lje_host_id_of(L, &host) && lje_host_view(host)->shadow_registry && n != 0) {
+    TValue *cached = (TValue *)lj_tab_getint(lje_host_view(host)->shadow_registry, n);
     if (cached) setnilV(cached);
     if (tvisudata(dst)) {
       // Tag this userdata with its registry index for caching
@@ -1369,6 +1374,8 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     /* main_state is only now known; bind LJE_CLIENT_STATE before secure scripts run. */
     lje_path_install_state_globals(LJEG()->isolated_state);
 
+    /* Closing the previous client state cleared its shadow registry, so re-seed. */
+    lje_startup_shadow_stubs(LJEG()->isolated_state);
     lje_startup_secure_preinit(LJEG()->isolated_state);
     // Ensure settings are refetched as well
     lje_settings_clear_cache(LJEG()->isolated_state);
@@ -1404,6 +1411,9 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
   {
     LJEG()->waiting_for_menu_call = 0;
     LJE_INFO("Running boot entrypoint for all scripts...");
+    // Boot scripts are the earliest thing that can call into a host state, so the
+    // shadow registries need their stubs before the helpers land.
+    lje_startup_shadow_stubs(LJEG()->isolated_state);
     // Load the pure-Lua helpers into the isolated state so boot scripts have them
     // available before they run.
     lje_startup_secure_helpers(LJEG()->isolated_state);
@@ -1817,11 +1827,17 @@ LUA_API void lua_setallocf(lua_State *L, lua_Alloc f, void *ud)
   g->allocf = f;
 }
 
+// Anything to do with new states is hooked - not overwritten.
+// This is because GMod has a lot of proprietary changes that we can't really replicate easily
+
 typedef void (*lua_close_t)(lua_State* L);
+
 static LJEDetourHook lua_close_hook;
 
 static void lua_close_detour(lua_State* L)
 {
+  int host_closed = lje_host_id_of(L, NULL);
+
   if (L == LJEG()->main_state)
   {
     LJE_INFO("Detected main state being closed. Cleaning up LJE resources...");
@@ -1854,8 +1870,20 @@ static void lua_close_detour(lua_State* L)
     LJEG()->main_state = NULL;
     lje_clear_global_refs();
     // Kill off old registry.
-    lj_tab_clear(LJEG()->shadow_registry);
+    if (lje_host_view(LJE_HOST_CLIENT)->shadow_registry)
+      lj_tab_clear(lje_host_view(LJE_HOST_CLIENT)->shadow_registry);
   }
+  else if (L == LJEG()->menu_state)
+  {
+    LJE_INFO("Detected menu state being closed.");
+    LJEG()->menu_state = NULL;
+    if (lje_host_view(LJE_HOST_MENU)->shadow_registry)
+      lj_tab_clear(lje_host_view(LJE_HOST_MENU)->shadow_registry);
+  }
+
+  /* lje.state holds raw pointers, so drop the one that just died. */
+  if (host_closed && LJEG()->isolated_state)
+    lje_path_install_state_globals(LJEG()->isolated_state);
 
   /* Lift the hook, run the real lua_close, then re-arm it for the next state. */
   if (lua_close_hook.target)
@@ -2054,8 +2082,6 @@ lje_detour_export(mod, lua_newuserdata, lua_newuserdata);
       } else {
         LJE_WARN("AdvancedLuaErrorReporter not found!");
       }
-
-
 
       if (options->disable_binary_modules)
       {
