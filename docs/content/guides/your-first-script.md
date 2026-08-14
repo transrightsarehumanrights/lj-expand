@@ -43,6 +43,10 @@ The **menu** state does exist by then, and is reachable:
 local openURL = lje.secure.pull("gui.OpenURL", lje.state.menu)
 ```
 
+Feel free to pull in any GMod API available in the menu state, **but be aware some functions differ in behavior depending on the state**.
+It is **not recommended** to pollute the global LJE environment with menu state functions, as they may overwrite client functions imported during preinit.
+Declare them locally instead, or use `lje.secure.pull` to pull them into a local table.
+
 See [lje.state](/api/state) for the details on which universe is available when.
 
 This is really only useful for:
