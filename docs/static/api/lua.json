@@ -40,12 +40,12 @@
     {
       "name": "con_printf",
       "defined_in": "lua",
-      "description": "A `string.format`-style console print with inline ANSI color support. Wrap text in `$colorName{...}` to colorize it.\n\nSupported colors: `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, `default`.\n\nExample:\n```lua\nlje.con_printf(\"$red{Error}: %s\", message)\n```",
+      "description": "A `string.format`-style console print with inline ANSI color support.\n\n- `$name{...}` sets the **foreground**.\n- `$$name{...}` sets the **background**.\n\nBlocks nest, and closing one restores whatever was active around it, so you can combine layers: `$$blue{$white{text}}`.\n\n**Color names**\n\n- Base 8: `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, plus `default`.\n- Bright variants: prefix with `bright` or `light` (`brightred`, `lightblue`, ...). `gray`/`grey` is the bright-black slot.\n- Extended: `orange`, `pink`, `hotpink`, `purple`, `violet`, `indigo`, `lime`, `mint`, `teal`, `turquoise`, `navy`, `maroon`, `olive`, `brown`, `gold`, `tan`, `salmon`, `coral`, `lavender`, `silver`, `slate`, `charcoal`, `cream`, `darkgreen`, `darkblue`, `darkred`.\n- Hex truecolor: `$#ff8800{...}` or the short form `$#f80{...}`.\n- Raw xterm-256 index: `$196{...}`, `$$21{...}`.\n\n**Styles** (foreground syntax only): `bold`, `dim`, `italic`, `underline`, `blink`, `reverse`/`invert`, `hidden`, `strike`.\n\nAn unrecognized name is left in the output as-is rather than being swallowed, so typos are visible.\n\nExample:\n```lua\nlje.con_printf(\"$red{Error}: %s\", message)\nlje.con_printf(\"$$red{$white{ FATAL }} $gray{disk on fire}\")\nlje.con_printf(\"$#ff8800{warning} on $$#202020{a dark strip}\")\n```",
       "params": [
         {
           "name": "fmt",
           "type": "string",
-          "description": "A `string.format` format string. Color codes use the syntax `$colorName{text}`."
+          "description": "A `string.format` format string. Color codes use the syntax `$colorName{text}` for the foreground and `$$colorName{text}` for the background."
         },
         {
           "name": "...",
