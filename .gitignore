@@ -14,3 +14,4 @@ build
 .idea
 src/*.pdb
 src/generated/*.h
+/.vs
