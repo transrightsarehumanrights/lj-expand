@@ -5,6 +5,7 @@ const sidebars = {
     { type: 'doc', id: 'installation', label: 'Installation' },
     { type: 'doc', id: 'folder-structure', label: 'Folder Structure' },
     { type: 'doc', id: 'cli-options', label: 'Command Line Options' },
+    { type: 'doc', id: 'how-it-works', label: 'How It Works'},
     {
       type: 'category',
       label: 'Guides',
